@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { LookingGlassToggle } from "@/components/scenery";
-import { SoundToggle } from "@/components/extras";
+import { SoundToggle } from "@/components/sound";
 import { api, mapAvailable, type Me } from "@/lib/api";
 
 export function Header() {

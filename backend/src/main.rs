@@ -2,6 +2,7 @@ use socra::config::Config;
 use socra::routes::api_router;
 use socra::state::AppState;
 use std::path::Path;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -46,7 +47,11 @@ async fn main() -> anyhow::Result<()> {
     } else {
         tracing::info!("no frontend build at {static_dir} (dev mode: run the Vite dev server)");
     }
-    let app = app.layer(TraceLayer::new_for_http()).with_state(state);
+    // Compress responses (brotli/gzip): the JS bundle and JSON shrink to about a third.
+    let app = app
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Socra listening on http://localhost:{port}");

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
-import { SparkleTrail } from "@/components/extras";
+import { SparkleTrail } from "@/components/celebrations";
 import { api } from "@/lib/api";
 
 const FLOATERS = [
