@@ -3,15 +3,15 @@ use crate::answers::{attempts_allowed, is_locked};
 use crate::config::Config;
 use crate::context::problem_context;
 use crate::error::{ApiResult, AppError};
-use crate::models::{new_id, Message, ProblemSession, Reward, User};
+use crate::models::{Message, ProblemSession, Reward, User, new_id};
 use crate::problems::get_template;
 use crate::prompts::opening_message;
 use crate::rewards::potential_reward;
 use crate::rng::{hash_seed, random_seed};
 use crate::solana::explorer_tx_url;
 use crate::state::AppState;
-use crate::verify::{verdict_chips, Verdict};
-use serde_json::{json, Value};
+use crate::verify::{Verdict, verdict_chips};
+use serde_json::{Value, json};
 use sqlx::PgPool;
 
 pub const DEMO_ACCOUNTS: [&str; 4] = ["demo", "copycat", "demo-b", "copycat-b"];
@@ -36,7 +36,12 @@ pub async fn earned_today(state: &AppState, user_id: &str) -> anyhow::Result<f64
 }
 
 /// A payout record for (user, template) from another session → Practice mode.
-pub async fn reward_elsewhere(pool: &PgPool, user_id: &str, template_id: &str, session_id: &str) -> anyhow::Result<bool> {
+pub async fn reward_elsewhere(
+    pool: &PgPool,
+    user_id: &str,
+    template_id: &str,
+    session_id: &str,
+) -> anyhow::Result<bool> {
     let found: Option<String> = sqlx::query_scalar("SELECT id FROM rewards WHERE user_id = $1 AND template_id = $2 AND session_id <> $3 LIMIT 1")
         .bind(user_id)
         .bind(template_id)
@@ -46,7 +51,13 @@ pub async fn reward_elsewhere(pool: &PgPool, user_id: &str, template_id: &str, s
     Ok(found.is_some())
 }
 
-pub async fn insert_message(pool: &PgPool, session_id: &str, role: &str, content: &str, verdicts: Option<Value>) -> anyhow::Result<Message> {
+pub async fn insert_message(
+    pool: &PgPool,
+    session_id: &str,
+    role: &str,
+    content: &str,
+    verdicts: Option<Value>,
+) -> anyhow::Result<Message> {
     Ok(sqlx::query_as::<_, Message>("INSERT INTO messages (id, session_id, role, content, verdicts) VALUES ($1, $2, $3, $4, $5) RETURNING *")
         .bind(new_id())
         .bind(session_id)
@@ -58,10 +69,12 @@ pub async fn insert_message(pool: &PgPool, session_id: &str, role: &str, content
 }
 
 pub async fn history(pool: &PgPool, session_id: &str) -> anyhow::Result<Vec<Message>> {
-    Ok(sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500")
-        .bind(session_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(sqlx::query_as::<_, Message>(
+        "SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500",
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await?)
 }
 
 pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<ProblemSession> {
@@ -75,7 +88,12 @@ pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<P
     }
 }
 
-pub async fn create_bank_session(state: &AppState, user: &User, template_id: &str, from_session_id: Option<&str>) -> ApiResult<ProblemSession> {
+pub async fn create_bank_session(
+    state: &AppState,
+    user: &User,
+    template_id: &str,
+    from_session_id: Option<&str>,
+) -> ApiResult<ProblemSession> {
     if get_template(template_id).is_none() {
         return Err(AppError::bad("Unknown problem."));
     }
@@ -108,10 +126,27 @@ pub fn reward_json(cfg: &Config, r: &Reward) -> Value {
 pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Value> {
     let ctx = problem_context(s)?;
     let messages = history(&state.pool, &s.id).await?;
-    let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1").bind(&s.id).fetch_optional(&state.pool).await?;
+    let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+        .bind(&s.id)
+        .fetch_optional(&state.pool)
+        .await?;
     let is_bank = ctx.is_bank();
-    let practice = if is_bank { reward_elsewhere(&state.pool, &s.user_id, s.template_id.as_deref().unwrap_or_default(), &s.id).await? } else { true };
-    let matched = ctx.custom_ref.matched_template_id.as_deref().and_then(get_template);
+    let practice = if is_bank {
+        reward_elsewhere(
+            &state.pool,
+            &s.user_id,
+            s.template_id.as_deref().unwrap_or_default(),
+            &s.id,
+        )
+        .await?
+    } else {
+        true
+    };
+    let matched = ctx
+        .custom_ref
+        .matched_template_id
+        .as_deref()
+        .and_then(get_template);
 
     let msgs: Vec<Value> = messages
         .iter()

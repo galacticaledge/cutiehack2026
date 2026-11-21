@@ -4,11 +4,11 @@
 //!   cargo run --bin seed -- --no-mint    clean accounts only (no history, no chain calls)
 //! Prints a presenter cheat sheet (answers) to the TERMINAL ONLY and writes demo-content.md (no answers).
 use socra::config::Config;
-use socra::models::{new_id, User};
-use socra::problems::{get_template, CheckpointKind};
+use socra::models::{User, new_id};
+use socra::problems::{CheckpointKind, get_template};
 use socra::rng::hash_seed;
 use socra::sessions::DEMO_ACCOUNTS;
-use socra::solana::{explorer_tx_url, generate_user_wallet, Solana};
+use socra::solana::{Solana, explorer_tx_url, generate_user_wallet};
 use sqlx::PgPool;
 
 struct History {
@@ -25,11 +25,23 @@ const HISTORY: [History; 2] = [
         hints: 0,
         learn: 100.0,
         chat: &[
-            ("tutor", "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What is this problem asking you to find?"),
+            (
+                "tutor",
+                "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What is this problem asking you to find?",
+            ),
             ("user", "the value of x"),
-            ("tutor", "Right. What's being done to $x$ on the left side, and in what order?"),
-            ("user", "it's multiplied and then a number is added, so I undo the adding first"),
-            ("tutor", "Exactly, undo in reverse order. What do you get after removing the constant?"),
+            (
+                "tutor",
+                "Right. What's being done to $x$ on the left side, and in what order?",
+            ),
+            (
+                "user",
+                "it's multiplied and then a number is added, so I undo the adding first",
+            ),
+            (
+                "tutor",
+                "Exactly, undo in reverse order. What do you get after removing the constant?",
+            ),
         ],
         explanation: "You undo the operations in reverse order: first remove the constant from both sides, then divide by the coefficient so x is alone. Doing the same thing to both sides keeps the equation balanced.",
     },
@@ -38,11 +50,20 @@ const HISTORY: [History; 2] = [
         hints: 1,
         learn: 150.0,
         chat: &[
-            ("tutor", "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What do you need first to find f'(k)?"),
+            (
+                "tutor",
+                "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What do you need first to find f'(k)?",
+            ),
             ("user", "the derivative function"),
             ("tutor", "Good. Which rule handles each term like $ax^3$?"),
-            ("user", "power rule, bring the exponent down and subtract one"),
-            ("tutor", "Nice. Write out $f'(x)$ term by term, then substitute."),
+            (
+                "user",
+                "power rule, bring the exponent down and subtract one",
+            ),
+            (
+                "tutor",
+                "Nice. Write out $f'(x)$ term by term, then substitute.",
+            ),
             ("user", "ok I plugged it in"),
         ],
         explanation: "The power rule gives the slope function f'(x) term by term, since the derivative of a sum is the sum of the derivatives. Plugging k into f'(x) gives the slope of f at that point.",
@@ -50,7 +71,11 @@ const HISTORY: [History; 2] = [
 ];
 
 async fn upsert_user(pool: &PgPool, username: &str) -> anyhow::Result<User> {
-    if let Some(u) = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1").bind(username).fetch_optional(pool).await? {
+    if let Some(u) = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_optional(pool)
+        .await?
+    {
         return Ok(u);
     }
     let (pk, sk) = generate_user_wallet();
@@ -66,22 +91,41 @@ async fn upsert_user(pool: &PgPool, username: &str) -> anyhow::Result<User> {
 async fn reset(pool: &PgPool, user_ids: &[String]) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
     let sub = "SELECT id FROM problem_sessions WHERE user_id = ANY($1)";
-    sqlx::query("DELETE FROM rewards WHERE user_id = ANY($1)").bind(user_ids).execute(&mut *tx).await?;
-    sqlx::query(&format!("DELETE FROM events WHERE session_id IN ({sub})")).bind(user_ids).execute(&mut *tx).await?;
-    sqlx::query(&format!("DELETE FROM messages WHERE session_id IN ({sub})")).bind(user_ids).execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM problem_sessions WHERE user_id = ANY($1)").bind(user_ids).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM rewards WHERE user_id = ANY($1)")
+        .bind(user_ids)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(&format!("DELETE FROM events WHERE session_id IN ({sub})"))
+        .bind(user_ids)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(&format!("DELETE FROM messages WHERE session_id IN ({sub})"))
+        .bind(user_ids)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM problem_sessions WHERE user_id = ANY($1)")
+        .bind(user_ids)
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     Ok(())
 }
 
-async fn seed_history(pool: &PgPool, cfg: &Config, sol: &Solana, user: &User) -> anyhow::Result<()> {
+async fn seed_history(
+    pool: &PgPool,
+    cfg: &Config,
+    sol: &Solana,
+    user: &User,
+) -> anyhow::Result<()> {
     for h in &HISTORY {
-        let t = get_template(h.template).ok_or_else(|| anyhow::anyhow!("unknown template id {}", h.template))?;
-        let exists: Option<String> = sqlx::query_scalar("SELECT id FROM rewards WHERE user_id = $1 AND template_id = $2")
-            .bind(&user.id)
-            .bind(t.id)
-            .fetch_optional(pool)
-            .await?;
+        let t = get_template(h.template)
+            .ok_or_else(|| anyhow::anyhow!("unknown template id {}", h.template))?;
+        let exists: Option<String> =
+            sqlx::query_scalar("SELECT id FROM rewards WHERE user_id = $1 AND template_id = $2")
+                .bind(&user.id)
+                .bind(t.id)
+                .fetch_optional(pool)
+                .await?;
         if exists.is_some() {
             println!("  {} already has {} history; skipping", user.username, t.id);
             continue;
@@ -109,8 +153,14 @@ async fn seed_history(pool: &PgPool, cfg: &Config, sol: &Solana, user: &User) ->
                 .await?;
         }
         let base = cfg.to_base_units(h.learn);
-        let sig = sol.mint_with_retry(&user.wallet_pubkey, base as u64).await?;
-        let summary = if h.hints == 0 { format!("Base {} = {} LEARN", h.learn, h.learn) } else { format!("Base 200 × Hints 0.75 = {} LEARN", h.learn) };
+        let sig = sol
+            .mint_with_retry(&user.wallet_pubkey, base as u64)
+            .await?;
+        let summary = if h.hints == 0 {
+            format!("Base {} = {} LEARN", h.learn, h.learn)
+        } else {
+            format!("Base 200 × Hints 0.75 = {} LEARN", h.learn)
+        };
         sqlx::query("INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status, tx_sig) VALUES ($1, $2, $3, $4, $5, $6, 'paid', $7)")
             .bind(new_id())
             .bind(&user.id)
@@ -121,15 +171,31 @@ async fn seed_history(pool: &PgPool, cfg: &Config, sol: &Solana, user: &User) ->
             .bind(&sig)
             .execute(pool)
             .await?;
-        println!("  {} earned {} LEARN on {}: {}", user.username, h.learn, t.id, explorer_tx_url(&sig));
+        println!(
+            "  {} earned {} LEARN on {}: {}",
+            user.username,
+            h.learn,
+            t.id,
+            explorer_tx_url(&sig)
+        );
     }
     Ok(())
 }
 
 fn cheat_sheet() {
-    println!("\n================ PRESENTER CHEAT SHEET (terminal only; contains answers) ================");
-    println!("Requires DEMO_FIXED_SEEDS=true in .env for demo accounts to get these exact numbers.\n");
-    for id in ["cs-trace-loop-1", "alg-linear-1", "calc-deriv-poly-1", "kin-freefall-1", "cs-trace-nested-1"] {
+    println!(
+        "\n================ PRESENTER CHEAT SHEET (terminal only; contains answers) ================"
+    );
+    println!(
+        "Requires DEMO_FIXED_SEEDS=true in .env for demo accounts to get these exact numbers.\n"
+    );
+    for id in [
+        "cs-trace-loop-1",
+        "alg-linear-1",
+        "calc-deriv-poly-1",
+        "kin-freefall-1",
+        "cs-trace-nested-1",
+    ] {
         let t = get_template(id).expect("template");
         let p = (t.generate)(hash_seed(id));
         println!("── {id} ──\n{}\n", p.prompt);
@@ -137,7 +203,9 @@ fn cheat_sheet() {
             let v = match &c.kind {
                 CheckpointKind::Number { value, .. } => format!("{value}"),
                 CheckpointKind::Expression { value, .. } => value.clone(),
-                CheckpointKind::List(l) => format!("{:?}", l.iter().map(|x| *x as i64).collect::<Vec<_>>()),
+                CheckpointKind::List(l) => {
+                    format!("{:?}", l.iter().map(|x| *x as i64).collect::<Vec<_>>())
+                }
             };
             println!("  {:<14} {:<55} = {v}", c.id, c.label);
         }
@@ -152,11 +220,24 @@ fn wrong_claim(p: &socra::problems::GeneratedProblem) -> Option<String> {
     for c in &p.checkpoints {
         match (&c.kind, c.id) {
             (CheckpointKind::List(l), "kept_values") if l.len() > 1 => {
-                let shown: Vec<String> = l[..l.len() - 1].iter().map(|x| (*x as i64).to_string()).collect();
-                return Some(format!("\"I think the kept values are {}\"", shown.join(", ")));
+                let shown: Vec<String> = l[..l.len() - 1]
+                    .iter()
+                    .map(|x| (*x as i64).to_string())
+                    .collect();
+                return Some(format!(
+                    "\"I think the kept values are {}\"",
+                    shown.join(", ")
+                ));
             }
-            (CheckpointKind::Number { value, .. }, "rhs") => return Some(format!("\"after removing the constant I get {}\"", value + 2.0)),
-            (CheckpointKind::Expression { .. }, "derivative") => return Some("\"the derivative is 3x^2 + 2x + 1\"".into()),
+            (CheckpointKind::Number { value, .. }, "rhs") => {
+                return Some(format!(
+                    "\"after removing the constant I get {}\"",
+                    value + 2.0
+                ));
+            }
+            (CheckpointKind::Expression { .. }, "derivative") => {
+                return Some("\"the derivative is 3x^2 + 2x + 1\"".into());
+            }
             _ => {}
         }
     }
@@ -216,7 +297,10 @@ async fn main() -> anyhow::Result<()> {
     let do_reset = args.iter().any(|a| a == "--reset");
     let no_mint = args.iter().any(|a| a == "--no-mint");
     let cfg = Config::from_env()?;
-    let pool = sqlx::postgres::PgPoolOptions::new().max_connections(2).connect(&cfg.database_url).await?;
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&cfg.database_url)
+        .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     let mut users = Vec::new();
@@ -227,18 +311,28 @@ async fn main() -> anyhow::Result<()> {
     if do_reset {
         let ids: Vec<String> = users.iter().map(|u| u.id.clone()).collect();
         reset(&pool, &ids).await?;
-        println!("Reset sessions/messages/events/rewards for the 4 demo accounts (other users untouched).");
+        println!(
+            "Reset sessions/messages/events/rewards for the 4 demo accounts (other users untouched)."
+        );
     }
 
     if no_mint {
         println!("--no-mint: clean accounts only, no history.");
     } else {
-        let sol = Solana::from_config(&cfg).map_err(|e| anyhow::anyhow!("{e}. Run `cargo run --bin setup_token` first, or pass --no-mint."))?;
+        let sol = Solana::from_config(&cfg).map_err(|e| {
+            anyhow::anyhow!("{e}. Run `cargo run --bin setup_token` first, or pass --no-mint.")
+        })?;
         let bal = sol.sol_balance().await?;
         if bal < 0.02 {
-            anyhow::bail!("Mint authority {} has {bal} SOL. Fund it at https://faucet.solana.com (devnet), or pass --no-mint.", sol.payer.pubkey_string());
+            anyhow::bail!(
+                "Mint authority {} has {bal} SOL. Fund it at https://faucet.solana.com (devnet), or pass --no-mint.",
+                sol.payer.pubkey_string()
+            );
         }
-        for u in users.iter().filter(|u| u.username == "demo" || u.username == "demo-b") {
+        for u in users
+            .iter()
+            .filter(|u| u.username == "demo" || u.username == "demo-b")
+        {
             seed_history(&pool, &cfg, &sol, u).await?;
         }
     }
@@ -247,7 +341,9 @@ async fn main() -> anyhow::Result<()> {
     std::fs::write(&path, demo_content())?;
     println!("Wrote {}", path.display());
     if !cfg.demo_fixed_seeds {
-        println!("Note: DEMO_FIXED_SEEDS is false, so demo accounts get random numbers. Set it to true for rehearsal.");
+        println!(
+            "Note: DEMO_FIXED_SEEDS is false, so demo accounts get random numbers. Set it to true for rehearsal."
+        );
     }
     cheat_sheet();
     Ok(())

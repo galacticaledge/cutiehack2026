@@ -7,7 +7,12 @@ pub struct TelemetryEvent {
     pub at: DateTime<Utc>,
 }
 
-pub fn compute_flags(started_at: DateTime<Utc>, submitted_at: DateTime<Utc>, min_solve_seconds: i64, events: &[TelemetryEvent]) -> Vec<&'static str> {
+pub fn compute_flags(
+    started_at: DateTime<Utc>,
+    submitted_at: DateTime<Utc>,
+    min_solve_seconds: i64,
+    events: &[TelemetryEvent],
+) -> Vec<&'static str> {
     let mut flags = Vec::new();
     if (submitted_at - started_at).num_milliseconds() < min_solve_seconds * 1000 {
         flags.push("too_fast");
@@ -47,19 +52,43 @@ mod tests {
     use chrono::Duration;
 
     fn ev(kind: &str, at: DateTime<Utc>) -> TelemetryEvent {
-        TelemetryEvent { kind: kind.into(), target: Some("answer".into()), at }
+        TelemetryEvent {
+            kind: kind.into(),
+            target: Some("answer".into()),
+            at,
+        }
     }
 
     #[test]
     fn flags() {
         let t0 = Utc::now();
-        assert_eq!(compute_flags(t0, t0 + Duration::seconds(5), 20, &[]), vec!["too_fast"]);
+        assert_eq!(
+            compute_flags(t0, t0 + Duration::seconds(5), 20, &[]),
+            vec!["too_fast"]
+        );
         assert!(compute_flags(t0, t0 + Duration::seconds(60), 20, &[]).is_empty());
         let submit = t0 + Duration::seconds(100);
-        assert_eq!(compute_flags(t0, submit, 20, &[ev("paste", submit - Duration::seconds(3))]), vec!["answer_pasted"]);
-        let away = [ev("hidden", submit - Duration::seconds(50)), ev("visible", submit - Duration::seconds(10))];
-        assert_eq!(compute_flags(t0, submit, 20, &away), vec!["away_then_correct"]);
-        let short = [ev("hidden", submit - Duration::seconds(15)), ev("visible", submit - Duration::seconds(10))];
+        assert_eq!(
+            compute_flags(
+                t0,
+                submit,
+                20,
+                &[ev("paste", submit - Duration::seconds(3))]
+            ),
+            vec!["answer_pasted"]
+        );
+        let away = [
+            ev("hidden", submit - Duration::seconds(50)),
+            ev("visible", submit - Duration::seconds(10)),
+        ];
+        assert_eq!(
+            compute_flags(t0, submit, 20, &away),
+            vec!["away_then_correct"]
+        );
+        let short = [
+            ev("hidden", submit - Duration::seconds(15)),
+            ev("visible", submit - Duration::seconds(10)),
+        ];
         assert!(compute_flags(t0, submit, 20, &short).is_empty());
     }
 }

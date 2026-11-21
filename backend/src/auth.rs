@@ -3,8 +3,8 @@ use crate::error::AppError;
 use crate::models::User;
 use crate::state::AppState;
 use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
 use axum::http::StatusCode;
+use axum::http::request::Parts;
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::Engine;
 use hmac::{Hmac, Mac};
@@ -24,7 +24,9 @@ pub fn make_token(secret: &str, user_id: &str) -> String {
 
 pub fn read_token(secret: &str, token: &str) -> Option<String> {
     let (user_id, sig) = token.rsplit_once('.')?;
-    let sig_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(sig).ok()?;
+    let sig_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(sig)
+        .ok()?;
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).ok()?;
     mac.update(user_id.as_bytes());
     mac.verify_slice(&sig_bytes).ok()?; // constant-time
@@ -51,11 +53,15 @@ pub struct AuthUser(pub User);
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_headers(&parts.headers);
         let unauthorized = || AppError::new(StatusCode::UNAUTHORIZED, "Please log in first.");
         let token = jar.get(COOKIE).ok_or_else(unauthorized)?;
-        let user_id = read_token(&state.cfg.session_secret, token.value()).ok_or_else(unauthorized)?;
+        let user_id =
+            read_token(&state.cfg.session_secret, token.value()).ok_or_else(unauthorized)?;
         let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
             .bind(&user_id)
             .fetch_optional(&state.pool)

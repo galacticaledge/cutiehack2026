@@ -1,8 +1,8 @@
 //! Socra backend: Socratic tutor that pays LEARN (Solana devnet) for verified learning.
 
 // Pure, unit-tested core
-pub mod anticheat;
 pub mod answers;
+pub mod anticheat;
 pub mod leak;
 pub mod mathexpr;
 pub mod problems;
