@@ -41,7 +41,9 @@ fn parse_params(v: &Value, texts: &[&str]) -> Option<Ranges> {
     let mut ranges = Vec::new();
     for (name, r) in params {
         let mut chars = name.chars();
-        let (Some(ch), None) = (chars.next(), chars.next()) else { return None };
+        let (Some(ch), None) = (chars.next(), chars.next()) else {
+            return None;
+        };
         if !('a'..='h').contains(&ch) {
             return None;
         }
@@ -62,29 +64,67 @@ fn parse_params(v: &Value, texts: &[&str]) -> Option<Ranges> {
 fn parse_steps(v: &Value) -> Vec<String> {
     v["steps"]
         .as_array()
-        .map(|a| a.iter().filter_map(|s| s.as_str()).take(8).map(|s| s.chars().take(400).collect()).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str())
+                .take(8)
+                .map(|s| s.chars().take(400).collect())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
 fn draw(ranges: &Ranges, rng: &mut Rng) -> Vec<(String, i64)> {
-    ranges.iter().map(|(ph, lo, hi)| (ph.clone(), rng.int(*lo, *hi))).collect()
+    ranges
+        .iter()
+        .map(|(ph, lo, hi)| (ph.clone(), rng.int(*lo, *hi)))
+        .collect()
 }
 
 fn substitute(s: &str, vals: &[(String, i64)], paren: bool) -> String {
-    vals.iter().fold(s.to_string(), |acc, (ph, n)| acc.replace(ph.as_str(), &if paren { format!("({n})") } else { n.to_string() }))
+    vals.iter().fold(s.to_string(), |acc, (ph, n)| {
+        acc.replace(
+            ph.as_str(),
+            &if paren {
+                format!("({n})")
+            } else {
+                n.to_string()
+            },
+        )
+    })
 }
 
 /// Shared final checks: sane size, not readable off the problem text, sig-fig note.
-fn finish(concept_id: &str, prompt: String, answer: f64, steps: Vec<String>, ran_in_sandbox: bool) -> Option<Quest> {
+fn finish(
+    concept_id: &str,
+    prompt: String,
+    answer: f64,
+    steps: Vec<String>,
+    ran_in_sandbox: bool,
+) -> Option<Quest> {
     if !answer.is_finite() || answer.abs() > 1e9 {
         return None;
     }
     let tol = tolerance_for(answer);
-    if extract_numbers(&prompt).iter().any(|n| (n - answer).abs() <= tol) {
+    if extract_numbers(&prompt)
+        .iter()
+        .any(|n| (n - answer).abs() <= tol)
+    {
         return None;
     }
-    let note = if (answer - answer.round()).abs() > 1e-9 { "\n\nGive your answer to at least 3 significant figures." } else { "" };
-    Some(Quest { concept_id: concept_id.to_string(), prompt: format!("{prompt}{note}"), answer, tolerance: tol, steps, ran_in_sandbox })
+    let note = if (answer - answer.round()).abs() > 1e-9 {
+        "\n\nGive your answer to at least 3 significant figures."
+    } else {
+        ""
+    };
+    Some(Quest {
+        concept_id: concept_id.to_string(),
+        prompt: format!("{prompt}{note}"),
+        answer,
+        tolerance: tol,
+        steps,
+        ran_in_sandbox,
+    })
 }
 
 pub fn tolerance_for(answer: f64) -> f64 {
@@ -100,7 +140,11 @@ pub fn agrees(engine: f64, independent: f64) -> bool {
 pub fn instantiate(concept_id: &str, v: &Value, seed: i64) -> Option<Quest> {
     let prompt = v["prompt"].as_str()?.trim();
     let expr = v["answerExpr"].as_str()?.trim();
-    if prompt.is_empty() || prompt.chars().count() > 1500 || expr.is_empty() || expr.chars().count() > 300 {
+    if prompt.is_empty()
+        || prompt.chars().count() > 1500
+        || expr.is_empty()
+        || expr.chars().count() > 300
+    {
         return None;
     }
     let ranges = parse_params(v, &[prompt, expr])?;
@@ -108,12 +152,23 @@ pub fn instantiate(concept_id: &str, v: &Value, seed: i64) -> Option<Quest> {
     let mut rng = Rng::new(seed);
     for _ in 0..20 {
         let vals = draw(&ranges, &mut rng);
-        let (p, e) = (substitute(prompt, &vals, false), substitute(expr, &vals, true));
+        let (p, e) = (
+            substitute(prompt, &vals, false),
+            substitute(expr, &vals, true),
+        );
         if p.contains("[[") || e.contains("[[") {
             return None; // placeholder without a range
         }
-        let Some(ans) = eval_number(&normalize_math(&e)) else { continue };
-        if let Some(q) = finish(concept_id, p, ans, steps.iter().map(|s| substitute(s, &vals, false)).collect(), false) {
+        let Some(ans) = eval_number(&normalize_math(&e)) else {
+            continue;
+        };
+        if let Some(q) = finish(
+            concept_id,
+            p,
+            ans,
+            steps.iter().map(|s| substitute(s, &vals, false)).collect(),
+            false,
+        ) {
             return Some(q);
         }
     }
@@ -137,16 +192,32 @@ pub struct CodeDraw {
 
 pub fn parse_code_template(v: &Value) -> Option<CodeTemplate> {
     let intro = v["prompt"].as_str().unwrap_or_default().trim().to_string();
-    let code = v["code"].as_str()?.trim_matches('\n').trim_end().to_string();
-    if code.is_empty() || code.chars().count() > 1500 || code.lines().count() > 40 || intro.chars().count() > 600 {
+    let code = v["code"]
+        .as_str()?
+        .trim_matches('\n')
+        .trim_end()
+        .to_string();
+    if code.is_empty()
+        || code.chars().count() > 1500
+        || code.lines().count() > 40
+        || intro.chars().count() > 600
+    {
         return None;
     }
     // Deterministic, non-interactive programs only (the sandbox is the security boundary).
-    if ["input(", "random", "time.", "datetime", "```"].iter().any(|bad| code.contains(bad)) {
+    if ["input(", "random", "time.", "datetime", "```"]
+        .iter()
+        .any(|bad| code.contains(bad))
+    {
         return None;
     }
     let ranges = parse_params(v, &[&code])?;
-    Some(CodeTemplate { intro, code, ranges, steps: parse_steps(v) })
+    Some(CodeTemplate {
+        intro,
+        code,
+        ranges,
+        steps: parse_steps(v),
+    })
 }
 
 pub fn draw_code(t: &CodeTemplate, rng: &mut Rng) -> Option<CodeDraw> {
@@ -156,11 +227,19 @@ pub fn draw_code(t: &CodeTemplate, rng: &mut Rng) -> Option<CodeDraw> {
     if code.contains("[[") || intro.contains("[[") {
         return None;
     }
-    let lead = if intro.is_empty() { String::new() } else { format!("{intro}\n\n") };
+    let lead = if intro.is_empty() {
+        String::new()
+    } else {
+        format!("{intro}\n\n")
+    };
     Some(CodeDraw {
         prompt: format!("{lead}```python\n{code}\n```\n\nWhat number does this program print?"),
         code,
-        steps: t.steps.iter().map(|s| substitute(s, &vals, false)).collect(),
+        steps: t
+            .steps
+            .iter()
+            .map(|s| substitute(s, &vals, false))
+            .collect(),
     })
 }
 
@@ -202,7 +281,9 @@ mod tests {
     #[test]
     fn same_seed_same_problem_different_seed_varies() {
         assert_eq!(instantiate("x", &tpl(), 7), instantiate("x", &tpl(), 7));
-        let distinct: std::collections::HashSet<String> = (0..20).map(|s| instantiate("x", &tpl(), s).unwrap().prompt).collect();
+        let distinct: std::collections::HashSet<String> = (0..20)
+            .map(|s| instantiate("x", &tpl(), s).unwrap().prompt)
+            .collect();
         assert!(distinct.len() > 5);
     }
 
@@ -229,10 +310,16 @@ mod tests {
         assert!(instantiate("x", &v, 1).is_none(), "unknown placeholder");
         let mut v = tpl();
         v["answerExpr"] = json!("[[a]] / [[b]] + y");
-        assert!(instantiate("x", &v, 1).is_none(), "free variable can't evaluate");
+        assert!(
+            instantiate("x", &v, 1).is_none(),
+            "free variable can't evaluate"
+        );
         let mut v = tpl();
         v["prompt"] = json!("Speed? [[a]] km in 2 hours");
-        assert!(instantiate("x", &v, 1).is_none(), "param missing from prompt");
+        assert!(
+            instantiate("x", &v, 1).is_none(),
+            "param missing from prompt"
+        );
     }
 
     #[test]

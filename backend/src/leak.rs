@@ -13,7 +13,9 @@ fn scan_number(chars: &[char], mut i: usize) -> (f64, usize) {
         i += 1;
     }
     // thousands separators: ,ddd
-    while i + 3 < chars.len() + 0 && chars[i] == ',' && chars[i + 1..i + 4].iter().all(|c| c.is_ascii_digit())
+    while i + 3 < chars.len() + 0
+        && chars[i] == ','
+        && chars[i + 1..i + 4].iter().all(|c| c.is_ascii_digit())
         && !(i + 4 < chars.len() && chars[i + 4].is_ascii_digit())
     {
         i += 4;
@@ -36,14 +38,20 @@ pub fn extract_numbers(text: &str) -> Vec<f64> {
     for cmd in ["\\dfrac", "\\tfrac", "\\frac"] {
         t = t.replace(cmd, " \\frac");
     }
-    let t = t.replace("\\frac", "").replace("}{", "/").replace(['{', '}'], " ");
+    let t = t
+        .replace("\\frac", "")
+        .replace("}{", "/")
+        .replace(['{', '}'], " ");
     let chars: Vec<char> = t.chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         let prev = if i > 0 { Some(chars[i - 1]) } else { None };
-        let neg_start = c == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() && !prev.is_some_and(is_word);
+        let neg_start = c == '-'
+            && i + 1 < chars.len()
+            && chars[i + 1].is_ascii_digit()
+            && !prev.is_some_and(is_word);
         if neg_start || (c.is_ascii_digit() && !prev.is_some_and(is_word)) {
             let neg = c == '-';
             let (mut v, mut end) = scan_number(&chars, if neg { i + 1 } else { i });
@@ -100,21 +108,45 @@ mod tests {
 
     #[test]
     fn catches_leaks() {
-        for reply in ["So x = 7.", "x equals 7", "That gives $x = \\frac{14}{2}$", "You get 14/2, which is the answer.", "Great, so $x=7$!"] {
-            assert!(deterministic_leak(reply, 7.0, 1e-9, PROMPT), "missed: {reply}");
+        for reply in [
+            "So x = 7.",
+            "x equals 7",
+            "That gives $x = \\frac{14}{2}$",
+            "You get 14/2, which is the answer.",
+            "Great, so $x=7$!",
+        ] {
+            assert!(
+                deterministic_leak(reply, 7.0, 1e-9, PROMPT),
+                "missed: {reply}"
+            );
         }
     }
     #[test]
     fn passes_prompt_numbers_only() {
-        assert!(!deterministic_leak("You have $2x + 3 = 17$. What could you do with the 3?", 7.0, 1e-9, PROMPT));
+        assert!(!deterministic_leak(
+            "You have $2x + 3 = 17$. What could you do with the 3?",
+            7.0,
+            1e-9,
+            PROMPT
+        ));
     }
     #[test]
     fn passes_intermediate_numbers() {
-        assert!(!deterministic_leak("Nice, $2x = 14$. What's next?", 7.0, 1e-9, PROMPT));
+        assert!(!deterministic_leak(
+            "Nice, $2x = 14$. What's next?",
+            7.0,
+            1e-9,
+            PROMPT
+        ));
     }
     #[test]
     fn answer_in_prompt_not_flagged() {
-        assert!(!deterministic_leak("Look at the 3 on the left.", 3.0, 1e-9, PROMPT));
+        assert!(!deterministic_leak(
+            "Look at the 3 on the left.",
+            3.0,
+            1e-9,
+            PROMPT
+        ));
     }
     #[test]
     fn negative_answers() {
@@ -125,8 +157,18 @@ mod tests {
     #[test]
     fn decimal_tolerance() {
         let ans = (100.0f64 / 9.8).sqrt();
-        assert!(deterministic_leak("about 3.19 seconds", ans, 0.05, "dropped from 50 m"));
-        assert!(!deterministic_leak("use g = 9.8", ans, 0.05, "dropped from 50 m"));
+        assert!(deterministic_leak(
+            "about 3.19 seconds",
+            ans,
+            0.05,
+            "dropped from 50 m"
+        ));
+        assert!(!deterministic_leak(
+            "use g = 9.8",
+            ans,
+            0.05,
+            "dropped from 50 m"
+        ));
     }
     #[test]
     fn commas_and_fracs() {

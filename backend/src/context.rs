@@ -1,8 +1,8 @@
 //! SERVER ONLY view of a session's problem (includes the answer).
-use crate::models::ProblemSession;
 use crate::concepts::get_concept;
-use crate::problems::{get_template, Checkpoint, CheckpointKind, GeneratedProblem, Template};
-use crate::quest::{Quest, QUEST_MIN_SOLVE_SECONDS};
+use crate::models::ProblemSession;
+use crate::problems::{Checkpoint, CheckpointKind, GeneratedProblem, Template, get_template};
+use crate::quest::{QUEST_MIN_SOLVE_SECONDS, Quest};
 use serde::{Deserialize, Serialize};
 
 /// AI reference solution for custom sessions. NEVER sent to the client.
@@ -81,11 +81,20 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             academic: true,
         });
     }
-    let r: CustomRef = s.custom_ref.clone().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    let r: CustomRef = s
+        .custom_ref
+        .clone()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
     let text = s.custom_text.clone().unwrap_or_default();
     if s.source == "quest" {
-        let q = r.quest.clone().ok_or_else(|| anyhow::anyhow!("quest session {} has no quest", s.id))?;
-        let title = get_concept(&q.concept_id).map(|c| c.title).unwrap_or("New topic");
+        let q = r
+            .quest
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("quest session {} has no quest", s.id))?;
+        let title = get_concept(&q.concept_id)
+            .map(|c| c.title)
+            .unwrap_or("New topic");
         return Ok(ProblemContext {
             source: "quest".into(),
             title: format!("New topic: {title}"),
@@ -98,7 +107,10 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             checkpoints: vec![Checkpoint {
                 id: "final",
                 label: "the final answer to the problem".into(),
-                kind: CheckpointKind::Number { value: q.answer, tolerance: q.tolerance },
+                kind: CheckpointKind::Number {
+                    value: q.answer,
+                    tolerance: q.tolerance,
+                },
             }],
             difficulty: 1,
             min_solve_seconds: QUEST_MIN_SOLVE_SECONDS,
@@ -112,8 +124,16 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
     let is_topic = s.source == "custom_topic";
     let numeric = r.numeric_answer.filter(|n| n.is_finite());
     Ok(ProblemContext {
-        source: if is_topic { "custom_topic".into() } else { "custom_problem".into() },
-        title: if is_topic { format!("Topic: {}", text.chars().take(60).collect::<String>()) } else { "Your problem".into() },
+        source: if is_topic {
+            "custom_topic".into()
+        } else {
+            "custom_problem".into()
+        },
+        title: if is_topic {
+            format!("Topic: {}", text.chars().take(60).collect::<String>())
+        } else {
+            "Your problem".into()
+        },
         display_prompt: text.clone(),
         steps: r.steps.iter().take(12).cloned().collect(),
         hints: vec![],

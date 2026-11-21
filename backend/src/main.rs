@@ -9,7 +9,10 @@ use tower_http::trace::TraceLayer;
 async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn,tower_http=info".into()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,sqlx=warn,tower_http=info".into()),
+        )
         .init();
 
     let cfg = Config::from_env()?;
@@ -30,7 +33,8 @@ async fn main() -> anyhow::Result<()> {
     let index = Path::new(&static_dir).join("index.html");
     if index.exists() {
         // Serve the React SPA; unknown paths fall back to index.html for client-side routing.
-        app = app.fallback_service(ServeDir::new(&static_dir).not_found_service(ServeFile::new(index)));
+        app = app
+            .fallback_service(ServeDir::new(&static_dir).not_found_service(ServeFile::new(index)));
         tracing::info!("serving frontend from {static_dir}");
     } else {
         tracing::info!("no frontend build at {static_dir} (dev mode: run the Vite dev server)");

@@ -12,10 +12,16 @@ pub fn parse_answer(raw: &str) -> Result<f64, &'static str> {
     }
     let lower = input.to_lowercase();
     let letters_left = lower.replace("sqrt", "").replace("pi", "");
-    if letters_left.chars().any(|c| c.is_alphabetic() || c == '_' || c == '$' || c == '\\') {
+    if letters_left
+        .chars()
+        .any(|c| c.is_alphabetic() || c == '_' || c == '$' || c == '\\')
+    {
         return Err(UNREADABLE);
     }
-    if !lower.chars().all(|c| c.is_ascii_digit() || "+-*/^(). ".contains(c) || c.is_ascii_lowercase()) {
+    if !lower
+        .chars()
+        .all(|c| c.is_ascii_digit() || "+-*/^(). ".contains(c) || c.is_ascii_lowercase())
+    {
         return Err(UNREADABLE);
     }
     eval_number(&lower).ok_or(UNREADABLE)
@@ -62,7 +68,18 @@ mod tests {
     fn rejects() {
         let long_a = "a".repeat(41);
         let long_1 = "1".repeat(41);
-        for input in ["", "x = 7", "seven", "7x", "import os", &long_a, &long_1, "1/0", "cos(0)", "e^2"] {
+        for input in [
+            "",
+            "x = 7",
+            "seven",
+            "7x",
+            "import os",
+            &long_a,
+            &long_1,
+            "1/0",
+            "cos(0)",
+            "e^2",
+        ] {
             assert!(parse_answer(input).is_err(), "accepted {input}");
         }
     }

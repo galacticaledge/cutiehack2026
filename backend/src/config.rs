@@ -30,7 +30,10 @@ pub struct Config {
 }
 
 fn var(k: &str) -> Option<String> {
-    std::env::var(k).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+    std::env::var(k)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 fn or(k: &str, d: &str) -> String {
@@ -49,7 +52,8 @@ impl Config {
             openai_model: or("OPENAI_MODEL", "gpt-6.1-terra"),
             tutor_effort: or("LLM_TUTOR_EFFORT", "low"),
             check_effort: or("LLM_CHECK_EFFORT", "none"),
-            database_url: var("DATABASE_URL").ok_or_else(|| anyhow::anyhow!("DATABASE_URL must be set"))?,
+            database_url: var("DATABASE_URL")
+                .ok_or_else(|| anyhow::anyhow!("DATABASE_URL must be set"))?,
             session_secret,
             daily_cap: or("DAILY_TOKEN_CAP", "1000").parse().unwrap_or(1000.0),
             daily_topic_cap: or("DAILY_TOPIC_CAP", "3").parse().unwrap_or(3),

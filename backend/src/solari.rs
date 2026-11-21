@@ -2,7 +2,7 @@
 //! SERVER ONLY (the key never reaches the client). Hides itself when SOLARI_API_KEY is unset.
 use crate::models::new_id;
 use crate::state::AppState;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 pub struct ExecOutput {
@@ -24,7 +24,11 @@ fn base(state: &AppState) -> &str {
 impl<'a> Sandbox<'a> {
     /// Small, network-less sandbox that kills itself after 2 idle minutes if we never delete it.
     pub async fn create(state: &'a AppState) -> anyhow::Result<Sandbox<'a>> {
-        let key = state.cfg.solari_api_key.as_deref().ok_or_else(|| anyhow::anyhow!("Solari not configured"))?;
+        let key = state
+            .cfg
+            .solari_api_key
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Solari not configured"))?;
         let res = state
             .http
             .post(format!("{}/sandboxes", base(state)))
@@ -45,9 +49,15 @@ impl<'a> Sandbox<'a> {
         let status = res.status();
         let v: Value = res.json().await.unwrap_or(Value::Null);
         if !status.is_success() {
-            anyhow::bail!("Solari create {status}: {}", v.to_string().chars().take(300).collect::<String>());
+            anyhow::bail!(
+                "Solari create {status}: {}",
+                v.to_string().chars().take(300).collect::<String>()
+            );
         }
-        let id = v["sandboxId"].as_str().ok_or_else(|| anyhow::anyhow!("Solari create: no sandboxId"))?.to_string();
+        let id = v["sandboxId"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Solari create: no sandboxId"))?
+            .to_string();
         Ok(Sandbox { state, key, id })
     }
 
@@ -65,12 +75,25 @@ impl<'a> Sandbox<'a> {
         let status = res.status();
         let v: Value = res.json().await.unwrap_or(Value::Null);
         if !status.is_success() {
-            anyhow::bail!("Solari exec {status}: {}", v.to_string().chars().take(300).collect::<String>());
+            anyhow::bail!(
+                "Solari exec {status}: {}",
+                v.to_string().chars().take(300).collect::<String>()
+            );
         }
         Ok(ExecOutput {
             exit_code: v["exitCode"].as_i64().unwrap_or(-1),
-            stdout: v["stdout"].as_str().unwrap_or_default().chars().take(2000).collect(),
-            stderr: v["stderr"].as_str().unwrap_or_default().chars().take(500).collect(),
+            stdout: v["stdout"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(2000)
+                .collect(),
+            stderr: v["stderr"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(500)
+                .collect(),
         })
     }
 

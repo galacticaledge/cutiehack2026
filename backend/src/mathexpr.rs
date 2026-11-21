@@ -97,7 +97,9 @@ fn tokenize(s: &str) -> Option<Vec<Tok>> {
             while i < chars.len() && chars[i].is_ascii_alphabetic() {
                 i += 1;
             }
-            toks.push(Tok::Ident(chars[start..i].iter().collect::<String>().to_lowercase()));
+            toks.push(Tok::Ident(
+                chars[start..i].iter().collect::<String>().to_lowercase(),
+            ));
         } else if "+-*/^".contains(c) {
             toks.push(Tok::Op(c));
             i += 1;
@@ -242,7 +244,12 @@ pub fn parse(input: &str, var: Option<&str>) -> Option<Expr> {
     if toks.is_empty() {
         return None;
     }
-    let mut p = Parser { toks, pos: 0, var, depth: 0 };
+    let mut p = Parser {
+        toks,
+        pos: 0,
+        var,
+        depth: 0,
+    };
     let e = p.expr()?;
     if p.pos != p.toks.len() {
         return None;

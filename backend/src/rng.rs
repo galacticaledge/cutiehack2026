@@ -6,7 +6,9 @@ pub struct Rng {
 
 impl Rng {
     pub fn new(seed: i64) -> Self {
-        Rng { state: (seed as u64 & 0xffff_ffff) as u32 }
+        Rng {
+            state: (seed as u64 & 0xffff_ffff) as u32,
+        }
     }
 
     /// Uniform in [0, 1).

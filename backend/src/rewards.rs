@@ -51,7 +51,11 @@ pub fn attempt_mult(wrong: i32) -> f64 {
 
 fn fmt(n: f64) -> String {
     let r = (n * 100.0).round() / 100.0;
-    if r.fract() == 0.0 { format!("{}", r as i64) } else { format!("{r}") }
+    if r.fract() == 0.0 {
+        format!("{}", r as i64)
+    } else {
+        format!("{r}")
+    }
 }
 
 /// Reward before the daily cap (for the "Potential reward" display).
@@ -66,10 +70,22 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
     let am = attempt_mult(i.wrong_attempts);
     let um = if i.explain_passed { 1.0 } else { 0.5 };
     let breakdown = vec![
-        BreakdownItem { label: "Base", value: base },
-        BreakdownItem { label: "Hints", value: hm },
-        BreakdownItem { label: "Attempts", value: am },
-        BreakdownItem { label: "Understanding", value: um },
+        BreakdownItem {
+            label: "Base",
+            value: base,
+        },
+        BreakdownItem {
+            label: "Hints",
+            value: hm,
+        },
+        BreakdownItem {
+            label: "Attempts",
+            value: am,
+        },
+        BreakdownItem {
+            label: "Understanding",
+            value: um,
+        },
     ];
     if i.flagged && !i.explain_passed {
         return RewardResult {
@@ -102,14 +118,28 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
             summary.push_str(&format!(" · capped to {amount} by the daily limit"));
         }
     }
-    RewardResult { amount, status: RewardStatus::Pay, breakdown, summary, capped }
+    RewardResult {
+        amount,
+        status: RewardStatus::Pay,
+        breakdown,
+        summary,
+        capped,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     fn base() -> RewardInput {
-        RewardInput { base: bank_base(1), hints_used: 0, wrong_attempts: 0, explain_passed: true, flagged: false, earned_today: 0.0, daily_cap: 1000.0 }
+        RewardInput {
+            base: bank_base(1),
+            hints_used: 0,
+            wrong_attempts: 0,
+            explain_passed: true,
+            flagged: false,
+            earned_today: 0.0,
+            daily_cap: 1000.0,
+        }
     }
 
     #[test]
@@ -118,51 +148,128 @@ mod tests {
     }
     #[test]
     fn floor_applies() {
-        let r = compute_reward(&RewardInput { hints_used: 3, wrong_attempts: 6, explain_passed: false, ..base() });
+        let r = compute_reward(&RewardInput {
+            hints_used: 3,
+            wrong_attempts: 6,
+            explain_passed: false,
+            ..base()
+        });
         assert_eq!(r.amount, 20);
         assert_eq!(r.status, RewardStatus::Pay);
     }
     #[test]
     fn d2_one_hint_is_150() {
-        assert_eq!(compute_reward(&RewardInput { base: bank_base(2), hints_used: 1, ..base() }).amount, 150);
+        assert_eq!(
+            compute_reward(&RewardInput {
+                base: bank_base(2),
+                hints_used: 1,
+                ..base()
+            })
+            .amount,
+            150
+        );
     }
     #[test]
     fn attempt_mult_bottoms_out() {
-        assert_eq!(compute_reward(&RewardInput { wrong_attempts: 2, ..base() }).amount, 80);
-        assert_eq!(compute_reward(&RewardInput { wrong_attempts: 10, ..base() }).amount, 60);
+        assert_eq!(
+            compute_reward(&RewardInput {
+                wrong_attempts: 2,
+                ..base()
+            })
+            .amount,
+            80
+        );
+        assert_eq!(
+            compute_reward(&RewardInput {
+                wrong_attempts: 10,
+                ..base()
+            })
+            .amount,
+            60
+        );
     }
     #[test]
     fn cap_clamps() {
-        let r = compute_reward(&RewardInput { base: bank_base(2), earned_today: 950.0, ..base() });
+        let r = compute_reward(&RewardInput {
+            base: bank_base(2),
+            earned_today: 950.0,
+            ..base()
+        });
         assert_eq!(r.amount, 50);
         assert!(r.capped);
     }
     #[test]
     fn cap_reached_is_zero() {
-        assert_eq!(compute_reward(&RewardInput { earned_today: 1000.0, ..base() }).amount, 0);
-        assert_eq!(compute_reward(&RewardInput { earned_today: 1200.0, ..base() }).amount, 0);
+        assert_eq!(
+            compute_reward(&RewardInput {
+                earned_today: 1000.0,
+                ..base()
+            })
+            .amount,
+            0
+        );
+        assert_eq!(
+            compute_reward(&RewardInput {
+                earned_today: 1200.0,
+                ..base()
+            })
+            .amount,
+            0
+        );
     }
     #[test]
     fn flagged_failed_is_forfeited() {
-        let r = compute_reward(&RewardInput { flagged: true, explain_passed: false, ..base() });
+        let r = compute_reward(&RewardInput {
+            flagged: true,
+            explain_passed: false,
+            ..base()
+        });
         assert_eq!(r.amount, 0);
         assert_eq!(r.status, RewardStatus::Forfeited);
     }
     #[test]
     fn flagged_passed_pays() {
-        let r = compute_reward(&RewardInput { flagged: true, ..base() });
+        let r = compute_reward(&RewardInput {
+            flagged: true,
+            ..base()
+        });
         assert_eq!(r.amount, 100);
     }
     #[test]
     fn quest_base_pays_half() {
-        assert_eq!(compute_reward(&RewardInput { base: QUEST_BASE, ..base() }).amount, 50);
-        assert_eq!(compute_reward(&RewardInput { base: QUEST_BASE, hints_used: 3, wrong_attempts: 9, explain_passed: false, ..base() }).amount, 10);
+        assert_eq!(
+            compute_reward(&RewardInput {
+                base: QUEST_BASE,
+                ..base()
+            })
+            .amount,
+            50
+        );
+        assert_eq!(
+            compute_reward(&RewardInput {
+                base: QUEST_BASE,
+                hints_used: 3,
+                wrong_attempts: 9,
+                explain_passed: false,
+                ..base()
+            })
+            .amount,
+            10
+        );
         assert_eq!(potential_reward(QUEST_BASE, 0, 1), 45);
     }
     #[test]
     fn summary_text() {
-        let r = compute_reward(&RewardInput { base: bank_base(2), hints_used: 1, wrong_attempts: 1, ..base() });
+        let r = compute_reward(&RewardInput {
+            base: bank_base(2),
+            hints_used: 1,
+            wrong_attempts: 1,
+            ..base()
+        });
         assert_eq!(r.amount, 135);
-        assert_eq!(r.summary, "Base 200 × Hints 0.75 × Attempts 0.9 = 135 LEARN");
+        assert_eq!(
+            r.summary,
+            "Base 200 × Hints 0.75 × Attempts 0.9 = 135 LEARN"
+        );
     }
 }

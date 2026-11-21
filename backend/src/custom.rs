@@ -1,29 +1,42 @@
 //! Bring-your-own problem/topic intake (SPEC §8.6) and generated topic problems. Results are SERVER ONLY.
 use crate::answers::parse_answer;
-use crate::concepts::{get_concept, is_code, match_alias, Concept};
-use crate::quest::{agrees, draw_code, finish_code, instantiate, parse_code_template, Quest};
-use crate::rng::Rng;
-use crate::solari::Sandbox;
+use crate::concepts::{Concept, get_concept, is_code, match_alias};
 use crate::context::CustomRef;
-use crate::llm::{complete_json, Kind};
+use crate::llm::{Kind, complete_json};
 use crate::problems::get_template;
 use crate::prompts;
+use crate::quest::{Quest, agrees, draw_code, finish_code, instantiate, parse_code_template};
+use crate::rng::Rng;
+use crate::solari::Sandbox;
 use crate::state::AppState;
 use serde_json::Value;
 
 pub const CUSTOM_MAX: usize = 2000;
 
 fn template_id(v: &Value) -> Option<String> {
-    v.as_str().filter(|id| get_template(id).is_some()).map(String::from)
+    v.as_str()
+        .filter(|id| get_template(id).is_some())
+        .map(String::from)
 }
 
 fn fallback() -> CustomRef {
-    CustomRef { academic: Some(true), solvable: Some(false), ..Default::default() }
+    CustomRef {
+        academic: Some(true),
+        solvable: Some(false),
+        ..Default::default()
+    }
 }
 
 /// Hidden reference-solution call. Never fails.
 pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
-    let v = match complete_json(state, Kind::Tutor, &prompts::intake_problem(text), Some("medium")).await {
+    let v = match complete_json(
+        state,
+        Kind::Tutor,
+        &prompts::intake_problem(text),
+        Some("medium"),
+    )
+    .await
+    {
         Ok(Some(v)) => v,
         Ok(None) => return fallback(),
         Err(e) => {
@@ -31,7 +44,9 @@ pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
             return fallback();
         }
     };
-    let final_answer = v["finalAnswer"].as_str().map(|s| s.chars().take(500).collect::<String>());
+    let final_answer = v["finalAnswer"]
+        .as_str()
+        .map(|s| s.chars().take(500).collect::<String>());
     let mut numeric = v["numericAnswer"].as_f64().filter(|n| n.is_finite());
     // Cross-check numericAnswer against finalAnswer with the math engine.
     if let Some(fa) = &final_answer {
@@ -50,7 +65,19 @@ pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
         numeric_answer: numeric,
         steps: v["steps"]
             .as_array()
-            .map(|a| a.iter().take(12).map(|s| s.as_str().map(String::from).unwrap_or_else(|| s.to_string()).chars().take(400).collect()).collect())
+            .map(|a| {
+                a.iter()
+                    .take(12)
+                    .map(|s| {
+                        s.as_str()
+                            .map(String::from)
+                            .unwrap_or_else(|| s.to_string())
+                            .chars()
+                            .take(400)
+                            .collect()
+                    })
+                    .collect()
+            })
             .unwrap_or_default(),
         matched_template_id: template_id(&v["matchedTemplateId"]),
         ..Default::default()
@@ -68,24 +95,44 @@ pub async fn classify_topic(state: &AppState, text: &str) -> TopicClass {
     if text.chars().count() <= 80
         && let Some(c) = match_alias(text)
     {
-        return TopicClass { academic: true, concept: Some(c) };
+        return TopicClass {
+            academic: true,
+            concept: Some(c),
+        };
     }
     match complete_json(state, Kind::Check, &prompts::intake_topic(text), None).await {
         Ok(Some(v)) => TopicClass {
             academic: v["academic"].as_bool() != Some(false),
             concept: v["conceptId"].as_str().and_then(get_concept),
         },
-        Ok(None) => TopicClass { academic: true, concept: None },
+        Ok(None) => TopicClass {
+            academic: true,
+            concept: None,
+        },
         Err(e) => {
             tracing::warn!("[custom] topic intake failed: {e}");
-            TopicClass { academic: true, concept: None }
+            TopicClass {
+                academic: true,
+                concept: None,
+            }
         }
     }
 }
 
 async fn independent_answer(state: &AppState, prompt: &str) -> Option<f64> {
-    let v = complete_json(state, Kind::Tutor, &prompts::quest_solve(prompt), Some("medium")).await.ok()??;
-    v["numericAnswer"].as_f64().or_else(|| v["numericAnswer"].as_str().and_then(|s| parse_answer(s).ok()))
+    let v = complete_json(
+        state,
+        Kind::Tutor,
+        &prompts::quest_solve(prompt),
+        Some("medium"),
+    )
+    .await
+    .ok()??;
+    v["numericAnswer"].as_f64().or_else(|| {
+        v["numericAnswer"]
+            .as_str()
+            .and_then(|s| parse_answer(s).ok())
+    })
 }
 
 /// Generate a checked problem for a concept: LLM template → server-picked numbers →
@@ -95,7 +142,14 @@ pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> O
         return generate_code_quest(state, concept, seed).await;
     }
     for attempt in 0..2 {
-        let v = match complete_json(state, Kind::Tutor, &prompts::quest_template(concept), Some("medium")).await {
+        let v = match complete_json(
+            state,
+            Kind::Tutor,
+            &prompts::quest_template(concept),
+            Some("medium"),
+        )
+        .await
+        {
             Ok(Some(v)) => v,
             Ok(None) => continue,
             Err(e) => {
@@ -109,7 +163,10 @@ pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> O
         };
         match independent_answer(state, &q.prompt).await {
             Some(n) if agrees(q.answer, n) => return Some(q),
-            other => tracing::warn!("[quest] cross-check failed for {} (independent: {other:?})", concept.id),
+            other => tracing::warn!(
+                "[quest] cross-check failed for {} (independent: {other:?})",
+                concept.id
+            ),
         }
     }
     None
@@ -119,7 +176,14 @@ pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> O
 /// a Solari sandbox runs the exact program shown → its printed number is the answer.
 async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> Option<Quest> {
     for attempt in 0..2 {
-        let v = match complete_json(state, Kind::Tutor, &prompts::code_quest_template(concept), Some("medium")).await {
+        let v = match complete_json(
+            state,
+            Kind::Tutor,
+            &prompts::code_quest_template(concept),
+            Some("medium"),
+        )
+        .await
+        {
             Ok(Some(v)) => v,
             Ok(None) => continue,
             Err(e) => {
@@ -142,7 +206,9 @@ async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> 
         let mut rng = Rng::new(seed.wrapping_add(attempt));
         let mut found = None;
         for _ in 0..3 {
-            let Some(d) = draw_code(&tpl, &mut rng) else { break };
+            let Some(d) = draw_code(&tpl, &mut rng) else {
+                break;
+            };
             match sbx.run_python(&d.code).await {
                 Ok(out) if out.exit_code == 0 => {
                     if let Some(q) = finish_code(concept.id, d, &out.stdout) {
@@ -150,7 +216,11 @@ async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> 
                         break;
                     }
                 }
-                Ok(out) => tracing::warn!("[solari] program exited {}: {}", out.exit_code, out.stderr.lines().last().unwrap_or_default()),
+                Ok(out) => tracing::warn!(
+                    "[solari] program exited {}: {}",
+                    out.exit_code,
+                    out.stderr.lines().last().unwrap_or_default()
+                ),
                 Err(e) => {
                     tracing::warn!("[solari] {e}");
                     break;
@@ -159,7 +229,10 @@ async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> 
         }
         sbx.delete().await;
         if found.is_some() {
-            tracing::info!("[quest] {} answer verified by running it in a Solari sandbox", concept.id);
+            tracing::info!(
+                "[quest] {} answer verified by running it in a Solari sandbox",
+                concept.id
+            );
             return found;
         }
     }

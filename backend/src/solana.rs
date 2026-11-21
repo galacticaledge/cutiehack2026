@@ -18,18 +18,33 @@ pub struct Solana {
 
 pub fn keypair_from_json(raw: &str) -> anyhow::Result<Keypair> {
     let bytes: Vec<u8> = serde_json::from_str(raw)?;
-    Keypair::try_from(bytes.as_slice()).map_err(|e| anyhow::anyhow!("bad MINT_AUTHORITY_SECRET: {e}"))
+    Keypair::try_from(bytes.as_slice())
+        .map_err(|e| anyhow::anyhow!("bad MINT_AUTHORITY_SECRET: {e}"))
 }
 
 pub fn rpc_client(cfg: &Config) -> RpcClient {
-    RpcClient::new_with_timeout_and_commitment(cfg.solana_rpc_url.clone(), Duration::from_secs(30), CommitmentConfig::confirmed())
+    RpcClient::new_with_timeout_and_commitment(
+        cfg.solana_rpc_url.clone(),
+        Duration::from_secs(30),
+        CommitmentConfig::confirmed(),
+    )
 }
 
 impl Solana {
     pub fn from_config(cfg: &Config) -> anyhow::Result<Self> {
-        let secret = cfg.mint_authority_secret.as_deref().ok_or_else(|| anyhow::anyhow!("MINT_AUTHORITY_SECRET not set"))?;
-        let mint = cfg.mint_address.as_deref().ok_or_else(|| anyhow::anyhow!("MINT_ADDRESS not set (run setup_token)"))?;
-        Ok(Solana { rpc: rpc_client(cfg), payer: keypair_from_json(secret)?, mint: Pubkey::from_str(mint)? })
+        let secret = cfg
+            .mint_authority_secret
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("MINT_AUTHORITY_SECRET not set"))?;
+        let mint = cfg
+            .mint_address
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("MINT_ADDRESS not set (run setup_token)"))?;
+        Ok(Solana {
+            rpc: rpc_client(cfg),
+            payer: keypair_from_json(secret)?,
+            mint: Pubkey::from_str(mint)?,
+        })
     }
 
     /// Mint LEARN (base units) to a wallet; the payer covers ATA rent. Returns the tx signature.
@@ -37,11 +52,28 @@ impl Solana {
         let owner = Pubkey::from_str(to)?;
         let ata = get_associated_token_address(&owner, &self.mint);
         let ixs = vec![
-            create_associated_token_account_idempotent(&self.payer.pubkey(), &owner, &self.mint, &spl_token::id()),
-            spl_token::instruction::mint_to(&spl_token::id(), &self.mint, &ata, &self.payer.pubkey(), &[], amount_base)?,
+            create_associated_token_account_idempotent(
+                &self.payer.pubkey(),
+                &owner,
+                &self.mint,
+                &spl_token::id(),
+            ),
+            spl_token::instruction::mint_to(
+                &spl_token::id(),
+                &self.mint,
+                &ata,
+                &self.payer.pubkey(),
+                &[],
+                amount_base,
+            )?,
         ];
         let blockhash = self.rpc.get_latest_blockhash().await?;
-        let tx = Transaction::new_signed_with_payer(&ixs, Some(&self.payer.pubkey()), &[&self.payer], blockhash);
+        let tx = Transaction::new_signed_with_payer(
+            &ixs,
+            Some(&self.payer.pubkey()),
+            &[&self.payer],
+            blockhash,
+        );
         let sig = self.rpc.send_and_confirm_transaction(&tx).await?;
         Ok(sig.to_string())
     }
@@ -61,11 +93,19 @@ impl Solana {
     pub async fn token_balance(&self, owner: &str) -> Option<f64> {
         let owner = Pubkey::from_str(owner).ok()?;
         let ata = get_associated_token_address(&owner, &self.mint);
-        match tokio::time::timeout(Duration::from_secs(5), self.rpc.get_token_account_balance(&ata)).await {
+        match tokio::time::timeout(
+            Duration::from_secs(5),
+            self.rpc.get_token_account_balance(&ata),
+        )
+        .await
+        {
             Ok(Ok(b)) => Some(b.ui_amount.unwrap_or(0.0)),
             Ok(Err(e)) => {
                 let msg = e.to_string();
-                if msg.contains("could not find account") || msg.contains("Invalid param") || msg.contains("AccountNotFound") {
+                if msg.contains("could not find account")
+                    || msg.contains("Invalid param")
+                    || msg.contains("AccountNotFound")
+                {
                     Some(0.0)
                 } else {
                     tracing::warn!("[solana] balance failed: {msg}");
@@ -83,7 +123,10 @@ impl Solana {
 
 pub fn generate_user_wallet() -> (String, String) {
     let kp = Keypair::new();
-    (kp.pubkey().to_string(), bs58::encode(kp.to_bytes()).into_string())
+    (
+        kp.pubkey().to_string(),
+        bs58::encode(kp.to_bytes()).into_string(),
+    )
 }
 
 pub fn explorer_tx_url(sig: &str) -> String {

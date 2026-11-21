@@ -14,7 +14,9 @@ pub fn to_speakable(text: &str) -> String {
     while let Some(i) = s.find("\\frac{") {
         let rest = &s[i + 6..];
         let Some(a_end) = rest.find("}{") else { break };
-        let Some(b_end) = rest[a_end + 2..].find('}') else { break };
+        let Some(b_end) = rest[a_end + 2..].find('}') else {
+            break;
+        };
         let a = rest[..a_end].to_string();
         let b = rest[a_end + 2..a_end + 2 + b_end].to_string();
         s = format!("{}{a} over {b}{}", &s[..i], &rest[a_end + 2 + b_end + 1..]);
@@ -33,7 +35,13 @@ pub fn to_speakable(text: &str) -> String {
         .replace("\\,", " ")
         .replace('=', " equals ");
     let cleaned: String = s.chars().filter(|c| !"{}$`*_#>\\".contains(*c)).collect();
-    cleaned.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(1200).collect()
+    cleaned
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(1200)
+        .collect()
 }
 
 pub async fn synthesize(state: &AppState, text: &str) -> anyhow::Result<Arc<Vec<u8>>> {
@@ -46,8 +54,13 @@ pub async fn synthesize(state: &AppState, text: &str) -> anyhow::Result<Arc<Vec<
     let voice = cfg.elevenlabs_voice_id.as_deref().unwrap_or_default();
     let res = state
         .http
-        .post(format!("https://api.elevenlabs.io/v1/text-to-speech/{voice}"))
-        .header("xi-api-key", cfg.elevenlabs_api_key.as_deref().unwrap_or_default())
+        .post(format!(
+            "https://api.elevenlabs.io/v1/text-to-speech/{voice}"
+        ))
+        .header(
+            "xi-api-key",
+            cfg.elevenlabs_api_key.as_deref().unwrap_or_default(),
+        )
         .header("Accept", "audio/mpeg")
         .timeout(Duration::from_secs(15))
         .json(&serde_json::json!({ "text": speakable, "model_id": cfg.elevenlabs_model_id }))
@@ -55,7 +68,15 @@ pub async fn synthesize(state: &AppState, text: &str) -> anyhow::Result<Arc<Vec<
         .await?;
     if !res.status().is_success() {
         let status = res.status();
-        anyhow::bail!("ElevenLabs {status}: {}", res.text().await.unwrap_or_default().chars().take(200).collect::<String>());
+        anyhow::bail!(
+            "ElevenLabs {status}: {}",
+            res.text()
+                .await
+                .unwrap_or_default()
+                .chars()
+                .take(200)
+                .collect::<String>()
+        );
     }
     let bytes = Arc::new(res.bytes().await?.to_vec());
     let mut cache = state.tts_cache.lock().unwrap();
@@ -71,7 +92,13 @@ mod tests {
     use super::*;
     #[test]
     fn speakable() {
-        assert_eq!(to_speakable("So $x^2 = \\frac{14}{2}$?"), "So x squared equals 14 over 2?");
-        assert_eq!(to_speakable("**Try** $\\sqrt{16}$"), "Try square root of 16");
+        assert_eq!(
+            to_speakable("So $x^2 = \\frac{14}{2}$?"),
+            "So x squared equals 14 over 2?"
+        );
+        assert_eq!(
+            to_speakable("**Try** $\\sqrt{16}$"),
+            "Try square root of 16"
+        );
     }
 }

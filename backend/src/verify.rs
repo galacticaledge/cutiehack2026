@@ -48,12 +48,19 @@ fn rhs(raw: &str) -> String {
 /// Any item that doesn't evaluate makes the whole list unverifiable (never a false ✗).
 pub fn parse_list(raw: &str) -> Option<Vec<f64>> {
     let lower = normalize_math(raw).to_lowercase();
-    let s = lower.trim().trim_start_matches(['[', '(', '{']).trim_end_matches([']', ')', '}', '.']);
+    let s = lower
+        .trim()
+        .trim_start_matches(['[', '(', '{'])
+        .trim_end_matches([']', ')', '}', '.']);
     if s.is_empty() || s.len() > 500 {
         return None;
     }
     let s = s.replace(" and ", ",").replace(';', ",");
-    let items: Vec<&str> = if s.contains(',') { s.split(',').collect() } else { s.split_whitespace().collect() };
+    let items: Vec<&str> = if s.contains(',') {
+        s.split(',').collect()
+    } else {
+        s.split_whitespace().collect()
+    };
     let mut out = Vec::new();
     for item in items {
         let item = item.trim();
@@ -66,7 +73,11 @@ pub fn parse_list(raw: &str) -> Option<Vec<f64>> {
 }
 
 fn squash(s: &str) -> String {
-    normalize_math(s).to_lowercase().chars().filter(|c| !c.is_whitespace() && !"[](){}".contains(*c)).collect()
+    normalize_math(s)
+        .to_lowercase()
+        .chars()
+        .filter(|c| !c.is_whitespace() && !"[](){}".contains(*c))
+        .collect()
 }
 
 /// The extractor must quote the student: a claim whose text isn't in the message is dropped.
@@ -96,9 +107,19 @@ pub fn equivalent(a: &str, b: &str, var: &str) -> Option<bool> {
 pub fn verify_claim(claim: &Claim, checkpoints: &[Checkpoint]) -> Verdict {
     let claimed: String = claim.claimed.chars().take(200).collect();
     let Some(cp) = checkpoints.iter().find(|c| c.id == claim.checkpoint_id) else {
-        return Verdict { checkpoint_id: claim.checkpoint_id.clone(), label: String::new(), claimed, status: Status::Unverifiable };
+        return Verdict {
+            checkpoint_id: claim.checkpoint_id.clone(),
+            label: String::new(),
+            claimed,
+            status: Status::Unverifiable,
+        };
     };
-    let mk = |status| Verdict { checkpoint_id: cp.id.to_string(), label: cp.label.clone(), claimed: claimed.clone(), status };
+    let mk = |status| Verdict {
+        checkpoint_id: cp.id.to_string(),
+        label: cp.label.clone(),
+        claimed: claimed.clone(),
+        status,
+    };
     // The final answer is never verified in chat.
     if cp.id == "final" {
         return mk(Status::Final);
@@ -109,14 +130,21 @@ pub fn verify_claim(claim: &Claim, checkpoints: &[Checkpoint]) -> Verdict {
             Some(n) if (n - value).abs() <= tolerance.max(1e-9) => Status::Correct,
             Some(_) => Status::Incorrect,
         },
-        CheckpointKind::Expression { value, variable } => match equivalent(&claimed, value, variable) {
-            None => Status::Unverifiable,
-            Some(true) => Status::Correct,
-            Some(false) => Status::Incorrect,
-        },
+        CheckpointKind::Expression { value, variable } => {
+            match equivalent(&claimed, value, variable) {
+                None => Status::Unverifiable,
+                Some(true) => Status::Correct,
+                Some(false) => Status::Incorrect,
+            }
+        }
         CheckpointKind::List(expected) => match parse_list(&claimed) {
             None => Status::Unverifiable,
-            Some(list) if list.len() == expected.len() && list.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-9) => Status::Correct,
+            Some(list)
+                if list.len() == expected.len()
+                    && list.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-9) =>
+            {
+                Status::Correct
+            }
             Some(_) => Status::Incorrect,
         },
     };
@@ -124,7 +152,11 @@ pub fn verify_claim(claim: &Claim, checkpoints: &[Checkpoint]) -> Verdict {
 }
 
 pub fn verify_claims(claims: &[Claim], checkpoints: &[Checkpoint]) -> Vec<Verdict> {
-    claims.iter().take(6).map(|c| verify_claim(c, checkpoints)).collect()
+    claims
+        .iter()
+        .take(6)
+        .map(|c| verify_claim(c, checkpoints))
+        .collect()
 }
 
 /// Lines for the tutor prompt. Never include expected values.
@@ -138,9 +170,17 @@ pub fn verdict_lines(verdicts: &[Verdict]) -> Vec<String> {
                 final_added = true;
             }
             Status::Final => {}
-            Status::Correct => lines.push(format!("{}: student said {} → CORRECT", v.label, v.claimed)),
-            Status::Incorrect => lines.push(format!("{}: student said {} → INCORRECT", v.label, v.claimed)),
-            Status::Unverifiable if !v.label.is_empty() => lines.push(format!("{}: student said {} → could not be checked", v.label, v.claimed)),
+            Status::Correct => {
+                lines.push(format!("{}: student said {} → CORRECT", v.label, v.claimed))
+            }
+            Status::Incorrect => lines.push(format!(
+                "{}: student said {} → INCORRECT",
+                v.label, v.claimed
+            )),
+            Status::Unverifiable if !v.label.is_empty() => lines.push(format!(
+                "{}: student said {} → could not be checked",
+                v.label, v.claimed
+            )),
             Status::Unverifiable => {}
         }
     }
@@ -151,13 +191,18 @@ pub fn verdict_chips(verdicts: &[Verdict]) -> Vec<Chip> {
     verdicts
         .iter()
         .filter(|v| matches!(v.status, Status::Correct | Status::Incorrect))
-        .map(|v| Chip { label: v.label.clone(), status: v.status })
+        .map(|v| Chip {
+            label: v.label.clone(),
+            status: v.status,
+        })
         .collect()
 }
 
 /// Did this stored user message state a final answer? (Its verdicts include a "final" claim.)
 pub fn stated_final(verdicts: Option<&serde_json::Value>) -> bool {
-    verdicts.and_then(|v| v.as_array()).is_some_and(|a| a.iter().any(|v| v["status"] == "final"))
+    verdicts
+        .and_then(|v| v.as_array())
+        .is_some_and(|a| a.iter().any(|v| v["status"] == "final"))
 }
 
 /// Tutor-prompt fact after the student's sketch of how they got a stated answer was graded.
@@ -172,9 +217,12 @@ pub fn sketch_line(sound: bool) -> String {
 /// Gate: skip the extractor for messages with no digits, operators or code-like tokens.
 pub fn looks_mathy(message: &str) -> bool {
     let m = message.to_lowercase();
-    m.chars().any(|c| c.is_ascii_digit() || "+*/^=<>%[]".contains(c))
+    m.chars()
+        .any(|c| c.is_ascii_digit() || "+*/^=<>%[]".contains(c))
         || m.contains(" - ")
-        || ["sqrt", "pi", "range", "print"].iter().any(|w| m.contains(w))
+        || ["sqrt", "pi", "range", "print"]
+            .iter()
+            .any(|w| m.contains(w))
         || m.split(|c: char| !c.is_alphanumeric()).any(|w| w == "x")
 }
 
@@ -185,15 +233,54 @@ mod tests {
 
     fn cps() -> Vec<Checkpoint> {
         vec![
-            Checkpoint { id: "rhs", label: "right-hand side after removing the constant".into(), kind: CheckpointKind::Number { value: 21.0, tolerance: 1e-9 } },
-            Checkpoint { id: "t2", label: "t squared".into(), kind: CheckpointKind::Number { value: 10.2, tolerance: 0.05 } },
-            Checkpoint { id: "derivative", label: "the derivative f'(x)".into(), kind: CheckpointKind::Expression { value: "21*x^2+8*x-3".into(), variable: "x".into() } },
-            Checkpoint { id: "kept_values", label: "the values added to total".into(), kind: CheckpointKind::List(vec![3.0, 6.0, 9.0]) },
-            Checkpoint { id: "final", label: "value of x".into(), kind: CheckpointKind::Number { value: 7.0, tolerance: 1e-9 } },
+            Checkpoint {
+                id: "rhs",
+                label: "right-hand side after removing the constant".into(),
+                kind: CheckpointKind::Number {
+                    value: 21.0,
+                    tolerance: 1e-9,
+                },
+            },
+            Checkpoint {
+                id: "t2",
+                label: "t squared".into(),
+                kind: CheckpointKind::Number {
+                    value: 10.2,
+                    tolerance: 0.05,
+                },
+            },
+            Checkpoint {
+                id: "derivative",
+                label: "the derivative f'(x)".into(),
+                kind: CheckpointKind::Expression {
+                    value: "21*x^2+8*x-3".into(),
+                    variable: "x".into(),
+                },
+            },
+            Checkpoint {
+                id: "kept_values",
+                label: "the values added to total".into(),
+                kind: CheckpointKind::List(vec![3.0, 6.0, 9.0]),
+            },
+            Checkpoint {
+                id: "final",
+                label: "value of x".into(),
+                kind: CheckpointKind::Number {
+                    value: 7.0,
+                    tolerance: 1e-9,
+                },
+            },
         ]
     }
     fn v(id: &str, claimed: &str) -> Status {
-        verify_claim(&Claim { checkpoint_id: id.into(), claimed: claimed.into() }, &cps()).status
+        verify_claim(
+            &Claim {
+                checkpoint_id: id.into(),
+                claimed: claimed.into(),
+            },
+            &cps(),
+        )
+        .status
     }
 
     #[test]
@@ -220,7 +307,10 @@ mod tests {
     }
     #[test]
     fn list_items_can_be_arithmetic() {
-        assert_eq!(parse_list("4, 4*2, 4*3, 4*4"), Some(vec![4.0, 8.0, 12.0, 16.0]));
+        assert_eq!(
+            parse_list("4, 4*2, 4*3, 4*4"),
+            Some(vec![4.0, 8.0, 12.0, 16.0])
+        );
         assert_eq!(parse_list("3 6 9"), Some(vec![3.0, 6.0, 9.0]));
         assert_eq!(parse_list("[3, 6, 9]."), Some(vec![3.0, 6.0, 9.0]));
         assert_eq!(v("kept_values", "3, 3*2, 3*3"), Status::Correct);
@@ -242,7 +332,10 @@ mod tests {
     fn claims_must_quote_the_student() {
         assert!(claim_in_message("[4, 8, 12, 16]", "4, 8, 12, 16"));
         assert!(claim_in_message("4, 4*2", "Multiples of 4. 4, 4*2, 4*3"));
-        assert!(!claim_in_message("[4, 8, 12, 16]", "Multiples of 4. 4, 4*2, 4*3, 4*4"));
+        assert!(!claim_in_message(
+            "[4, 8, 12, 16]",
+            "Multiples of 4. 4, 4*2, 4*3, 4*4"
+        ));
         assert!(!claim_in_message("", "anything"));
     }
     #[test]
@@ -261,9 +354,18 @@ mod tests {
     fn rendering_never_leaks_expected_values() {
         let verdicts = verify_claims(
             &[
-                Claim { checkpoint_id: "rhs".into(), claimed: "20".into() },
-                Claim { checkpoint_id: "final".into(), claimed: "7".into() },
-                Claim { checkpoint_id: "kept_values".into(), claimed: "[3,6,9]".into() },
+                Claim {
+                    checkpoint_id: "rhs".into(),
+                    claimed: "20".into(),
+                },
+                Claim {
+                    checkpoint_id: "final".into(),
+                    claimed: "7".into(),
+                },
+                Claim {
+                    checkpoint_id: "kept_values".into(),
+                    claimed: "[3,6,9]".into(),
+                },
             ],
             &cps(),
         );
@@ -275,8 +377,14 @@ mod tests {
         assert_eq!(
             verdict_chips(&verdicts),
             vec![
-                Chip { label: "right-hand side after removing the constant".into(), status: Status::Incorrect },
-                Chip { label: "the values added to total".into(), status: Status::Correct },
+                Chip {
+                    label: "right-hand side after removing the constant".into(),
+                    status: Status::Incorrect
+                },
+                Chip {
+                    label: "the values added to total".into(),
+                    status: Status::Correct
+                },
             ]
         );
     }
@@ -296,29 +404,58 @@ mod tests {
                         CheckpointKind::Expression { value, .. } => value.clone(),
                         CheckpointKind::List(l) => format!("{l:?}"),
                     };
-                    let verdict = verify_claim(&Claim { checkpoint_id: c.id.into(), claimed: claimed.clone() }, &p.checkpoints);
-                    assert_eq!(verdict.status, Status::Correct, "{} {} {claimed}", t.id, c.id);
+                    let verdict = verify_claim(
+                        &Claim {
+                            checkpoint_id: c.id.into(),
+                            claimed: claimed.clone(),
+                        },
+                        &p.checkpoints,
+                    );
+                    assert_eq!(
+                        verdict.status,
+                        Status::Correct,
+                        "{} {} {claimed}",
+                        t.id,
+                        c.id
+                    );
                 }
                 // steps never state the final answer as a standalone number (beyond the prompt)
                 let steps = p.solution_steps.join(" ");
-                assert!(!crate::leak::deterministic_leak(&steps, p.answer, p.tolerance, &p.prompt) || t.id == "kin-freefall-1", "{} seed {seed} steps leak", t.id);
+                assert!(
+                    !crate::leak::deterministic_leak(&steps, p.answer, p.tolerance, &p.prompt)
+                        || t.id == "kin-freefall-1",
+                    "{} seed {seed} steps leak",
+                    t.id
+                );
             }
         }
     }
     #[test]
     fn different_seeds_differ() {
         for t in TEMPLATES.iter() {
-            let prompts: std::collections::HashSet<String> = (1..6).map(|s| (t.generate)(s).prompt).collect();
+            let prompts: std::collections::HashSet<String> =
+                (1..6).map(|s| (t.generate)(s).prompt).collect();
             assert!(prompts.len() > 1, "{}", t.id);
         }
     }
     #[test]
     fn derivative_matches_numeric_slope() {
         let p = (TEMPLATES[2].generate)(77);
-        let CheckpointKind::Expression { value, .. } = &p.checkpoints[0].kind else { panic!() };
+        let CheckpointKind::Expression { value, .. } = &p.checkpoints[0].kind else {
+            panic!()
+        };
         let e = parse(value, Some("x")).unwrap();
         // f'(k) from the derivative expression must equal the stored answer
-        let k: f64 = p.prompt.split("f'(").nth(1).unwrap().split(')').next().unwrap().parse().unwrap();
+        let k: f64 = p
+            .prompt
+            .split("f'(")
+            .nth(1)
+            .unwrap()
+            .split(')')
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
         assert!((eval(&e, k) - p.answer).abs() < 1e-9);
     }
 }

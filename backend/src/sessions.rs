@@ -1,18 +1,18 @@
 //! Session services and the client-safe session view.
 use crate::answers::{attempts_allowed, is_locked};
-use crate::concepts::{concept_of_key, missing_prereqs, reward_key, Concept};
+use crate::concepts::{Concept, concept_of_key, missing_prereqs, reward_key};
 use crate::config::Config;
 use crate::context::problem_context;
 use crate::error::{ApiResult, AppError};
-use crate::models::{new_id, Message, ProblemSession, Reward, User};
+use crate::models::{Message, ProblemSession, Reward, User, new_id};
 use crate::problems::get_template;
 use crate::prompts::opening_message;
-use crate::rewards::{bank_base, potential_reward, QUEST_BASE};
+use crate::rewards::{QUEST_BASE, bank_base, potential_reward};
 use crate::rng::{hash_seed, random_seed};
 use crate::solana::explorer_tx_url;
 use crate::state::AppState;
-use crate::verify::{verdict_chips, Verdict};
-use serde_json::{json, Value};
+use crate::verify::{Verdict, verdict_chips};
+use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::collections::HashSet;
 
@@ -38,7 +38,12 @@ pub async fn earned_today(state: &AppState, user_id: &str) -> anyhow::Result<f64
 }
 
 /// A payout record for (user, template) from another session → Practice mode.
-pub async fn reward_elsewhere(pool: &PgPool, user_id: &str, template_id: &str, session_id: &str) -> anyhow::Result<bool> {
+pub async fn reward_elsewhere(
+    pool: &PgPool,
+    user_id: &str,
+    template_id: &str,
+    session_id: &str,
+) -> anyhow::Result<bool> {
     let found: Option<String> = sqlx::query_scalar("SELECT id FROM rewards WHERE user_id = $1 AND template_id = $2 AND session_id <> $3 LIMIT 1")
         .bind(user_id)
         .bind(template_id)
@@ -57,13 +62,25 @@ pub async fn mastered_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<H
     .bind(user_id)
     .fetch_all(pool)
     .await?;
-    Ok(keys.iter().filter_map(|k| concept_of_key(k)).map(String::from).collect())
+    Ok(keys
+        .iter()
+        .filter_map(|k| concept_of_key(k))
+        .map(String::from)
+        .collect())
 }
 
 /// Concepts with any reward record (paid, minting, failed or forfeited).
 pub async fn rewarded_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<HashSet<String>> {
-    let keys: Vec<String> = sqlx::query_scalar("SELECT template_id FROM rewards WHERE user_id = $1").bind(user_id).fetch_all(pool).await?;
-    Ok(keys.iter().filter_map(|k| concept_of_key(k)).map(String::from).collect())
+    let keys: Vec<String> =
+        sqlx::query_scalar("SELECT template_id FROM rewards WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
+    Ok(keys
+        .iter()
+        .filter_map(|k| concept_of_key(k))
+        .map(String::from)
+        .collect())
 }
 
 /// New-topic rewards recorded today.
@@ -77,24 +94,45 @@ pub async fn topic_rewards_today(pool: &PgPool, user_id: &str) -> anyhow::Result
 }
 
 /// Why a generated problem on `c` can't earn right now, or None if it can.
-pub async fn topic_block_reason(state: &AppState, user_id: &str, c: &Concept) -> anyhow::Result<Option<String>> {
+pub async fn topic_block_reason(
+    state: &AppState,
+    user_id: &str,
+    c: &Concept,
+) -> anyhow::Result<Option<String>> {
     if reward_elsewhere(&state.pool, user_id, &reward_key(c.id), "").await? {
-        return Ok(Some(format!("You've already earned on {}. This one is practice.", c.title)));
+        return Ok(Some(format!(
+            "You've already earned on {}. This one is practice.",
+            c.title
+        )));
     }
     let missing = missing_prereqs(c.id, &mastered_concepts(&state.pool, user_id).await?);
     if !missing.is_empty() {
-        let names = missing.iter().map(|m| m.title).collect::<Vec<_>>().join(" and ");
-        return Ok(Some(format!("Master {names} first to unlock LEARN for {}. This one is practice.", c.title)));
+        let names = missing
+            .iter()
+            .map(|m| m.title)
+            .collect::<Vec<_>>()
+            .join(" and ");
+        return Ok(Some(format!(
+            "Master {names} first to unlock LEARN for {}. This one is practice.",
+            c.title
+        )));
     }
     if topic_rewards_today(&state.pool, user_id).await? >= state.cfg.daily_topic_cap {
-        return Ok(Some(format!("You've reached today's limit of {} new-topic rewards. This one is practice.", state.cfg.daily_topic_cap)));
+        return Ok(Some(format!(
+            "You've reached today's limit of {} new-topic rewards. This one is practice.",
+            state.cfg.daily_topic_cap
+        )));
     }
     Ok(None)
 }
 
 /// An unfinished generated problem on this concept. Reused instead of generating a new one,
 /// so a student can't reroll until they get an easy problem.
-pub async fn active_quest(pool: &PgPool, user_id: &str, concept_id: &str) -> anyhow::Result<Option<ProblemSession>> {
+pub async fn active_quest(
+    pool: &PgPool,
+    user_id: &str,
+    concept_id: &str,
+) -> anyhow::Result<Option<ProblemSession>> {
     Ok(sqlx::query_as::<_, ProblemSession>(
         "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'quest' AND template_id = $2 AND status IN ('active','solved')
          ORDER BY started_at DESC LIMIT 1",
@@ -105,7 +143,13 @@ pub async fn active_quest(pool: &PgPool, user_id: &str, concept_id: &str) -> any
     .await?)
 }
 
-pub async fn insert_message(pool: &PgPool, session_id: &str, role: &str, content: &str, verdicts: Option<Value>) -> anyhow::Result<Message> {
+pub async fn insert_message(
+    pool: &PgPool,
+    session_id: &str,
+    role: &str,
+    content: &str,
+    verdicts: Option<Value>,
+) -> anyhow::Result<Message> {
     Ok(sqlx::query_as::<_, Message>("INSERT INTO messages (id, session_id, role, content, verdicts) VALUES ($1, $2, $3, $4, $5) RETURNING *")
         .bind(new_id())
         .bind(session_id)
@@ -117,10 +161,12 @@ pub async fn insert_message(pool: &PgPool, session_id: &str, role: &str, content
 }
 
 pub async fn history(pool: &PgPool, session_id: &str) -> anyhow::Result<Vec<Message>> {
-    Ok(sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500")
-        .bind(session_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(sqlx::query_as::<_, Message>(
+        "SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500",
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await?)
 }
 
 pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<ProblemSession> {
@@ -134,7 +180,12 @@ pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<P
     }
 }
 
-pub async fn create_bank_session(state: &AppState, user: &User, template_id: &str, from_session_id: Option<&str>) -> ApiResult<ProblemSession> {
+pub async fn create_bank_session(
+    state: &AppState,
+    user: &User,
+    template_id: &str,
+    from_session_id: Option<&str>,
+) -> ApiResult<ProblemSession> {
     if get_template(template_id).is_none() {
         return Err(AppError::bad("Unknown problem."));
     }
@@ -167,17 +218,35 @@ pub fn reward_json(cfg: &Config, r: &Reward) -> Value {
 pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Value> {
     let ctx = problem_context(s)?;
     let messages = history(&state.pool, &s.id).await?;
-    let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1").bind(&s.id).fetch_optional(&state.pool).await?;
+    let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+        .bind(&s.id)
+        .fetch_optional(&state.pool)
+        .await?;
     let is_bank = ctx.is_bank();
     let earns = ctx.earns();
     let practice_reason = ctx.custom_ref.practice_reason.clone();
     let practice = if earns {
-        practice_reason.is_some() || reward_elsewhere(&state.pool, &s.user_id, s.template_id.as_deref().unwrap_or_default(), &s.id).await?
+        practice_reason.is_some()
+            || reward_elsewhere(
+                &state.pool,
+                &s.user_id,
+                s.template_id.as_deref().unwrap_or_default(),
+                &s.id,
+            )
+            .await?
     } else {
         true
     };
-    let base = if ctx.is_quest() { QUEST_BASE } else { bank_base(ctx.difficulty) };
-    let matched = ctx.custom_ref.matched_template_id.as_deref().and_then(get_template);
+    let base = if ctx.is_quest() {
+        QUEST_BASE
+    } else {
+        bank_base(ctx.difficulty)
+    };
+    let matched = ctx
+        .custom_ref
+        .matched_template_id
+        .as_deref()
+        .and_then(get_template);
 
     let msgs: Vec<Value> = messages
         .iter()
