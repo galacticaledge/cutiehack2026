@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { DreamFooter } from "@/components/scenery";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { flavorFor, suitColor, Tart } from "@/components/wonder";
 import { DoorArt } from "@/components/doors";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
-import { api, type Problem } from "@/lib/api";
+import { api, mapAvailable, type Problem } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {
   return (
@@ -122,6 +122,10 @@ export function Learn() {
   const [text, setText] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [hasMap, setHasMap] = useState(false);
+  useEffect(() => {
+    void mapAvailable().then(setHasMap);
+  }, []);
   const navigate = useNavigate();
 
   // One door at a time: swing it open, then go through.
@@ -223,7 +227,19 @@ export function Learn() {
             placeholder={kind === "problem" ? "Paste your homework problem here…" : "e.g. recursion, the chain rule, free fall"}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does.</span>
+            <span className="text-xs text-muted-foreground">
+              {kind === "topic" && hasMap ? (
+                <>
+                  Topics on the{" "}
+                  <Link to="/map" className="font-medium text-[var(--tan)] underline">
+                    Map of Wonderland
+                  </Link>{" "}
+                  get a fresh, verified problem that can earn tarts.
+                </>
+              ) : (
+                "Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does."
+              )}
+            </span>
             <Button disabled={!text.trim() || starting !== null || openingId !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
               {starting === "custom" ? "The Caterpillar is reading…" : "Ask the Cat"}
             </Button>

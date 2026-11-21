@@ -28,7 +28,16 @@ async fn main() -> anyhow::Result<()> {
         state.cfg.resources_enabled()
     );
 
-    let mut app = api_router();
+    // Unknown /api paths get a JSON 404, never the SPA's index.html (which would look like a 200).
+    let mut app = api_router().route(
+        "/api/{*rest}",
+        axum::routing::any(|| async {
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                axum::Json(serde_json::json!({ "error": "Not found." })),
+            )
+        }),
+    );
     let index = Path::new(&static_dir).join("index.html");
     if index.exists() {
         // Serve the React SPA; unknown paths fall back to index.html for client-side routing.

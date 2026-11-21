@@ -146,7 +146,7 @@ export function TartRecipePanel() {
 type Stop = { label: string; done: boolean; current?: boolean; icon: typeof Rabbit; detail?: string };
 
 export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: string[] }) {
-  const isBank = s.source === "bank";
+  const isBank = s.source === "bank" || s.source === "quest"; // both have a verified answer and a trial
   const solved = s.status !== "active";
   const done = s.status === "done";
   const stops: Stop[] = [{ label: "Fell down the rabbit hole", done: true, icon: Rabbit }];
@@ -211,10 +211,12 @@ export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: 
       {isBank && (
         <Panel title="Pockets">
           <dl className="grid grid-cols-2 gap-2 text-center text-xs">
-            <div className="rounded-lg bg-secondary/70 p-2">
+            {s.source === "bank" && (
+              <div className="rounded-lg bg-secondary/70 p-2">
               <dt className="text-muted-foreground">Bottles drunk</dt>
               <dd className="text-lg font-semibold tabular-nums">{s.hintsUsed}/3</dd>
             </div>
+            )}
             <div className="rounded-lg bg-secondary/70 p-2">
               <dt className="text-muted-foreground">Wrong turns</dt>
               <dd className="text-lg font-semibold tabular-nums">{s.wrongAttempts}</dd>

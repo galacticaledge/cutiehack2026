@@ -94,7 +94,10 @@ export interface RewardView {
 
 export interface SessionView {
   id: string;
-  source: "bank" | "custom_problem" | "custom_topic";
+  source: "bank" | "quest" | "custom_problem" | "custom_topic";
+  conceptId?: string | null;
+  practiceReason?: string | null;
+  checkedBy?: "engine" | "sandbox" | null;
   templateId: string | null;
   title: string;
   prompt: string;
@@ -124,6 +127,24 @@ export interface Features {
   learnMore: boolean;
   llmProvider: string;
   solana: boolean;
+  codeRunner?: boolean;
+}
+
+export interface ConceptNode {
+  id: string;
+  title: string;
+  subject: string;
+  prereqs: string[];
+  status: "mastered" | "available" | "locked";
+  rewarded: boolean;
+  bankTemplateId: string | null;
+}
+
+export interface ConceptMap {
+  concepts: ConceptNode[];
+  topicRewardsToday: number;
+  dailyTopicCap: number;
+  questBase: number;
 }
 
 export interface JournalEntry {
@@ -139,4 +160,14 @@ export interface JournalEntry {
   explainPassed: boolean | null;
   explainFeedback: string | null;
   reward: RewardView | null;
+}
+
+/** Whether this server has the Map of Wonderland (/api/concepts). Checked once per page load. */
+let mapProbe: Promise<boolean> | null = null;
+export function mapAvailable(): Promise<boolean> {
+  mapProbe ??= fetch("/api/concepts", { credentials: "same-origin" })
+    // Only a real JSON answer counts (an HTML page or a 404 means this server has no map).
+    .then((r) => r.status !== 404 && (r.headers.get("content-type") ?? "").includes("json"))
+    .catch(() => false);
+  return mapProbe;
 }

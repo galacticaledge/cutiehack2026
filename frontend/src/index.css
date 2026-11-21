@@ -522,3 +522,33 @@ main { position: relative; z-index: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(1.1); }
 }
+
+/* ---------- Solari sandbox badge ---------- */
+.solari-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; padding: 0.25rem 0.7rem;
+  font-size: 0.78rem; font-weight: 600; color: #1f5f5a; background: #e3f4f1; border: 1px solid #b9ddd7;
+}
+.dark .solari-badge { color: #9fe3da; background: #143130; border-color: #2c6461; }
+
+/* ---------- Map of Wonderland ---------- */
+.map-path { display: flex; flex-wrap: wrap; align-items: center; row-gap: 0.65rem; }
+.map-path > li { display: flex; align-items: center; }
+.map-path > li:not(:last-child)::after {
+  content: ""; width: 1.1rem; height: 0; margin: 0 0.15rem;
+  border-top: 2px dashed color-mix(in oklab, var(--tan) 55%, transparent);
+}
+.map-node {
+  display: inline-flex; align-items: center; gap: 0.45rem; max-width: 15rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.2rem; border-radius: 999px;
+  border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 85%, transparent);
+  font-size: 0.85rem; text-align: left; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.map-node:hover { transform: translateY(-1px); border-color: var(--tan); }
+.map-node.is-selected { border-color: var(--tan); box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-soft) 45%, transparent); }
+.map-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-stone { display: inline-flex; width: 1.9rem; height: 1.9rem; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 999px; border: 2px solid; }
+.map-stone-sm { width: 1.3rem; height: 1.3rem; border-width: 1.5px; }
+.map-stone.is-mastered { background: var(--potion); border-color: var(--potion); color: #fff; }
+.map-stone.is-available { background: #fff8e6; border-color: var(--gold-soft); color: #8d6a20; box-shadow: 0 0 10px 1px color-mix(in oklab, var(--gold-soft) 55%, transparent); }
+.map-stone.is-locked { background: var(--muted); border-color: var(--border); color: var(--muted-foreground); }
+.dark .map-stone.is-available { background: #3a2e1a; color: #f1d79a; }

@@ -1,18 +1,23 @@
-import { BookHeart, LogOut, Wallet } from "lucide-react";
+import { BookHeart, LogOut, Map as MapIcon, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { LookingGlassToggle } from "@/components/scenery";
 import { SoundToggle } from "@/components/extras";
-import { api, type Me } from "@/lib/api";
+import { api, mapAvailable, type Me } from "@/lib/api";
 
 export function Header() {
   const [me, setMe] = useState<Me | null>(null);
+  const [hasMap, setHasMap] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(() => {
     api<Me>("/api/me").then(setMe).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void mapAvailable().then(setHasMap);
   }, []);
 
   useEffect(() => {
@@ -35,6 +40,12 @@ export function Header() {
         </Link>
         {me && (
           <div className="flex items-center gap-1.5 text-sm sm:gap-2">
+            {hasMap && (
+              <Link to="/map" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="The Map of Wonderland">
+                <MapIcon className="size-4" />
+                <span className="hidden lg:inline">Map</span>
+              </Link>
+            )}
             <Link to="/journal" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="Your dream journal">
               <BookHeart className="size-4" />
               <span className="hidden md:inline">Dream journal</span>
