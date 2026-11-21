@@ -2,7 +2,8 @@ import { BookHeart, LogOut, Map as MapIcon, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheshireGrin, Tart } from "@/components/wonder";
+import { Tart } from "@/components/wonder";
+import { SocraMark } from "@/components/logo";
 import { LookingGlassToggle } from "@/components/scenery";
 import { SoundToggle } from "@/components/sound";
 import { api, mapAvailable, type Me } from "@/lib/api";
@@ -35,7 +36,7 @@ export function Header() {
     <header className="sticky top-0 z-40 bg-[var(--night)]/95 text-[#faf8f1] backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[90rem] items-center justify-between gap-3 px-4">
         <Link to="/learn" className="flex items-center gap-2">
-          <CheshireGrin className="grin-mirror size-8" />
+          <SocraMark className="size-9 text-[#d6ecf7]" />
           <span className="font-display text-2xl leading-none">Socra</span>
         </Link>
         {me && (
