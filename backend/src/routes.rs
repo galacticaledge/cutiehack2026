@@ -36,6 +36,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/auth/logout", post(logout))
         .route("/api/me", get(me))
         .route("/api/problems", get(problems))
+        .route("/api/journal", get(journal))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
@@ -132,6 +133,39 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
     Ok(Json(Value::Array(list)))
 }
 
+/// Dream journal: the user's finished verified problems, newest first. Never includes answers.
+async fn journal(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
+    let sessions = sqlx::query_as::<_, ProblemSession>(
+        "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'bank' AND status = 'done' ORDER BY solved_at DESC NULLS LAST LIMIT 100",
+    )
+    .bind(&user.id)
+    .fetch_all(&st.pool)
+    .await?;
+    let rewards = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE user_id = $1").bind(&user.id).fetch_all(&st.pool).await?;
+    let entries: Vec<Value> = sessions
+        .iter()
+        .filter_map(|s| {
+            let t = get_template(s.template_id.as_deref()?)?;
+            let reward = rewards.iter().find(|r| r.session_id == s.id);
+            Some(json!({
+                "sessionId": s.id,
+                "templateId": t.id,
+                "title": t.title,
+                "difficulty": t.difficulty,
+                "startedAt": s.started_at,
+                "solvedAt": s.solved_at,
+                "hintsUsed": s.hints_used,
+                "wrongAttempts": s.wrong_attempts,
+                "explanation": s.explanation,
+                "explainPassed": s.explain_passed,
+                "explainFeedback": s.explain_feedback,
+                "reward": reward.map(|r| reward_json(&st.cfg, r)),
+            }))
+        })
+        .collect();
+    Ok(Json(Value::Array(entries)))
+}
+
 async fn features(State(st): State<AppState>) -> J {
     Json(json!({
         "tts": st.cfg.tts_enabled(),
@@ -226,7 +260,7 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
         let mut rate = st.chat_rate.lock().unwrap();
         let now = Instant::now();
         if rate.get(&user.id).is_some_and(|t| now.duration_since(*t) < Duration::from_secs(2)) {
-            return Err(AppError::new(StatusCode::TOO_MANY_REQUESTS, "Slow down a little, one message every 2 seconds."));
+            return Err(AppError::new(StatusCode::TOO_MANY_REQUESTS, "No need to hurry like the White Rabbit. One message every 2 seconds."));
         }
         rate.insert(user.id.clone(), now);
     }
@@ -277,7 +311,7 @@ struct AnswerBody {
     answer: Option<String>,
 }
 
-const DIAGNOSIS_FALLBACK: &str = "Not quite. Go back through your work one step at a time. Which step are you least sure about?";
+const DIAGNOSIS_FALLBACK: &str = "Not quite, but every adventure in Wonderland takes a wrong turn or two. Go back through your work one step at a time. Which step are you least sure about?";
 
 async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<AnswerBody>) -> ApiResult<Response> {
     let s = load_session(&st.pool, &id, &user.id).await?;
@@ -292,7 +326,7 @@ async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): 
     }
     if is_bank && is_locked(s.wrong_attempts, s.hints_used) {
         let msg = if s.hints_used < 3 {
-            "Answers are locked. Reveal the next hint to unlock 2 more attempts."
+            "The little door is locked. Drink the next bottle to find the key (2 more attempts)."
         } else {
             "You're out of attempts for this problem. Keep chatting with the tutor to understand it."
         };
@@ -378,7 +412,7 @@ async fn settle(st: &AppState, reward: &Reward, wallet: &str) -> anyhow::Result<
         }
         Some(sol) => match sol.mint_with_retry(wallet, reward.amount.max(0) as u64).await {
             Ok(sig) => {
-                tracing::info!("[mint] {} LEARN → {wallet}: {}", st.cfg.from_base_units(reward.amount), explorer_tx_url(&sig));
+                tracing::info!("[mint] {} TARTS → {wallet}: {}", st.cfg.from_base_units(reward.amount), explorer_tx_url(&sig));
                 ("paid", Some(sig))
             }
             Err(e) => {
@@ -402,7 +436,7 @@ fn practice_reward(msg: &str) -> Value {
 async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<ExplainBody>) -> ApiResult<J> {
     let s = load_session(&st.pool, &id, &user.id).await?;
     if s.source != "bank" {
-        return Err(AppError::bad("Practice sessions don't pay out. Try a verified problem on this concept to earn LEARN."));
+        return Err(AppError::bad("Practice sessions don't pay out. Try a verified problem on this concept to earn TARTS."));
     }
     if s.status == "active" {
         return Err(AppError::bad("Solve the problem first."));
@@ -436,15 +470,29 @@ async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
         return Err(AppError::bad("Please keep it under 1500 characters."));
     }
     let ctx = problem_context(&s)?;
+    let solve: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'solve' ORDER BY created_at DESC LIMIT 1")
+        .bind(&s.id)
+        .fetch_optional(&st.pool)
+        .await?;
+    let flags: Vec<String> = solve
+        .and_then(|d| d.get("flags").cloned())
+        .and_then(|f| serde_json::from_value(f).ok())
+        .unwrap_or_default();
     let mut pass = true;
     let mut feedback = "Nice work explaining your reasoning!".to_string();
-    if let Some(v) = complete_json(&st, Kind::Check, &prompts::grader(&ctx, &text), None).await? {
-        if let Some(p) = v["pass"].as_bool() {
-            pass = p;
-            if let Some(f) = v["feedback"].as_str().filter(|f| !f.trim().is_empty()) {
-                feedback = f.trim().chars().take(400).collect();
+    match complete_json(&st, Kind::Check, &prompts::grader(&ctx, &text), None).await {
+        Ok(Some(v)) => {
+            if let Some(p) = v["pass"].as_bool() {
+                pass = p;
+                if let Some(f) = v["feedback"].as_str().filter(|f| !f.trim().is_empty()) {
+                    feedback = f.trim().chars().take(400).collect();
+                }
             }
         }
+        Ok(None) => {}
+        // A flagged solve must really be graded; otherwise an LLM outage would wave it through.
+        Err(e) if !flags.is_empty() => return Err(e.into()),
+        Err(e) => tracing::warn!("[grader] unavailable, accepting unflagged explanation: {e}"),
     }
 
     let marked = sqlx::query(
@@ -466,14 +514,6 @@ async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
         return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("Practice mode: no reward (you've already earned on this problem)") })));
     }
 
-    let solve: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'solve' ORDER BY created_at DESC LIMIT 1")
-        .bind(&s.id)
-        .fetch_optional(&st.pool)
-        .await?;
-    let flags: Vec<String> = solve
-        .and_then(|d| d.get("flags").cloned())
-        .and_then(|f| serde_json::from_value(f).ok())
-        .unwrap_or_default();
     let r = compute_reward(&RewardInput {
         difficulty: ctx.difficulty,
         hints_used: s.hints_used,
@@ -483,7 +523,11 @@ async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
         earned_today: earned_today(&st, &user.id).await?,
         daily_cap: st.cfg.daily_cap,
     });
-    let status = if r.status == RewardStatus::Forfeited { "forfeited" } else if r.amount == 0 { "paid" } else { "minting" };
+    // Daily cap reached: don't record a 0-amount payout, or this problem's one-time reward would be gone for good.
+    if r.status == RewardStatus::Pay && r.amount == 0 {
+        return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("The Queen's treasury is closed for today (daily cap reached). Solve this one again tomorrow to earn your tarts.") })));
+    }
+    let status = if r.status == RewardStatus::Forfeited { "forfeited" } else { "minting" };
     let inserted = sqlx::query_as::<_, Reward>(
         "INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status, flags)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING RETURNING *",

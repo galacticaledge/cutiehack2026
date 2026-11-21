@@ -1,6 +1,6 @@
 //! Deterministic leak check (SPEC §8.3 step 1). Pure.
 
-pub const LEAK_FALLBACK: &str = "Good progress! What do you think the next step is, and why?";
+pub const LEAK_FALLBACK: &str = "Curiouser and curiouser! You're getting somewhere. What do you think the next step is, and why?";
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '.'

@@ -39,7 +39,7 @@ impl<E: Into<anyhow::Error>> From<E> for AppError {
             tracing::warn!("{e}");
             return AppError::new(
                 StatusCode::SERVICE_UNAVAILABLE,
-                "The tutor is having trouble connecting right now. Please try again in a moment.",
+                "The Cheshire Cat has vanished for a moment. Please try again shortly.",
             );
         }
         tracing::error!("unhandled error: {e:#}");

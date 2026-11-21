@@ -25,7 +25,7 @@ const HISTORY: [History; 2] = [
         hints: 0,
         learn: 100.0,
         chat: &[
-            ("tutor", "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What is this problem asking you to find?"),
+            ("tutor", "*A wide grin appears, then the rest of the Cat.* I never give directions, I only ask which way you'd like to go. What is this problem asking you to find?"),
             ("user", "the value of x"),
             ("tutor", "Right. What's being done to $x$ on the left side, and in what order?"),
             ("user", "it's multiplied and then a number is added, so I undo the adding first"),
@@ -38,7 +38,7 @@ const HISTORY: [History; 2] = [
         hints: 1,
         learn: 150.0,
         chat: &[
-            ("tutor", "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What do you need first to find f'(k)?"),
+            ("tutor", "*A wide grin appears, then the rest of the Cat.* I never give directions, I only ask which way you'd like to go. What do you need first to find f'(k)?"),
             ("user", "the derivative function"),
             ("tutor", "Good. Which rule handles each term like $ax^3$?"),
             ("user", "power rule, bring the exponent down and subtract one"),
@@ -110,7 +110,7 @@ async fn seed_history(pool: &PgPool, cfg: &Config, sol: &Solana, user: &User) ->
         }
         let base = cfg.to_base_units(h.learn);
         let sig = sol.mint_with_retry(&user.wallet_pubkey, base as u64).await?;
-        let summary = if h.hints == 0 { format!("Base {} = {} LEARN", h.learn, h.learn) } else { format!("Base 200 × Hints 0.75 = {} LEARN", h.learn) };
+        let summary = if h.hints == 0 { format!("Base {} = {} TARTS", h.learn, h.learn) } else { format!("Base 200 × Hints 0.75 = {} TARTS", h.learn) };
         sqlx::query("INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status, tx_sig) VALUES ($1, $2, $3, $4, $5, $6, 'paid', $7)")
             .bind(new_id())
             .bind(&user.id)
@@ -121,7 +121,7 @@ async fn seed_history(pool: &PgPool, cfg: &Config, sol: &Solana, user: &User) ->
             .bind(&sig)
             .execute(pool)
             .await?;
-        println!("  {} earned {} LEARN on {}: {}", user.username, h.learn, t.id, explorer_tx_url(&sig));
+        println!("  {} earned {} TARTS on {}: {}", user.username, h.learn, t.id, explorer_tx_url(&sig));
     }
     Ok(())
 }
@@ -167,9 +167,9 @@ fn demo_content() -> String {
     let p = (get_template("cs-trace-loop-1").unwrap().generate)(hash_seed("cs-trace-loop-1"));
     let wrong = wrong_claim(&p).unwrap_or_default();
     format!(
-        r#"# Socra demo content (paste-ready; contains no answers)
+        r#"# Curiouser demo content (paste-ready; contains no answers)
 
-## 1. The refusal (custom problem → "Earn LEARN")
+## 1. The refusal (custom problem → "Earn TARTS")
 Paste into **Stuck on something?** (Problem):
 
 ```
@@ -182,7 +182,7 @@ print(count)
 ```
 
 Then type: `just give me the answer`
-Then press **Earn LEARN: try a verified problem on this concept**.
+Then press **Earn TARTS: try a verified problem on this concept**.
 
 ## 2. Learning (account `demo`, cs-trace-loop-1)
 - Wrong-step claim for the ✗ chip: {wrong}

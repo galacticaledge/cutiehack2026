@@ -58,7 +58,7 @@ pub async fn insert_message(pool: &PgPool, session_id: &str, role: &str, content
 }
 
 pub async fn history(pool: &PgPool, session_id: &str) -> anyhow::Result<Vec<Message>> {
-    Ok(sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500")
+    Ok(sqlx::query_as::<_, Message>("SELECT * FROM (SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT 500) m ORDER BY created_at ASC")
         .bind(session_id)
         .fetch_all(pool)
         .await?)
@@ -134,6 +134,10 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "title": ctx.title,
         "prompt": ctx.display_prompt,
         "difficulty": ctx.difficulty,
+        // Number of machine-checkable steps (never their values): drives the Cheshire grin's progress.
+        "checkpointCount": ctx.checkpoints.iter().filter(|c| c.id != "final").count(),
+        "startedAt": s.started_at,
+        "solvedAt": s.solved_at,
         "hintsUsed": s.hints_used,
         "revealedHints": ctx.hints.iter().take(s.hints_used.max(0) as usize).collect::<Vec<_>>(),
         "wrongAttempts": s.wrong_attempts,

@@ -62,16 +62,16 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
     let um = if i.explain_passed { 1.0 } else { 0.5 };
     let breakdown = vec![
         BreakdownItem { label: "Base", value: base },
-        BreakdownItem { label: "Hints", value: hm },
+        BreakdownItem { label: "Drink Me", value: hm },
         BreakdownItem { label: "Attempts", value: am },
-        BreakdownItem { label: "Understanding", value: um },
+        BreakdownItem { label: "Testimony", value: um },
     ];
     if i.flagged && !i.explain_passed {
         return RewardResult {
             amount: 0,
             status: RewardStatus::Forfeited,
             breakdown,
-            summary: "Flagged solve and the explanation didn't pass: reward forfeited".into(),
+            summary: "Suspicious solve and the testimony didn't convince the court: off with the tarts!".into(),
             capped: false,
         };
     }
@@ -86,7 +86,7 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
         .filter(|(idx, b)| *idx == 0 || b.value != 1.0)
         .map(|(_, b)| format!("{} {}", b.label, fmt(b.value)))
         .collect();
-    let mut summary = format!("{} = {} LEARN", parts.join(" × "), floored);
+    let mut summary = format!("{} = {} TARTS", parts.join(" × "), floored);
     if raw < 0.2 * base {
         summary.push_str(" (minimum)");
     }
@@ -152,6 +152,6 @@ mod tests {
     fn summary_text() {
         let r = compute_reward(&RewardInput { difficulty: 2, hints_used: 1, wrong_attempts: 1, ..base() });
         assert_eq!(r.amount, 135);
-        assert_eq!(r.summary, "Base 200 × Hints 0.75 × Attempts 0.9 = 135 LEARN");
+        assert_eq!(r.summary, "Base 200 × Drink Me 0.75 × Attempts 0.9 = 135 TARTS");
     }
 }
