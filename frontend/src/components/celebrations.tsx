@@ -90,3 +90,49 @@ export function SparkleTrail() {
   return null;
 }
 
+
+/* ---------------- Waking up: a short sunrise when the trial ends ---------------- */
+
+type WakeDetail = { amount: number | null; resolve: () => void };
+
+/** Plays the sunrise and resolves when it's over (immediately for reduced motion). */
+export function wakeUp(amount: number | null): Promise<void> {
+  if (reducedMotion()) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.dispatchEvent(new CustomEvent<WakeDetail>("socra:wakeup", { detail: { amount, resolve } }));
+    setTimeout(resolve, 3200); // safety net if nothing is listening
+  });
+}
+
+export function WakeUp() {
+  const [wake, setWake] = useState<WakeDetail | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setWake((e as CustomEvent<WakeDetail>).detail);
+    window.addEventListener("socra:wakeup", on);
+    return () => window.removeEventListener("socra:wakeup", on);
+  }, []);
+  useEffect(() => {
+    if (!wake) return;
+    const t = setTimeout(() => {
+      wake.resolve();
+      setWake(null);
+    }, 2400);
+    return () => clearTimeout(t);
+  }, [wake]);
+  if (!wake) return null;
+  const finish = () => {
+    wake.resolve();
+    setWake(null);
+  };
+  return (
+    <div className="wakeup" onClick={finish} role="status" aria-live="polite">
+      <div className="wakeup-stars" />
+      <div className="wakeup-sun" />
+      <div className="wakeup-hills" />
+      <div className="wakeup-text">
+        <p className="font-display">You woke up!</p>
+        {wake.amount ? <p className="wakeup-tarts">+{wake.amount} tarts</p> : null}
+      </div>
+    </div>
+  );
+}

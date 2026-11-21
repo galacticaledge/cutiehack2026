@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import { Landing } from "@/pages/Landing";
 import { FallingCards } from "@/components/wonder";
 import { DreamClouds, useLookingGlass, WonderSides } from "@/components/scenery";
-import { HeartsBurst } from "@/components/celebrations";
+import { HeartsBurst, WakeUp } from "@/components/celebrations";
 import { DealtCards } from "@/components/skeletons";
 import { PresenterPanel } from "@/components/presenter";
 
@@ -59,6 +59,7 @@ export default function App() {
       <Toaster position="top-right" theme={dark ? "dark" : "light"} richColors closeButton mobileOffset={{ top: 124 }} />
       <FallingCards />
       <HeartsBurst />
+      <WakeUp />
       <PresenterPanel />
     </BrowserRouter>
   );

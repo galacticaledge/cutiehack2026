@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { celebrate, CheshireAppearing, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
+import { wakeUp } from "@/components/celebrations";
 import { FallingIntro, hasToured, heartsBurst, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
 import { play } from "@/lib/sfx";
 import { AnswerDoor, type DoorState } from "@/components/doors";
@@ -428,6 +429,8 @@ export function Workspace() {
       }
       setJury(null);
       setExplainOpen(false);
+      // The dream ends: a short sunrise, then the celebrations and the result.
+      if (!retry) await wakeUp(r.reward?.status === "paid" && r.reward.amount > 0 ? r.reward.amount : null);
       if (!retry) {
         if (r.pass) {
           heartsBurst();
