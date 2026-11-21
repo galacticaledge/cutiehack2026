@@ -1,7 +1,5 @@
 # Socra
 
-Socra is an AI Tutor that never gives you the answer. It guides you to it, and pays you in TARTS (a Solana Devnet SPL token) for actually learning.
-
 Socra is an AI Tutor that incentivizes students to use AI for learning rather than cognitive offloading. It promotes independent learning by rewarding students with cryptocurrency via Solana for engaging with AI to understand concepts, develop problem-solving skills, and arrive at answers themselves instead of relying on AI to think for them.
 
 Spec: [SPEC.md](SPEC.md).
