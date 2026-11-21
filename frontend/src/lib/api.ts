@@ -172,3 +172,15 @@ export function mapAvailable(): Promise<boolean> {
     .catch(() => false);
   return mapProbe;
 }
+
+/** Server features, fetched once per page load. */
+let featuresProbe: Promise<Features | null> | null = null;
+export function getFeatures(): Promise<Features | null> {
+  featuresProbe ??= api<Features>("/api/features").catch(() => null);
+  return featuresProbe;
+}
+
+/** Throwaway demo accounts (guest pass, judge mode) never hold real tokens. */
+export function isGuestName(username: string) {
+  return /^(guest|copycat)-/.test(username);
+}

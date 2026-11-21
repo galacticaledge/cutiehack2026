@@ -1,4 +1,4 @@
-import { BookHeart, LogOut, Map as MapIcon, Wallet } from "lucide-react";
+import { BookHeart, LogOut, Map as MapIcon, UserRound, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,12 @@ import { Tart } from "@/components/wonder";
 import { SocraMark } from "@/components/logo";
 import { LookingGlassToggle } from "@/components/scenery";
 import { SoundToggle } from "@/components/sound";
-import { api, mapAvailable, type Me } from "@/lib/api";
+import { api, getFeatures, isGuestName, mapAvailable, type Me } from "@/lib/api";
 
 export function Header() {
   const [me, setMe] = useState<Me | null>(null);
   const [hasMap, setHasMap] = useState(false);
+  const [solana, setSolana] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(() => {
@@ -19,6 +20,7 @@ export function Header() {
 
   useEffect(() => {
     void mapAvailable().then(setHasMap);
+    void getFeatures().then((f) => setSolana(Boolean(f?.solana)));
   }, []);
 
   useEffect(() => {
@@ -60,16 +62,27 @@ export function Header() {
               <Tart />
               {me.balance.toLocaleString()} <span className="hidden sm:inline">TARTS</span>
             </span>
-            <a
-              href={me.walletUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="hidden items-center gap-1 text-[#d6ecf7] hover:text-white sm:flex"
-              title={`Your Solana devnet wallet: ${me.walletPubkey}`}
+            {/* The name is you: it opens your journal. The wallet is its own link, only when it holds real (devnet) tarts. */}
+            <Link
+              to="/journal"
+              className="hidden items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white sm:flex"
+              title={isGuestName(me.username) ? `${me.username} (guest)` : `${me.username}: your dream journal`}
             >
-              <Wallet className="size-4" />
-              {me.username}
-            </a>
+              <UserRound className="size-4" />
+              <span className="max-w-[9rem] truncate">{me.username}</span>
+            </Link>
+            {solana && !isGuestName(me.username) && (
+              <a
+                href={me.walletUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex size-8 items-center justify-center rounded-full text-[#d6ecf7] hover:bg-white/10 hover:text-white"
+                aria-label="Your Solana wallet on the explorer (opens in a new tab)"
+                title={`Your Solana devnet wallet: ${me.walletPubkey}`}
+              >
+                <Wallet className="size-4" />
+              </a>
+            )}
             <Button variant="ghost" size="icon-sm" onClick={logout} aria-label="Wake up (log out)" title="Wake up (log out)" className="text-[#d6ecf7] hover:bg-white/10 hover:text-white">
               <LogOut />
             </Button>
