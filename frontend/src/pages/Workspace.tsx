@@ -458,6 +458,7 @@ export function Workspace() {
             <CardContent className="space-y-4">
               {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
               {isQuest && s.practiceReason && <p className="text-sm text-muted-foreground">{s.practiceReason}</p>}
+              {earns && <p className="text-sm text-muted-foreground">Attempts on this problem on {s.attemptsDateUtc} (UTC): {s.attemptsToday}</p>}
 
               {isBank && (
                 <div className="space-y-2">

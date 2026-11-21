@@ -7,6 +7,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -29,6 +41,11 @@ jobs:
 
       - name: Run tests
         run: cargo test
+
+      - name: Run PostgreSQL integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:${{ job.services.postgres.ports[5432] }}/postgres
+        run: cargo test --lib -- --ignored
   format:
     runs-on: ubuntu-latest
     defaults:
