@@ -121,7 +121,7 @@ export function Learn() {
     setStarting(key);
     try {
       const { sessionId } = await api<{ sessionId: string }>("/api/sessions", body);
-      navigate(`/learn/${sessionId}`);
+      navigate(`/learn/${sessionId}`, { state: { fresh: true } });
     } catch (e) {
       toast.error((e as Error).message);
       setStarting(null);

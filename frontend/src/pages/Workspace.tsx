@@ -1,13 +1,15 @@
 import { Check, ExternalLink, FlaskConical, KeyRound, Send, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { celebrate, CheshireGrin, flavorFor } from "@/components/wonder";
+import { celebrate, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
+import { FallingIntro, hasToured, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
+import { play } from "@/lib/sfx";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,9 +19,20 @@ import { api, ApiError, postEvent, refreshBalance, type ChatMessage, type Featur
 
 const HINT_COST = ["−25%", "−33%", "−40%"];
 
+const TOUR: TourStep[] = [
+  { target: "problem", title: "Your dream", body: "This is your problem. The numbers are yours alone, so nobody can hand you the answer." },
+  { target: "chat", title: "The Cheshire Cat", body: "Talk it through here. The Cat answers with questions and never gives the answer away. Chatting is always free." },
+  { target: "hint", title: "Drink Me bottles", body: "Stuck? Each bottle is a hint, but it shrinks your tart." },
+  { target: "answer", title: "Try the door", body: "When you're sure, enter your final answer. Wrong turns shrink the tart a little." },
+  { target: "map", title: "Your dream map", body: "Follow each step the math engine confirms. Solve it, testify at the trial, and wake up with tarts." },
+];
+
+const ASKS_FOR_ANSWER = /\b(answer|tell me|give me|just say|solution|solve it for me|what is it)\b/i;
+
 function showRewardToast(r: RewardView) {
   if (r.status === "paid" && r.amount > 0) {
     celebrate();
+    play("chime");
     toast.success(`+${r.amount} TARTS · You woke up!`, {
       description: r.breakdown,
       duration: 15000,
@@ -66,6 +79,22 @@ export function Workspace() {
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const chatInput = useRef<HTMLInputElement>(null);
+  const answerInput = useRef<HTMLInputElement>(null);
+  const location = useLocation();
+  const [intro, setIntro] = useState(() => Boolean((location.state as { fresh?: boolean } | null)?.fresh));
+  const [tourOpen, setTourOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [reaction, setReaction] = useState<CatMood | null>(null);
+  const endIntro = useCallback(() => setIntro(false), []);
+
+  // Play the falling intro once per fresh door, then clear the flag so a reload doesn't replay it.
+  useEffect(() => {
+    if ((location.state as { fresh?: boolean } | null)?.fresh) {
+      setIntro(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +110,7 @@ export function Workspace() {
   useEffect(() => {
     setS(null);
     setLinks([]);
+    setReaction(null);
     void load();
     api<Features>("/api/features").then(setFeatures).catch(() => {});
   }, [load]);
@@ -97,6 +127,41 @@ export function Workspace() {
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [tracking, sessionId]);
+
+  // First visit: the White Rabbit's tour (after the falling intro, once the page has loaded).
+  const loaded = s !== null;
+  useEffect(() => {
+    if (!loaded || intro || hasToured()) return;
+    const t = setTimeout(() => setTourOpen(true), 400);
+    return () => clearTimeout(t);
+  }, [loaded, intro]);
+
+  // Keyboard shortcuts (ignored while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || tourOpen) return;
+      if (isTypingTarget(e.target)) {
+        if (e.key === "Escape") (e.target as HTMLElement).blur();
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === "/" || k === "c") {
+        e.preventDefault();
+        chatInput.current?.focus();
+      } else if (k === "a") {
+        e.preventDefault();
+        answerInput.current?.focus();
+      } else if (k === "h") {
+        document.querySelector<HTMLButtonElement>('[data-tour="hint"]')?.click();
+      } else if (k === "t") {
+        setTourOpen(true);
+      } else if (e.key === "?") {
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tourOpen]);
 
   // Go deeper links after a solve.
   useEffect(() => {
@@ -123,17 +188,34 @@ export function Workspace() {
   const shownSteps = s.status === "active" ? Math.min(correctSteps.size, s.checkpointCount) : totalSteps;
   const catOpacity = isBank && totalSteps > 1 ? 0.3 + 0.7 * (shownSteps / totalSteps) : 1;
   const maxReward = 100 * s.difficulty;
+  // The Cat's expression reacts to the last thing that happened.
+  const lastUser = [...s.messages].reverse().find((m) => m.role === "user");
+  const derivedMood: CatMood =
+    s.status !== "active"
+      ? "delighted"
+      : lastUser?.verdicts.some((v) => v.status === "incorrect")
+        ? "puzzled"
+        : lastUser?.verdicts.some((v) => v.status === "correct")
+          ? "delighted"
+          : lastUser && ASKS_FOR_ANSWER.test(lastUser.content)
+            ? "secretive"
+            : "neutral";
+  const mood: CatMood = reaction ?? derivedMood;
+  const lastTutorId = [...s.messages].reverse().find((m) => m.role === "tutor")?.id;
 
   async function sendChat(e: React.FormEvent) {
     e.preventDefault();
     const text = msg.trim();
     if (!text || sending || !s) return;
     setSending(true);
+    setReaction(null);
     setMsg("");
     const tempId = `pending-${Date.now()}`;
     setS({ ...s, messages: [...s.messages, { id: tempId, role: "user", content: text, verdicts: [], pending: true }] });
     try {
       const r = await api<{ reply: string; messageId: string; userMessageId: string; verdicts: ChatMessage["verdicts"] }>(`/api/sessions/${sessionId}/chat`, { message: text });
+      if (r.verdicts.some((v) => v.status === "incorrect")) play("boing");
+      else if (r.verdicts.some((v) => v.status === "correct")) play("clink");
       setS((prev) =>
         prev && {
           ...prev,
@@ -145,7 +227,7 @@ export function Workspace() {
       );
     } catch (err) {
       toast.error((err as Error).message);
-      if ((err as ApiError).status === 429) setMsg(text);
+      setMsg(text); // nothing was saved, so give the student their words back
       await load();
     } finally {
       setSending(false);
@@ -156,6 +238,7 @@ export function Workspace() {
     setHinting(true);
     try {
       await api(`/api/sessions/${sessionId}/hint`, {});
+      play("pop");
       await load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -171,6 +254,8 @@ export function Workspace() {
     try {
       const r = await api<{ correct: boolean; flagged?: boolean; practice?: boolean }>(`/api/sessions/${sessionId}/answer`, { answer });
       if (r.correct) {
+        play("clink");
+        setReaction("delighted");
         if (isBank) {
           setFlagged(Boolean(r.flagged));
           setExplainOpen(true);
@@ -178,6 +263,8 @@ export function Workspace() {
           toast.success("That matches the AI reference solution.", { description: "It could be wrong. Check your reasoning with the tutor." });
         }
       } else {
+        play("boing");
+        setReaction("puzzled");
         toast("Curiouser and curiouser… not quite. The Cat has a question for you.");
       }
       setAnswer("");
@@ -192,6 +279,7 @@ export function Workspace() {
 
   async function submitExplain(retry = false) {
     setExplaining(true);
+    if (!retry) play("gavel");
     try {
       const r = await api<{ pass: boolean; feedback: string; reward: RewardView }>(`/api/sessions/${sessionId}/explain`, { text: retry ? "" : explainText });
       setExplainOpen(false);
@@ -213,7 +301,7 @@ export function Workspace() {
     setSimilarLoading(true);
     try {
       const r = await api<{ sessionId: string }>(`/api/sessions/${sessionId}/similar`, {});
-      navigate(`/learn/${r.sessionId}`);
+      navigate(`/learn/${r.sessionId}`, { state: { fresh: true } });
     } catch (e) {
       toast.error((e as Error).message);
       setSimilarLoading(false);
@@ -225,13 +313,13 @@ export function Workspace() {
       <Header />
       <main className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:grid-cols-[15rem_minmax(0,5fr)_minmax(0,6fr)]">
         <aside className="hidden xl:block">
-          <div className="sticky top-24">
+          <div className="sticky top-24" data-tour="map">
             <DreamMap s={s} correctLabels={[...correctSteps]} />
           </div>
         </aside>
         {/* Left: problem */}
         <div className="space-y-4">
-          <Card className="parchment">
+          <Card className="parchment" data-tour="problem">
             <CardHeader>
               {flavor && <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">{flavor.character} · {flavor.concept}</p>}
               <div className="flex flex-wrap items-center gap-2">
@@ -261,7 +349,7 @@ export function Workspace() {
                     </div>
                   ))}
                   {s.status === "active" && s.hintsUsed < 3 && (
-                    <Button variant="outline" size="sm" onClick={takeHint} disabled={hinting}>
+                    <Button variant="outline" size="sm" onClick={takeHint} disabled={hinting} data-tour="hint">
                       <FlaskConical className="text-[var(--potion)]" />
                       {hinting ? "Uncorking…" : `Drink Me: hint (${HINT_COST[s.hintsUsed]} tarts)`}
                     </Button>
@@ -272,11 +360,12 @@ export function Workspace() {
           </Card>
 
           {s.hasAnswerCheck && s.status === "active" && (
-            <Card className="parchment">
+            <Card className="parchment" data-tour="answer">
               <CardContent className="space-y-3 pt-0">
                 {!isBank && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
                 <form onSubmit={submitAnswer} className="flex gap-2">
                   <Input
+                    ref={answerInput}
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     onPaste={(e) => isBank && postEvent(sessionId, "paste", { length: e.clipboardData.getData("text").length, target: "answer" })}
@@ -343,18 +432,30 @@ export function Workspace() {
                         View on Solana Explorer <ExternalLink className="size-3.5" />
                       </a>
                     )}
-                    {s.reward.status === "failed" && (
-                      <Button size="sm" onClick={() => submitExplain(true)} disabled={explaining}>
-                        {explaining ? "Retrying…" : "Retry payout"}
-                      </Button>
-                    )}
+                    {s.reward.status === "failed" &&
+                      (features && !features.solana ? (
+                        <p className="text-xs text-muted-foreground">
+                          Tart delivery (Solana) isn't set up on this server yet. Your reward is saved and can be delivered once it is.
+                        </p>
+                      ) : (
+                        <Button size="sm" onClick={() => submitExplain(true)} disabled={explaining}>
+                          {explaining ? "Retrying…" : "Retry payout"}
+                        </Button>
+                      ))}
                   </>
                 ) : (
                   <p className="text-muted-foreground">No tarts for this one (unbirthday practice or the daily cap).</p>
                 )}
-                <Button variant="outline" size="sm" onClick={() => navigate("/learn")}>
-                  Back to the Hall of Doors
-                </Button>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {s.reward?.status === "paid" && (
+                    <ShareDreamButton
+                      info={{ title: s.title, templateId: s.templateId, testimony: s.explanation, amount: s.reward.amount, explorerUrl: s.reward.explorerUrl ?? null, date: s.solvedAt }}
+                    />
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => navigate("/learn")}>
+                    Back to the Hall of Doors
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -398,10 +499,10 @@ export function Workspace() {
         </div>
 
         {/* Right: chat */}
-        <Card className="parchment flex h-[calc(100vh-8rem)] min-h-[420px] flex-col gap-0 py-0">
+        <Card className="parchment flex h-[calc(100vh-8rem)] min-h-[420px] flex-col gap-0 py-0" data-tour="chat">
           <div className="flex items-center gap-3 border-b px-4 py-3">
             <span key={shownSteps} className={shownSteps > 0 ? "grin-appear" : undefined}>
-              <CheshireGrin className="grin-mirror grin-progress size-10" fading={sending} style={sending ? undefined : { opacity: catOpacity }} />
+              <CheshireGrin className="grin-mirror grin-progress size-10" mood={mood} fading={sending} style={sending ? undefined : { opacity: catOpacity }} />
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-display text-lg leading-tight">The Cheshire Cat</p>
@@ -427,7 +528,7 @@ export function Workspace() {
             {s.messages.map((m) => (
               <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`flex max-w-[88%] items-end gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-                  {m.role === "tutor" && <CheshireGrin className="size-6 shrink-0" />}
+                  {m.role === "tutor" && <CheshireGrin className="size-6 shrink-0" mood={m.id === lastTutorId ? mood : "neutral"} />}
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
@@ -463,17 +564,29 @@ export function Workspace() {
           </CardContent>
           <div className="border-t p-3">
             <form onSubmit={sendChat} className="flex gap-2">
-              <Input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Tell the Cat what you're thinking…" maxLength={2000} disabled={sending} aria-label="Message" />
+              <Input ref={chatInput} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Tell the Cat what you're thinking…" maxLength={2000} disabled={sending} aria-label="Message" />
               <Button type="submit" size="icon" disabled={sending || !msg.trim()} aria-label="Send">
                 <Send />
               </Button>
             </form>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {isBank ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right." : "Practice dream: steps aren't machine-checked here."}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <p>{isBank ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right." : "Practice dream: steps aren't machine-checked here."}</p>
+              <div className="flex shrink-0 gap-3">
+                <button type="button" className="hover:underline" onClick={() => setTourOpen(true)}>
+                  Tour
+                </button>
+                <button type="button" className="hidden hover:underline sm:inline" onClick={() => setShortcutsOpen(true)}>
+                  Shortcuts <kbd className="rounded border border-[var(--border)] px-1 font-mono">?</kbd>
+                </button>
+              </div>
+            </div>
           </div>
         </Card>
       </main>
+
+      {intro && <FallingIntro onDone={endIntro} />}
+      {tourOpen && <RabbitTour steps={TOUR} onClose={() => setTourOpen(false)} />}
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       <Dialog open={explainOpen} onOpenChange={setExplainOpen}>
         <DialogContent className="sm:max-w-md">

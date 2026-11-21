@@ -7,7 +7,7 @@ use crate::context::problem_context;
 use crate::custom::{intake_problem, intake_topic, CUSTOM_MAX};
 use crate::error::{ApiResult, AppError};
 use crate::llm::{complete_json, Kind};
-use crate::models::{new_id, Event, ProblemSession, Reward, User};
+use crate::models::{new_id, Event, Message, ProblemSession, Reward, User};
 use crate::problems::{get_template, TEMPLATES};
 use crate::prompts::{self, opening_message};
 use crate::resources::learn_more_links;
@@ -268,9 +268,19 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
     // Neuro-symbolic verification (bank sessions only; custom sessions have no ground truth).
     let verdicts = if ctx.is_bank() { verify_message(&st, &message, &ctx.checkpoints).await } else { vec![] };
     let verdict_json = (!verdicts.is_empty()).then(|| serde_json::to_value(&verdicts).unwrap_or(Value::Null));
-    let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
-    let hist = history(&st.pool, &s.id).await?;
+    // Generate the reply before saving anything, so a failed LLM call doesn't leave an
+    // orphaned student message that the tutor would then see twice on retry.
+    let mut hist = history(&st.pool, &s.id).await?;
+    hist.push(Message {
+        id: String::new(),
+        session_id: s.id.clone(),
+        role: "user".into(),
+        content: message.clone(),
+        verdicts: None,
+        created_at: Utc::now(),
+    });
     let r = tutor_reply(&st, &ctx, s.hints_used, &hist, &verdict_lines(&verdicts), None).await?;
+    let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
     let tutor_msg = insert_message(&st.pool, &s.id, "tutor", &r.reply, None).await?;
     Ok(Json(json!({
         "reply": r.reply,

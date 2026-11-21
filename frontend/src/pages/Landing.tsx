@@ -29,6 +29,20 @@ export function Landing() {
   const [vanishes, setVanishes] = useState(0);
   const [hidden, setHidden] = useState(false);
 
+  async function guestPass() {
+    setLoading(true);
+    setError(null);
+    try {
+      const name = `guest-${Math.random().toString(36).slice(2, 8)}`;
+      await api("/api/auth/login", { username: name });
+      const { sessionId } = await api<{ sessionId: string }>("/api/sessions", { templateId: "cs-trace-loop-1" });
+      navigate(`/learn/${sessionId}`, { state: { fresh: true } });
+    } catch (err) {
+      setError((err as Error).message);
+      setLoading(false);
+    }
+  }
+
   function poke() {
     if (hidden) return;
     setHidden(true);
@@ -107,6 +121,12 @@ export function Landing() {
             {loading ? "Falling…" : "Follow the rabbit"}
           </Button>
         </form>
+        <p className="-mt-5 text-center text-sm text-muted-foreground">
+          Just looking?{" "}
+          <button type="button" onClick={guestPass} disabled={loading} className="font-semibold text-[var(--tan)] underline-offset-2 hover:underline disabled:opacity-50">
+            Use a guest pass to the Mad Hatter's tea party →
+          </button>
+        </p>
         {error && <p className="-mt-6 text-center text-sm text-destructive">{error}</p>}
 
         <ol className="grid gap-3 sm:grid-cols-3">

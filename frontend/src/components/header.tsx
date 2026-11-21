@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { LookingGlassToggle } from "@/components/scenery";
+import { SoundToggle } from "@/components/extras";
 import { api, type Me } from "@/lib/api";
 
 export function Header() {
@@ -38,6 +39,7 @@ export function Header() {
               <BookHeart className="size-4" />
               <span className="hidden md:inline">Dream journal</span>
             </Link>
+            <SoundToggle className="text-[#d6ecf7] hover:text-white" />
             <LookingGlassToggle className="text-[#d6ecf7] hover:text-white" />
             <span
               className="flex items-center gap-1.5 rounded-full bg-[#faf8f1] px-3 py-1 font-semibold text-[var(--night)]"

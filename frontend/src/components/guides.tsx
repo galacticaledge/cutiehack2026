@@ -161,7 +161,16 @@ export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: 
       label: "Woke up",
       done: done,
       icon: Sunrise,
-      detail: s.reward?.status === "paid" ? `+${s.reward.amount} tarts` : done ? "No tarts this time" : undefined,
+      detail:
+        s.reward?.status === "paid"
+          ? `+${s.reward.amount} tarts`
+          : s.reward?.status === "failed" || s.reward?.status === "minting"
+            ? "Tarts saved, delivery pending"
+            : s.reward?.status === "forfeited"
+              ? "Off with the tarts"
+              : done
+                ? "No tarts this time"
+                : undefined,
     });
   } else {
     stops.push({ label: "Talk it through with the Cat", done: false, current: true, icon: Sprout });

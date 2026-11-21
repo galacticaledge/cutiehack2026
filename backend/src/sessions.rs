@@ -149,6 +149,7 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "hasAnswerCheck": is_bank || ctx.answer.is_some(),
         "explainPassed": s.explain_passed,
         "explainFeedback": s.explain_feedback,
+        "explanation": s.explanation, // the student's own testimony (for the share card)
         "reward": reward.as_ref().map(|r| reward_json(&state.cfg, r)),
         "matchedTemplate": if !is_bank { matched.map(|t| json!({ "id": t.id, "title": t.title })) } else { None },
         "messages": msgs,

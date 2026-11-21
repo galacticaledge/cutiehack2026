@@ -6,7 +6,8 @@ import { Header } from "@/components/header";
 import { DreamFooter } from "@/components/scenery";
 import { Button } from "@/components/ui/button";
 import { CheshireGrin, flavorFor, suitColor, Tart } from "@/components/wonder";
-import { api, type JournalEntry } from "@/lib/api";
+import { api, type JournalEntry, type Problem } from "@/lib/api";
+import { DeckPanel, ShareDreamButton } from "@/components/extras";
 
 function duration(a: string, b: string | null) {
   if (!b) return null;
@@ -26,9 +27,11 @@ function outcome(e: JournalEntry) {
 
 export function Journal() {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
+  const [problems, setProblems] = useState<Problem[] | null>(null);
 
   useEffect(() => {
     api<JournalEntry[]>("/api/journal").then(setEntries).catch((e) => toast.error(e.message));
+    api<Problem[]>("/api/problems").then(setProblems).catch(() => {});
   }, []);
 
   const total = entries?.reduce((sum, e) => sum + (e.reward?.status === "paid" ? e.reward.amount : 0), 0) ?? 0;
@@ -52,6 +55,8 @@ export function Journal() {
             )}
           </p>
         </section>
+
+        {problems && problems.length > 0 && <DeckPanel problems={problems} />}
 
         {!entries && <p className="text-center text-sm text-muted-foreground">Turning the pages…</p>}
 
@@ -125,6 +130,11 @@ export function Journal() {
                     <a href={e.reward.explorerUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 font-medium text-foreground underline">
                       Receipt on Solana Explorer <ExternalLink className="size-3" />
                     </a>
+                  )}
+                  {e.reward?.status === "paid" && (
+                    <ShareDreamButton
+                      info={{ title: e.title, templateId: e.templateId, testimony: e.explanation, amount: e.reward.amount, explorerUrl: e.reward.explorerUrl ?? null, date: e.solvedAt }}
+                    />
                   )}
                   <Link to={`/learn/${e.sessionId}`} className="ml-auto font-medium text-[var(--primary)] hover:underline">
                     Revisit this dream →

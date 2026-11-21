@@ -113,6 +113,7 @@ export interface SessionView {
   hasAnswerCheck: boolean;
   explainPassed: boolean | null;
   explainFeedback: string | null;
+  explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
   messages: ChatMessage[];
