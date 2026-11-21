@@ -2,10 +2,6 @@
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub llm_provider: String,
-    pub aisa_api_key: Option<String>,
-    pub aisa_base_url: String,
-    pub aisa_model: String,
     pub openai_api_key: Option<String>,
     pub openai_base_url: String,
     pub openai_model: String,
@@ -44,10 +40,6 @@ impl Config {
             anyhow::bail!("SESSION_SECRET must be set (32+ chars)");
         }
         Ok(Config {
-            llm_provider: or("LLM_PROVIDER", "aisa"),
-            aisa_api_key: var("AISA_API_KEY"),
-            aisa_base_url: or("AISA_BASE_URL", "https://api.aisa.one/v1"),
-            aisa_model: or("AISA_MODEL", "gpt-6.1-terra"),
             openai_api_key: var("OPENAI_API_KEY"),
             openai_base_url: or("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_model: or("OPENAI_MODEL", "gpt-6.1-terra"),
@@ -79,9 +71,7 @@ impl Config {
         self.keenable_api_key.is_some()
     }
     pub fn active_llm_provider(&self) -> &'static str {
-        if self.llm_provider != "openai" && self.aisa_api_key.is_some() {
-            "aisa"
-        } else if self.openai_api_key.is_some() {
+        if self.openai_api_key.is_some() {
             "openai"
         } else {
             "none"
