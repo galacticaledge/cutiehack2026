@@ -1,6 +1,6 @@
 # Socra
 
-Socra is an intelligent AI tutoring platform (an AI Tutor) that incentivizes students to use AI for learning rather than cognitive offloading. It promotes independent learning by rewarding students with cryptocurrency via Solana for engaging with AI to understand concepts, develop problem-solving skills, and arrive at answers themselves instead of relying on AI to do the thinking for them.
+Socra is an AI Tutor that incentivizes students to use AI for learning rather than cognitive offloading. It promotes independent learning by rewarding students with cryptocurrency via Solana for engaging with AI to understand concepts, develop problem-solving skills, and arrive at answers themselves instead of relying on AI to think for them.
 
 Spec: [SPEC.md](SPEC.md).
 
