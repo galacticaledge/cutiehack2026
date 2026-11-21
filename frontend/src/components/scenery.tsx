@@ -132,7 +132,7 @@ export function PocketWatch({ startedAt, stoppedAt }: { startedAt: string; stopp
 
 /* ---------------- Through the Looking-Glass (dark mode) ---------------- */
 
-const KEY = "curiouser:looking-glass";
+const KEY = "socra:looking-glass";
 
 export function initLookingGlass() {
   try {

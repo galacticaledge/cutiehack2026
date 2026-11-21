@@ -167,7 +167,7 @@ fn demo_content() -> String {
     let p = (get_template("cs-trace-loop-1").unwrap().generate)(hash_seed("cs-trace-loop-1"));
     let wrong = wrong_claim(&p).unwrap_or_default();
     format!(
-        r#"# Curiouser demo content (paste-ready; contains no answers)
+        r#"# Socra demo content (paste-ready; contains no answers)
 
 ## 1. The refusal (custom problem → "Earn TARTS")
 Paste into **Stuck on something?** (Problem):

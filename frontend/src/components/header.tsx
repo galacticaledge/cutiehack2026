@@ -30,7 +30,7 @@ export function Header() {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
         <Link to="/learn" className="flex items-center gap-2">
           <CheshireGrin className="grin-mirror size-8" />
-          <span className="font-display text-2xl leading-none">Curiouser</span>
+          <span className="font-display text-2xl leading-none">Socra</span>
         </Link>
         {me && (
           <div className="flex items-center gap-1.5 text-sm sm:gap-2">
