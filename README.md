@@ -28,23 +28,23 @@ frontend/           Vite + React SPA
 
 ## Run locally
 
-Prereqs: Rust (stable), Node 22+, Postgres (local, or `docker compose up -d db`).
+With Nix flakes enabled, run `nix develop` from the repo root in each development terminal. The shell provides Rust/Cargo, Node.js 22/npm, PostgreSQL 17, and the native Rust build dependencies. Without Nix, install those tools separately.
 
 ```bash
 cp .env.example .env          # fill SESSION_SECRET (32+ chars), OPENAI_API_KEY
 
-# One-time Solana setup
-cd backend
-cargo run --bin setup_token -- --keygen     # paste MINT_AUTHORITY_SECRET into .env
-#   fund the printed address at https://faucet.solana.com (devnet)
-cargo run --bin setup_token                 # creates the mint, writes MINT_ADDRESS into .env
+```bash
+# One-time Solana setup (optional for local development)
+(cd backend && cargo run --bin setup_token -- --keygen)  # paste MINT_AUTHORITY_SECRET into .env
+# Fund the printed address at https://faucet.solana.com (devnet)
+(cd backend && cargo run --bin setup_token)             # writes MINT_ADDRESS into .env
 
-# Dev: two terminals
-cargo run                                   # API on :3000 (runs migrations)
-cd ../frontend && npm install && npm run dev   # UI on :5173, proxies /api → :3000
+# Dev: run these in separate terminals from the repo root
+(cd backend && cargo run --bin socra)                   # API on :3000 (runs migrations)
+(cd frontend && npm ci && npm run dev)                  # UI on :5173, proxies /api → :3000
 
-# Or single process: build the UI once and let Rust serve it on :3000
-cd frontend && npm run build && cd ../backend && cargo run
+# Or single process: build the UI and let Rust serve it on :3000
+(cd frontend && npm ci && npm run build) && (cd backend && cargo run --bin socra)
 ```
 
 Tests: `cd backend && cargo test` (rewards, answers, leak, verify, math engine, anti-cheat, templates).
