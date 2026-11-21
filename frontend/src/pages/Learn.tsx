@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { DreamFooter } from "@/components/scenery";
+import { TartRecipePanel, YourDreamPanel } from "@/components/guides";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -130,7 +131,13 @@ export function Learn() {
   return (
     <>
       <Header />
-      <main className="mx-auto max-w-6xl space-y-10 px-4 py-10">
+      <main className="mx-auto grid max-w-[90rem] gap-8 px-4 py-10 xl:grid-cols-[16rem_minmax(0,1fr)_17rem]">
+        <aside className="hidden xl:block">
+          <div className="sticky top-24">
+            <YourDreamPanel problems={problems} />
+          </div>
+        </aside>
+        <div className="min-w-0 space-y-10">
         <section className="space-y-2 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--tan)]">✦ Dream to Wonderland ✦</p>
           <h1 className="font-display text-4xl text-[var(--night)] dark:text-foreground sm:text-5xl">The Hall of Doors</h1>
@@ -139,7 +146,7 @@ export function Learn() {
           </p>
         </section>
 
-        <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 min-[1780px]:grid-cols-3">
           {!problems && <p className="text-sm text-muted-foreground">Unlocking the doors…</p>}
           {problems?.map((p) => (
             <DoorCard key={p.id} p={p} starting={starting} onStart={() => start({ templateId: p.id }, p.id)} />
@@ -184,6 +191,12 @@ export function Learn() {
             </Button>
           </div>
         </section>
+        </div>
+        <aside className="hidden xl:block">
+          <div className="sticky top-24">
+            <TartRecipePanel />
+          </div>
+        </aside>
       </main>
       <DreamFooter />
     </>

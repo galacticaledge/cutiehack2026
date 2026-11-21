@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
+import { CastPanel, WhyPanel } from "@/components/guides";
 import { api } from "@/lib/api";
 
 const FLOATERS = [
@@ -126,6 +127,12 @@ export function Landing() {
           Built with AIsa · ElevenLabs · Keenable · Solana devnet
         </p>
       </main>
+      <aside className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+        <CastPanel />
+      </aside>
+      <aside className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+        <WhyPanel />
+      </aside>
       <DreamFooter />
     </div>
   );

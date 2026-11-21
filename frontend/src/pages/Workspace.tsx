@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { celebrate, CheshireGrin, flavorFor } from "@/components/wonder";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
+import { DreamMap } from "@/components/guides";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -222,7 +223,12 @@ export function Workspace() {
   return (
     <>
       <Header />
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <main className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:grid-cols-[15rem_minmax(0,5fr)_minmax(0,6fr)]">
+        <aside className="hidden xl:block">
+          <div className="sticky top-24">
+            <DreamMap s={s} correctLabels={[...correctSteps]} />
+          </div>
+        </aside>
         {/* Left: problem */}
         <div className="space-y-4">
           <Card className="parchment">

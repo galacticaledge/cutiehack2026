@@ -27,7 +27,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--night)]/95 text-[#faf8f1] backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex h-14 max-w-[90rem] items-center justify-between gap-3 px-4">
         <Link to="/learn" className="flex items-center gap-2">
           <CheshireGrin className="grin-mirror size-8" />
           <span className="font-display text-2xl leading-none">Socra</span>

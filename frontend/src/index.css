@@ -250,16 +250,16 @@
   position: fixed;
   top: 66px;
   bottom: 0;
-  width: calc((100vw - 72rem) / 2);
+  width: calc((100vw - 90rem) / 2);
   display: none;
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
 }
-@media (min-width: 1380px) { .rail { display: block; } }
+@media (min-width: 1700px) { .rail { display: block; } }
 .rail-left { left: 0; }
 .rail-right { right: 0; display: none; flex-direction: column; align-items: center; gap: 1.5rem; padding: 0 0.9rem 2rem; }
-@media (min-width: 1380px) { .rail-right { display: flex; } }
+@media (min-width: 1700px) { .rail-right { display: flex; } }
 
 /* The rabbit hole: a dark funnel with things tumbling through it. */
 /* The opening of the rabbit hole: an earthy rim with darkness falling away beneath it. */
@@ -367,4 +367,4 @@ main { position: relative; z-index: 1; }
 }
 
 /* Landing floaters give way to the side rails on wide screens. */
-@media (min-width: 1380px) { .landing-floater { display: none !important; } }
+@media (min-width: 1340px) { .landing-floater { display: none !important; } }
