@@ -1,5 +1,6 @@
 import { BoxSelect, Check, ExternalLink, FlaskConical, KeyRound, MessageCircle, ScrollText, Send, Sparkles, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
@@ -12,6 +13,7 @@ import { FallingIntro, hasToured, heartsBurst, isTypingTarget, RabbitTour, Share
 import { play } from "@/lib/sfx";
 import { AnswerDoor, type DoorState } from "@/components/doors";
 import { DrinkMeBottles } from "@/components/potions";
+import { AnswerPreview, MathKeys } from "@/components/mathpad";
 import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
@@ -351,6 +353,20 @@ export function Workspace() {
     }
   }
 
+  /** Math keys insert at the cursor (keeping the 40-character limit) and put the cursor where it's useful. */
+  function insertIntoAnswer(text: string, caret = text.length) {
+    const el = answerInput.current;
+    const start = el?.selectionStart ?? answer.length;
+    const end = el?.selectionEnd ?? answer.length;
+    const next = answer.slice(0, start) + text + answer.slice(end);
+    if (next.length > 40) return;
+    // Commit the new value and place the cursor in the same tick, so a key typed
+    // right after tapping a math key lands at the cursor, not at the end.
+    flushSync(() => setAnswer(next));
+    el?.focus();
+    el?.setSelectionRange(start + caret, start + caret);
+  }
+
   async function submitAnswer(e: React.FormEvent) {
     e.preventDefault();
     if (!answer.trim()) return;
@@ -527,6 +543,12 @@ export function Workspace() {
                     {submitting ? "Checking…" : "Try the door"}
                   </Button>
                 </form>
+                {s.status === "active" && !s.locked && (
+                  <div className="space-y-1.5 pl-[46px]">
+                    <MathKeys onInsert={insertIntoAnswer} disabled={submitting} />
+                    <AnswerPreview value={answer} />
+                  </div>
+                )}
                 {earns && (
                   <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">

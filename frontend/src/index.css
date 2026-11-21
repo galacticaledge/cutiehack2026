@@ -562,3 +562,15 @@ main { position: relative; z-index: 1; }
 .presenter-step { width: 1.8rem; height: 1.8rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; }
 .presenter-step.is-active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 @media (max-width: 640px) { .presenter { left: 0.5rem; right: 0.5rem; width: auto; } }
+
+/* ---------- Math keys + answer preview ---------- */
+.math-key {
+  min-width: 2.1rem; height: 1.9rem; padding: 0 0.5rem; border-radius: 0.5rem;
+  border: 1px solid var(--border); background: var(--card); font-size: 0.9rem; font-weight: 600;
+  box-shadow: 0 1px 0 var(--border); transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.math-key:hover:not(:disabled) { border-color: var(--tan); }
+.math-key:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.math-key:disabled { opacity: 0.5; }
+.answer-preview { font-size: 0.85rem; min-height: 1.4rem; }
+.answer-preview .katex { font-size: 1.1em; }
