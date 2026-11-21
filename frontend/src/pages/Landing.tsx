@@ -85,7 +85,7 @@ export function Landing() {
             <span className="mt-2 block text-2xl italic text-[var(--tan)] sm:text-3xl">a Socratic dream in Wonderland</span>
           </h1>
           <p className="mx-auto max-w-lg text-lg text-muted-foreground">
-            A tutor that, like the Cheshire Cat, only answers with questions. Find your own way out of the dream and wake up with{" "}
+            A tutor that, like the Cheshire Cat, answers your questions with questions. Find your own way out of the dream and wake up with{" "}
             <span className="inline-flex items-center gap-1 font-semibold text-[var(--heart)]">
               TARTS <Tart />
             </span>
@@ -121,7 +121,7 @@ export function Landing() {
         </ol>
 
         <p className="text-center text-xs text-muted-foreground">
-          Built on UC Irvine research showing slow, Socratic AI tutoring improves learning.
+          Inspired by UC Irvine research (SIGCSE 2026) on slow, Socratic-paced AI tutoring.
           <br />
           Built with AIsa · ElevenLabs · Keenable · Solana devnet
         </p>

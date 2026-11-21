@@ -31,7 +31,8 @@ function showRewardToast(r: RewardView) {
   } else if (r.status === "forfeited") {
     toast.error("Off with their tarts!", { description: "This solve was suspicious and the testimony didn't show understanding." });
   } else if (r.status === "practice") {
-    toast("Unbirthday practice: no tarts", { description: r.breakdown });
+    const capped = r.breakdown.includes("daily cap");
+    toast(capped ? "The Queen's treasury is closed for today" : "Unbirthday practice: no tarts", { description: r.breakdown });
   }
 }
 

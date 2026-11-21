@@ -7,7 +7,7 @@ const FALLING = [Clock, KeyRound, Coffee, BookOpen, FlaskConical, Spade, Crown, 
 
 const QUOTES = [
   { q: "Why, sometimes I've believed as many as six impossible things before breakfast.", who: "The White Queen" },
-  { q: "If you don't know where you are going, any road will get you there.", who: "after the Cheshire Cat" },
+  { q: "That depends a good deal on where you want to get to.", who: "The Cheshire Cat" },
   { q: "Begin at the beginning, and go on till you come to the end: then stop.", who: "The King of Hearts" },
   { q: "Curiouser and curiouser!", who: "Alice" },
   { q: "It's no use going back to yesterday, because I was a different person then.", who: "Alice" },
@@ -251,7 +251,7 @@ export function DreamFooter() {
       <div className="checker" />
       <div className="bg-[var(--night)] px-4 py-5 text-center text-xs text-[#d6ecf7]">
         <p className="font-display text-base text-[#faf8f1]">Dream to Wonderland ✦ Cutie Hack 2026</p>
-        <p className="mt-1">Made with 💗 and 🫖 at UC Riverside · Tarts are devnet tokens: for eating, not selling.</p>
+        <p className="mt-1">Made with 💗 and 🫖 at UC Riverside · TARTS are Solana devnet test tokens with no monetary value.</p>
       </div>
     </footer>
   );

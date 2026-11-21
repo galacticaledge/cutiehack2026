@@ -89,7 +89,7 @@ function DoorCard({ p, starting, onStart }: { p: Problem; starting: string | nul
                 ))}
               </ul>
             </div>
-            <p className="text-xs text-[#d6ecf7]">Your numbers are unique to you. Each Drink Me bottle shrinks the tart; chatting with the Cat is free.</p>
+            <p className="text-xs text-[#d6ecf7]">Your numbers are unique to you. Drink Me bottles (hints) and wrong answers shrink the tart; chatting with the Cat is always free.</p>
             <button
               type="button"
               onClick={() => setFlipped(false)}

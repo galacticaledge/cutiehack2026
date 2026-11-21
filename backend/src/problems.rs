@@ -137,7 +137,7 @@ fn gen_trace_loop(seed: i64) -> GeneratedProblem {
     let first_multiple = ((a + k - 1) / k) * k;
     let code = format!("total = 0\nfor i in range({a}, {b}):\n    if i % {k} == 0:\n        total += i\nprint(total)");
     GeneratedProblem {
-        prompt: format!("At the Mad Hatter's tea party it is always six o'clock, so he wrote a program to keep track of the cups instead. What does this Python code print?\n\n```python\n{code}\n```"),
+        prompt: format!("At the Mad Hatter's tea party it is always six o'clock, so the Hatter passes the endless tea-time with this little program. What does this Python code print?\n\n```python\n{code}\n```"),
         answer: total as f64,
         tolerance: 0.0,
         solution_steps: vec![
@@ -198,7 +198,7 @@ fn gen_deriv(seed: i64) -> GeneratedProblem {
     let answer = 3 * a * k * k + 2 * b * k + c;
     let latex = latex_term(a, "x^3", true) + &latex_term(b, "x^2", false) + &latex_term(c, "x", false);
     GeneratedProblem {
-        prompt: format!("\"One side will make you grow taller, and the other side will make you grow shorter.\" After a nibble of the Caterpillar's mushroom, Alice's height changes according to\n\n$$f(x) = {latex}$$\n\nHow fast is she changing at that moment? Find $f'({k})$."),
+        prompt: format!("\"One side will make you grow taller, and the other side will make you grow shorter.\" After a nibble of the Caterpillar's mushroom, Alice's height is modelled by\n\n$$f(x) = {latex}$$\n\nHow fast is her height changing at $x = {k}$? Find $f'({k})$."),
         answer: answer as f64,
         tolerance: 1e-9,
         solution_steps: vec![
