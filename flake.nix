@@ -26,6 +26,7 @@
                 nodejs_22
                 postgresql_17
                 pkg-config
+                act
               ];
 
               buildInputs = [ pkgs.openssl ];

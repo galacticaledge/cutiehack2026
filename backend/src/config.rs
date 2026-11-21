@@ -2,10 +2,6 @@
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub llm_provider: String,
-    pub aisa_api_key: Option<String>,
-    pub aisa_base_url: String,
-    pub aisa_model: String,
     pub openai_api_key: Option<String>,
     pub openai_base_url: String,
     pub openai_model: String,
@@ -30,7 +26,10 @@ pub struct Config {
 }
 
 fn var(k: &str) -> Option<String> {
-    std::env::var(k).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+    std::env::var(k)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 fn or(k: &str, d: &str) -> String {
@@ -44,16 +43,13 @@ impl Config {
             anyhow::bail!("SESSION_SECRET must be set (32+ chars)");
         }
         Ok(Config {
-            llm_provider: or("LLM_PROVIDER", "aisa"),
-            aisa_api_key: var("AISA_API_KEY"),
-            aisa_base_url: or("AISA_BASE_URL", "https://api.aisa.one/v1"),
-            aisa_model: or("AISA_MODEL", "gpt-6.1-terra"),
             openai_api_key: var("OPENAI_API_KEY"),
             openai_base_url: or("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_model: or("OPENAI_MODEL", "gpt-6.1-terra"),
             tutor_effort: or("LLM_TUTOR_EFFORT", "low"),
             check_effort: or("LLM_CHECK_EFFORT", "none"),
-            database_url: var("DATABASE_URL").ok_or_else(|| anyhow::anyhow!("DATABASE_URL must be set"))?,
+            database_url: var("DATABASE_URL")
+                .ok_or_else(|| anyhow::anyhow!("DATABASE_URL must be set"))?,
             session_secret,
             daily_cap: or("DAILY_TOKEN_CAP", "1000").parse().unwrap_or(1000.0),
             demo_fixed_seeds: or("DEMO_FIXED_SEEDS", "false") == "true",
@@ -79,9 +75,7 @@ impl Config {
         self.keenable_api_key.is_some()
     }
     pub fn active_llm_provider(&self) -> &'static str {
-        if self.llm_provider != "openai" && self.aisa_api_key.is_some() {
-            "aisa"
-        } else if self.openai_api_key.is_some() {
+        if self.openai_api_key.is_some() {
             "openai"
         } else {
             "none"

@@ -18,10 +18,18 @@ pub struct Checkpoint {
 
 impl Checkpoint {
     fn number(id: &'static str, label: impl Into<String>, value: f64, tolerance: f64) -> Self {
-        Checkpoint { id, label: label.into(), kind: CheckpointKind::Number { value, tolerance } }
+        Checkpoint {
+            id,
+            label: label.into(),
+            kind: CheckpointKind::Number { value, tolerance },
+        }
     }
     fn list(id: &'static str, label: impl Into<String>, value: Vec<i64>) -> Self {
-        Checkpoint { id, label: label.into(), kind: CheckpointKind::List(value.into_iter().map(|v| v as f64).collect()) }
+        Checkpoint {
+            id,
+            label: label.into(),
+            kind: CheckpointKind::List(value.into_iter().map(|v| v as f64).collect()),
+        }
     }
 }
 
@@ -103,9 +111,17 @@ fn gen_linear(seed: i64) -> GeneratedProblem {
     let x = r.int_except(-10, 10, &[0]);
     let b = r.int_except(-20, 20, &[0]);
     let c = a * x + b;
-    let undo = if b >= 0 { format!("subtract {b} from both sides") } else { format!("add {} to both sides", -b) };
+    let undo = if b >= 0 {
+        format!("subtract {b} from both sides")
+    } else {
+        format!("add {} to both sides", -b)
+    };
     GeneratedProblem {
-        prompt: format!("The White Rabbit is late, late, late! He scribbled a riddle on his pocket watch, and the hands won't move until someone solves it.\n\nSolve for $x$: ${a}x {} {} = {c}$", if b >= 0 { "+" } else { "-" }, b.abs()),
+        prompt: format!(
+            "The White Rabbit is late, late, late! He scribbled a riddle on his pocket watch, and the hands won't move until someone solves it.\n\nSolve for $x$: ${a}x {} {} = {c}$",
+            if b >= 0 { "+" } else { "-" },
+            b.abs()
+        ),
         answer: x as f64,
         tolerance: 1e-9,
         solution_steps: vec![
@@ -115,11 +131,20 @@ fn gen_linear(seed: i64) -> GeneratedProblem {
         ],
         hints: [
             "What operations are being applied to x, and in what order?".into(),
-            "Undo operations in reverse order: addition/subtraction first, then multiplication.".into(),
-            format!("After removing the constant you get ${a}x = {}$. What's next?", c - b),
+            "Undo operations in reverse order: addition/subtraction first, then multiplication."
+                .into(),
+            format!(
+                "After removing the constant you get ${a}x = {}$. What's next?",
+                c - b
+            ),
         ],
         checkpoints: vec![
-            Checkpoint::number("rhs", "right-hand side after removing the constant", (c - b) as f64, 1e-9),
+            Checkpoint::number(
+                "rhs",
+                "right-hand side after removing the constant",
+                (c - b) as f64,
+                1e-9,
+            ),
             Checkpoint::number("final", "value of x", x as f64, 1e-9),
         ],
     }
@@ -132,16 +157,27 @@ fn gen_trace_loop(seed: i64) -> GeneratedProblem {
     let k = r.int(2, 4);
     // Ground truth: run the same loop.
     let range_values: Vec<i64> = (a..b).collect();
-    let kept: Vec<i64> = range_values.iter().copied().filter(|i| i % k == 0).collect();
+    let kept: Vec<i64> = range_values
+        .iter()
+        .copied()
+        .filter(|i| i % k == 0)
+        .collect();
     let total: i64 = kept.iter().sum();
     let first_multiple = ((a + k - 1) / k) * k;
-    let code = format!("total = 0\nfor i in range({a}, {b}):\n    if i % {k} == 0:\n        total += i\nprint(total)");
+    let code = format!(
+        "total = 0\nfor i in range({a}, {b}):\n    if i % {k} == 0:\n        total += i\nprint(total)"
+    );
     GeneratedProblem {
-        prompt: format!("At the Mad Hatter's tea party it is always six o'clock, so the Hatter passes the endless tea-time with this little program. What does this Python code print?\n\n```python\n{code}\n```"),
+        prompt: format!(
+            "At the Mad Hatter's tea party it is always six o'clock, so the Hatter passes the endless tea-time with this little program. What does this Python code print?\n\n```python\n{code}\n```"
+        ),
         answer: total as f64,
         tolerance: 0.0,
         solution_steps: vec![
-            format!("List the values range({a}, {b}) produces: from {a} up to {} ({b} is excluded).", b - 1),
+            format!(
+                "List the values range({a}, {b}) produces: from {a} up to {} ({b} is excluded).",
+                b - 1
+            ),
             format!("Keep only the values where i % {k} == 0, i.e. multiples of {k}."),
             "Add the kept values together; that sum is what gets printed.".into(),
         ],
@@ -151,7 +187,11 @@ fn gen_trace_loop(seed: i64) -> GeneratedProblem {
             format!("The first value that counts is {first_multiple}. Keep going."),
         ],
         checkpoints: vec![
-            Checkpoint::list("range_values", "every value of i the loop visits", range_values),
+            Checkpoint::list(
+                "range_values",
+                "every value of i the loop visits",
+                range_values,
+            ),
             Checkpoint::list("kept_values", "the values added to total", kept),
             Checkpoint::number("final", "the printed total", total as f64, 0.0),
         ],
@@ -162,10 +202,24 @@ fn latex_term(coef: i64, power: &str, first: bool) -> String {
     if coef == 0 {
         return String::new();
     }
-    let sign = if coef < 0 { "-" } else if first { "" } else { "+" };
+    let sign = if coef < 0 {
+        "-"
+    } else if first {
+        ""
+    } else {
+        "+"
+    };
     let abs = coef.abs();
-    let c = if abs == 1 && !power.is_empty() { String::new() } else { abs.to_string() };
-    if first { format!("{sign}{c}{power}") } else { format!(" {sign} {c}{power}") }
+    let c = if abs == 1 && !power.is_empty() {
+        String::new()
+    } else {
+        abs.to_string()
+    };
+    if first {
+        format!("{sign}{c}{power}")
+    } else {
+        format!(" {sign} {c}{power}")
+    }
 }
 
 /// Power rule applied to a coefficient vector (index = power), rendered as an expression in x.
@@ -184,7 +238,11 @@ fn derivative_expr(coefs: &[i64]) -> String {
             }
         })
         .collect();
-    if terms.is_empty() { "0".into() } else { terms.join(" + ") }
+    if terms.is_empty() {
+        "0".into()
+    } else {
+        terms.join(" + ")
+    }
 }
 
 fn gen_deriv(seed: i64) -> GeneratedProblem {
@@ -196,13 +254,16 @@ fn gen_deriv(seed: i64) -> GeneratedProblem {
     let coefs = [0, c, b, a];
     let dfx = derivative_expr(&coefs); // computed, not hand-written
     let answer = 3 * a * k * k + 2 * b * k + c;
-    let latex = latex_term(a, "x^3", true) + &latex_term(b, "x^2", false) + &latex_term(c, "x", false);
+    let latex =
+        latex_term(a, "x^3", true) + &latex_term(b, "x^2", false) + &latex_term(c, "x", false);
     GeneratedProblem {
-        prompt: format!("\"One side will make you grow taller, and the other side will make you grow shorter.\" After a nibble of the Caterpillar's mushroom, Alice's height is modelled by\n\n$$f(x) = {latex}$$\n\nHow fast is her height changing at $x = {k}$? Find $f'({k})$."),
+        prompt: format!(
+            "\"One side will make you grow taller, and the other side will make you grow shorter.\" After a nibble of the Caterpillar's mushroom, Alice's height is modelled by\n\n$$f(x) = {latex}$$\n\nHow fast is her height changing at $x = {k}$? Find $f'({k})$."
+        ),
         answer: answer as f64,
         tolerance: 1e-9,
         solution_steps: vec![
-            "Apply the power rule to each term: d/dx of x^n is n·x^(n-1).".into(),
+            "Apply the power rule to each term: the derivative of x^n is n times x to the power one less.".into(),
             "Write f'(x) as a polynomial in x.".into(),
             format!("Substitute x = {k} into f'(x) (the student should do the arithmetic)."),
         ],
@@ -257,14 +318,21 @@ fn gen_nested(seed: i64) -> GeneratedProblem {
     let m = r.int(n + 1, n + 5);
     let inner: Vec<i64> = (0..n).map(|i| m - i).collect();
     let count: i64 = inner.iter().sum();
-    let code = format!("count = 0\nfor i in range({n}):\n    for j in range(i, {m}):\n        count += 1\nprint(count)");
+    let code = format!(
+        "count = 0\nfor i in range({n}):\n    for j in range(i, {m}):\n        count += 1\nprint(count)"
+    );
     GeneratedProblem {
-        prompt: format!("The Queen of Hearts has ordered her card-soldiers to bend into croquet hoops, and she wants them counted. \"Off with their heads\" if the count is wrong! What does this Python code print?\n\n```python\n{code}\n```"),
+        prompt: format!(
+            "The Queen of Hearts has ordered her card-soldiers to bend into croquet hoops, and she wants them counted. \"Off with their heads\" if the count is wrong! What does this Python code print?\n\n```python\n{code}\n```"
+        ),
         answer: count as f64,
         tolerance: 0.0,
         solution_steps: vec![
             format!("The outer loop runs once for each i in range({n})."),
-            format!("For a given i, the inner loop runs for j from i up to {}, so {m} - i times.", m - 1),
+            format!(
+                "For a given i, the inner loop runs for j from i up to {}, so {m} - i times.",
+                m - 1
+            ),
             "Add up the inner-loop counts for every value of i.".into(),
         ],
         hints: [
@@ -273,8 +341,17 @@ fn gen_nested(seed: i64) -> GeneratedProblem {
             format!("When i = 0 the inner loop runs {m} times. How many times when i = 1?"),
         ],
         checkpoints: vec![
-            Checkpoint::number("outer_count", "number of outer-loop iterations", n as f64, 0.0),
-            Checkpoint::list("inner_count", "inner-loop iterations for each value of i, in order", inner),
+            Checkpoint::number(
+                "outer_count",
+                "number of outer-loop iterations",
+                n as f64,
+                0.0,
+            ),
+            Checkpoint::list(
+                "inner_count",
+                "inner-loop iterations for each value of i, in order",
+                inner,
+            ),
             Checkpoint::number("final", "the printed count", count as f64, 0.0),
         ],
     }

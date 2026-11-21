@@ -22,7 +22,10 @@ pub mod bytes_cache {
 
 impl AppState {
     pub async fn new(cfg: Config) -> anyhow::Result<Self> {
-        let pool = sqlx::postgres::PgPoolOptions::new().max_connections(10).connect(&cfg.database_url).await?;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(10)
+            .connect(&cfg.database_url)
+            .await?;
         let solana = match Solana::from_config(&cfg) {
             Ok(s) => Some(Arc::new(s)),
             Err(e) => {

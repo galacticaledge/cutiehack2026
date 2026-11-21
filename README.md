@@ -2,7 +2,7 @@
 
 An AI tutor that never gives you the answer. It guides you to it, and pays you in LEARN (a Solana devnet SPL token) for actually learning. Spec: [SPEC.md](SPEC.md).
 
-**Stack:** Rust (Axum on Tokio, sqlx/Postgres, solana-sdk + spl-token) · React (Vite, Tailwind, shadcn/ui, KaTeX) · OpenAI-compatible LLM via AIsa with OpenAI fallback.
+**Stack:** Rust (Axum on Tokio, sqlx/Postgres, solana-sdk + spl-token) · React (Vite, Tailwind, shadcn/ui, KaTeX) · OpenAI Chat Completions.
 
 ## Layout
 
@@ -30,7 +30,8 @@ frontend/           Vite + React SPA
 
 With Nix flakes enabled, run `nix develop` from the repo root in each development terminal. The shell provides Rust/Cargo, Node.js 22/npm, PostgreSQL 17, and the native Rust build dependencies. Without Nix, install those tools separately.
 
-If `.env` doesn't exist, copy `.env.example` to `.env`. Fill in `SESSION_SECRET` (32+ chars) and `OPENAI_API_KEY` and/or `AISA_API_KEY`. The shell doesn't start a database: use a local PostgreSQL instance or run `docker compose up -d db` if you have Docker. Set `DATABASE_URL` in `.env` to match.
+```bash
+cp .env.example .env          # fill SESSION_SECRET (32+ chars), OPENAI_API_KEY
 
 ```bash
 # One-time Solana setup (optional for local development)
