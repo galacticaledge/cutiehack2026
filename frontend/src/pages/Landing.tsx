@@ -82,7 +82,7 @@ export function Landing() {
           </p>
           <h1 className="font-display text-6xl leading-none text-[var(--night)] dark:text-foreground sm:text-7xl">
             Socra
-            <span className="block text-3xl italic text-[var(--tan)] sm:text-4xl">curiouser &amp; curiouser</span>
+            <span className="mt-2 block text-2xl italic text-[var(--tan)] sm:text-3xl">a Socratic dream in Wonderland</span>
           </h1>
           <p className="mx-auto max-w-lg text-lg text-muted-foreground">
             A tutor that, like the Cheshire Cat, only answers with questions. Find your own way out of the dream and wake up with{" "}
