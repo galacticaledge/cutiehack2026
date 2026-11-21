@@ -1,7 +1,7 @@
 //! API errors: always friendly JSON `{ error }`, never a stack trace.
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde_json::json;
 
 #[derive(Debug)]
@@ -12,7 +12,10 @@ pub struct AppError {
 
 impl AppError {
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
-        AppError { status, message: message.into() }
+        AppError {
+            status,
+            message: message.into(),
+        }
     }
     pub fn bad(message: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message)
@@ -43,7 +46,10 @@ impl<E: Into<anyhow::Error>> From<E> for AppError {
             );
         }
         tracing::error!("unhandled error: {e:#}");
-        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong. Please try again.")
+        AppError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Something went wrong. Please try again.",
+        )
     }
 }
 

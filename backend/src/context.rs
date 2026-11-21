@@ -1,6 +1,6 @@
 //! SERVER ONLY view of a session's problem (includes the answer).
 use crate::models::ProblemSession;
-use crate::problems::{get_template, Checkpoint, GeneratedProblem, Template};
+use crate::problems::{Checkpoint, GeneratedProblem, Template, get_template};
 use serde::{Deserialize, Serialize};
 
 /// AI reference solution for custom sessions. NEVER sent to the client.
@@ -61,13 +61,25 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             academic: true,
         });
     }
-    let r: CustomRef = s.custom_ref.clone().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    let r: CustomRef = s
+        .custom_ref
+        .clone()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
     let text = s.custom_text.clone().unwrap_or_default();
     let is_topic = s.source == "custom_topic";
     let numeric = r.numeric_answer.filter(|n| n.is_finite());
     Ok(ProblemContext {
-        source: if is_topic { "custom_topic".into() } else { "custom_problem".into() },
-        title: if is_topic { format!("Topic: {}", text.chars().take(60).collect::<String>()) } else { "Your problem".into() },
+        source: if is_topic {
+            "custom_topic".into()
+        } else {
+            "custom_problem".into()
+        },
+        title: if is_topic {
+            format!("Topic: {}", text.chars().take(60).collect::<String>())
+        } else {
+            "Your problem".into()
+        },
         display_prompt: text.clone(),
         steps: r.steps.iter().take(12).cloned().collect(),
         hints: vec![],

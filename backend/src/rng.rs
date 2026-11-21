@@ -7,7 +7,9 @@ pub struct Rng {
 
 impl Rng {
     pub fn new(seed: i64) -> Self {
-        Rng { inner: StdRng::seed_from_u64(seed as u64) }
+        Rng {
+            inner: StdRng::seed_from_u64(seed as u64),
+        }
     }
 
     /// Uniform in [0, 1).
