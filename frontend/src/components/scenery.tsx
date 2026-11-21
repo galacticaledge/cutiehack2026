@@ -166,9 +166,9 @@ export function initLookingGlass() {
   });
 }
 
-// Easter egg: 10 clicks on the toggle within 4 seconds sets off the Cheshire flashbang.
+// Easter egg: 10 clicks on the toggle within 6.5 seconds sets off the Cheshire flashbang.
 const SPAM_CLICKS = 10;
-const SPAM_WINDOW_MS = 4000;
+const SPAM_WINDOW_MS = 6500;
 let recentClicks: number[] = [];
 function countClick() {
   const now = Date.now();
@@ -202,9 +202,10 @@ export function useLookingGlass() {
       applyDark(next);
       return;
     }
+    // A quick flip: colours swap at the narrowest point, and the next click is accepted right after.
     root.classList.add("through-glass");
-    setTimeout(() => applyDark(next), 280);
-    setTimeout(() => root.classList.remove("through-glass"), 700);
+    setTimeout(() => applyDark(next), 140);
+    setTimeout(() => root.classList.remove("through-glass"), 330);
   }
   return { on, toggle };
 }
