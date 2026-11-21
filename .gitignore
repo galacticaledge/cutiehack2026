@@ -13,3 +13,7 @@ backend/target/
 .omc/
 .DS_Store
 *.log
+
+# direnv builds
+.direnv/
+.envrc
