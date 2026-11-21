@@ -552,3 +552,13 @@ main { position: relative; z-index: 1; }
 .map-stone.is-available { background: #fff8e6; border-color: var(--gold-soft); color: #8d6a20; box-shadow: 0 0 10px 1px color-mix(in oklab, var(--gold-soft) 55%, transparent); }
 .map-stone.is-locked { background: var(--muted); border-color: var(--border); color: var(--muted-foreground); }
 .dark .map-stone.is-available { background: #3a2e1a; color: #f1d79a; }
+
+/* ---------- Judge mode ---------- */
+.presenter { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; width: 19rem; border-radius: 1rem; padding: 0.8rem 0.9rem; }
+.presenter-tab { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.75rem; font-weight: 600; background: var(--night); color: #faf8f1; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
+.presenter-btn { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600; background: var(--card); }
+.presenter-btn:hover:not(:disabled) { border-color: var(--tan); }
+.presenter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.presenter-step { width: 1.8rem; height: 1.8rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; }
+.presenter-step.is-active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+@media (max-width: 640px) { .presenter { left: 0.5rem; right: 0.5rem; width: auto; } }

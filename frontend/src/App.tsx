@@ -6,6 +6,7 @@ import { FallingCards } from "@/components/wonder";
 import { DreamClouds, useLookingGlass, WonderSides } from "@/components/scenery";
 import { HeartsBurst } from "@/components/celebrations";
 import { DealtCards } from "@/components/skeletons";
+import { PresenterPanel } from "@/components/presenter";
 
 // Each page loads only when it's visited; the landing page stays in the first download.
 const loadLearn = () => import("@/pages/Learn").then((m) => ({ default: m.Learn }));
@@ -58,6 +59,7 @@ export default function App() {
       <Toaster position="top-right" theme={dark ? "dark" : "light"} richColors closeButton mobileOffset={{ top: 124 }} />
       <FallingCards />
       <HeartsBurst />
+      <PresenterPanel />
     </BrowserRouter>
   );
 }

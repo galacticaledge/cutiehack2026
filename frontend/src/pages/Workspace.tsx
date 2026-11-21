@@ -115,6 +115,19 @@ export function Workspace() {
   }, []);
   const endIntro = useCallback(() => setIntro(false), []);
 
+  // Judge mode can put a line in the chat box for the presenter (it isn't sent automatically).
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text !== "string") return;
+      setMsg(text);
+      showTab("chat");
+      setTimeout(() => chatInput.current?.focus(), 0);
+    };
+    window.addEventListener("socra:prefill-chat", onPrefill);
+    return () => window.removeEventListener("socra:prefill-chat", onPrefill);
+  }, [showTab]);
+
   // The chat box grows with the message (up to ~6 lines, then scrolls) and shrinks back after sending.
   const CHAT_MAX_PX = 160;
   const fitChat = useCallback(() => {
