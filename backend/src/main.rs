@@ -3,6 +3,7 @@ use socra::routes::api_router;
 use socra::state::AppState;
 use std::path::Path;
 use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -50,7 +51,14 @@ async fn main() -> anyhow::Result<()> {
     }
     // Compress responses (brotli/gzip): the JS bundle and JSON shrink to about a third.
     let app = app
-        .layer(CompressionLayer::new())
+        .layer(
+            // Media is already compressed; leave it alone (and keep byte ranges simple for video).
+            CompressionLayer::new().compress_when(
+                DefaultPredicate::new()
+                    .and(NotForContentType::const_new("video/"))
+                    .and(NotForContentType::const_new("audio/")),
+            ),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

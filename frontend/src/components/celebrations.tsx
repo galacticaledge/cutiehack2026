@@ -140,30 +140,49 @@ export function WakeUp() {
 /* ---------------- Easter egg: the Cheshire flashbang ---------------- */
 
 /** Spam the light/dark toggle (10 clicks in 4 s) and the Cat goes off like a flashbang.
- *  Skipped for reduced motion: it's a bright full-screen flash. */
+ *  With reduced motion (or if the browser won't play the clip) a still of the glowing
+ *  purple cat fades in gently instead: no flashing. */
 export function Flashbang() {
-  const [on, setOn] = useState(false);
+  const [mode, setMode] = useState<"off" | "video" | "still">("off");
   useEffect(() => {
-    const go = () => {
-      if (!reducedMotion()) setOn(true);
-    };
+    const go = () => setMode(reducedMotion() ? "still" : "video");
     window.addEventListener("socra:flashbang", go);
     return () => window.removeEventListener("socra:flashbang", go);
   }, []);
   useEffect(() => {
-    if (!on) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOn(false);
+    if (mode === "off") return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMode("off");
     window.addEventListener("keydown", onKey);
-    const safety = setTimeout(() => setOn(false), 6000); // never get stuck if the video can't play
+    // the still stays for a moment; the video closes itself, with a safety net
+    const t = setTimeout(() => setMode("off"), mode === "still" ? 2600 : 6000);
     return () => {
       window.removeEventListener("keydown", onKey);
-      clearTimeout(safety);
+      clearTimeout(t);
     };
-  }, [on]);
-  if (!on) return null;
+  }, [mode]);
+  if (mode === "off") return null;
   return (
-    <div className="flashbang" onClick={() => setOn(false)} role="presentation" aria-hidden="true">
-      <video src="/easter/flashbang.mp4" autoPlay muted playsInline onEnded={() => setOn(false)} onError={() => setOn(false)} />
+    <div className={`flashbang ${mode === "still" ? "flashbang-still" : ""}`} onClick={() => setMode("off")} role="presentation" aria-hidden="true">
+      {mode === "video" ? (
+        <video
+          src="/easter/flashbang.mp4"
+          poster="/easter/flashbang-still.jpg"
+          autoPlay
+          muted
+          playsInline
+          ref={(v) => {
+            // React doesn't always reflect `muted` before autoplay; make sure, then fall back to the still if playback is refused.
+            if (v) {
+              v.muted = true;
+              void v.play().catch(() => setMode("still"));
+            }
+          }}
+          onEnded={() => setMode("off")}
+          onError={() => setMode("still")}
+        />
+      ) : (
+        <img src="/easter/flashbang-still.jpg" alt="" />
+      )}
     </div>
   );
 }
