@@ -2,7 +2,7 @@ import { BookHeart, Check, Clock, Crown, FlaskConical, Gavel, KeyRound, Rabbit, 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheshireGrin, flavorFor, Tart } from "@/components/wonder";
-import { api, type Me, type Problem, type SessionView } from "@/lib/api";
+import { api, type Me, type Problem, type Proficiency, type SessionView } from "@/lib/api";
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -15,7 +15,7 @@ function Panel({ title, children, className = "" }: { title: string; children: R
 
 /* ---------------- Hall of Doors: left column ---------------- */
 
-export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
+export function YourDreamPanel({ problems, proficiency }: { problems: Problem[] | null; proficiency?: Proficiency | null }) {
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
     const load = () => api<Me>("/api/me").then(setMe).catch(() => {});
@@ -23,7 +23,8 @@ export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
     window.addEventListener("socra:balance", load);
     return () => window.removeEventListener("socra:balance", load);
   }, []);
-  const eaten = problems?.filter((p) => p.rewardStatus === "paid").length ?? 0;
+  // A door counts as opened once you've finished its trial (paid, pending delivery or forfeited).
+  const eaten = problems?.filter((p) => p.rewardStatus !== null || proficiency?.topics.some((t) => t.templateId === p.id && t.solves > 0)).length ?? 0;
   const total = problems?.length ?? 0;
   const capPct = me && me.dailyCap > 0 ? Math.min(100, (me.earnedToday / me.dailyCap) * 100) : 0;
 
@@ -60,17 +61,30 @@ export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
             const f = flavorFor(p.id);
             const Icon = f?.icon ?? KeyRound;
             const status = p.rewardStatus;
+            const topic = proficiency?.topics.find((t) => t.templateId === p.id);
             return (
               <li key={p.id} className="flex items-center gap-2">
                 <Icon className="size-4 shrink-0 text-[var(--tan)]" />
                 <span className="min-w-0 flex-1 truncate">{f?.character ?? p.title}</span>
                 {status === "paid" && <Check className="size-4 text-[var(--potion)]" aria-label="earned" />}
                 {status === "forfeited" && <X className="size-4 text-[var(--heart)]" aria-label="forfeited" />}
-                {!status && <span className="text-xs tabular-nums text-muted-foreground">{p.maxReward}</span>}
+                {topic && topic.solves > 0 ? (
+                  <span className="text-xs tabular-nums text-muted-foreground" title={`${topic.level}${topic.fading ? ", fading" : ""}`}>
+                    {topic.proficiency}%
+                  </span>
+                ) : (
+                  !status && <span className="text-xs tabular-nums text-muted-foreground">{p.maxReward}</span>
+                )}
               </li>
             );
           })}
         </ul>
+        {proficiency && proficiency.topics.some((t) => t.solves > 0) && (
+          <p className="mt-3 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground" title="Average across all five doors, including ones you haven't opened yet">Overall proficiency (all doors)</span>
+            <span className="font-semibold tabular-nums">{proficiency.overall}%</span>
+          </p>
+        )}
         <Link to="/journal" className="mt-3 flex items-center gap-1 text-xs font-medium text-[var(--tan)] hover:underline">
           <BookHeart className="size-3.5" /> Read your dream journal
         </Link>

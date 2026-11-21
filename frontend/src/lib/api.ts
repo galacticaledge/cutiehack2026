@@ -184,3 +184,29 @@ export function getFeatures(): Promise<Features | null> {
 export function isGuestName(username: string) {
   return /^(guest|copycat)-/.test(username);
 }
+
+export interface ProficiencyTopic {
+  templateId: string;
+  title: string;
+  concept: string;
+  difficulty: number;
+  proficiency: number;
+  earned: number;
+  level: "Unexplored" | "Curious" | "Learning" | "Skilled" | "Mastered";
+  solves: number;
+  lastSolvedAt: string | null;
+  fading: boolean;
+}
+
+export interface Suggestion {
+  templateId: string;
+  title: string;
+  kind: "new" | "strengthen" | "review" | "foundation";
+  reason: string;
+}
+
+export interface Proficiency {
+  topics: ProficiencyTopic[];
+  suggestions: Suggestion[];
+  overall: number;
+}

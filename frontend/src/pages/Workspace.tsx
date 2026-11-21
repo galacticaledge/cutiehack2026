@@ -16,6 +16,7 @@ import { AnswerDoor, type DoorState } from "@/components/doors";
 import { DrinkMeBottles } from "@/components/potions";
 import { AnswerPreview, MathKeys } from "@/components/mathpad";
 import { TypedMarkdown } from "@/components/typed";
+import { ProficiencyMeter, useProficiency } from "@/components/proficiency";
 import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
@@ -90,6 +91,8 @@ export function Workspace() {
   const [explaining, setExplaining] = useState(false);
   // A weak testimony gets the jury's note and another try (the server counts tries).
   const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
+  // After the trial: how this topic's proficiency stands now, and where to go next.
+  const prof = useProficiency(s?.status === "done" && s.source === "bank" ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -639,6 +642,29 @@ export function Workspace() {
                 ) : (
                   <p className="text-muted-foreground">No tarts for this one (unbirthday practice or the daily cap).</p>
                 )}
+                {(() => {
+                  const topic = prof?.topics.find((t) => t.templateId === s.templateId);
+                  const next = prof?.suggestions.find((sg) => sg.templateId !== s.templateId);
+                  if (!topic) return null;
+                  return (
+                    <div className="space-y-2 rounded-xl border border-[var(--border)] bg-secondary/50 p-3" aria-label="Proficiency">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">Your proficiency in this topic</p>
+                      <ProficiencyMeter value={topic.proficiency} level={topic.level} fading={topic.fading} />
+                      {topic.solves > 1 && (
+                        <p className="text-xs text-muted-foreground">
+                          Solve #{topic.solves} here. Repeats count less each time, so new topics grow you faster.
+                        </p>
+                      )}
+                      {next && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Next: </span>
+                          <span className="font-semibold">{next.title}</span>
+                          <span className="text-muted-foreground">. {next.reason}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-2 pt-1">
                   {s.reward?.status === "paid" && (
                     <ShareDreamButton

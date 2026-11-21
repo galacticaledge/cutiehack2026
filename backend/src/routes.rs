@@ -37,6 +37,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/me", get(me))
         .route("/api/problems", get(problems))
         .route("/api/journal", get(journal))
+        .route("/api/proficiency", get(proficiency))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
@@ -162,6 +163,21 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
         })
         .collect();
     Ok(Json(Value::Array(list)))
+}
+
+/// Proficiency per topic (carried across visits) and what to learn next.
+async fn proficiency(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
+    let solves = crate::proficiency::load(&st.pool, &user.id).await?;
+    let topics = crate::proficiency::topics(&solves, Utc::now());
+    let suggestions = crate::proficiency::suggestions(&topics);
+    let overall = if topics.is_empty() {
+        0
+    } else {
+        topics.iter().map(|t| t.proficiency).sum::<i64>() / topics.len() as i64
+    };
+    Ok(Json(
+        json!({ "topics": topics, "suggestions": suggestions, "overall": overall }),
+    ))
 }
 
 /// Dream journal: the user's finished verified problems, newest first. Never includes answers.

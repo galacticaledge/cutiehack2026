@@ -6,6 +6,7 @@ pub mod anticheat;
 pub mod leak;
 pub mod mathexpr;
 pub mod problems;
+pub mod proficiency;
 pub mod rewards;
 pub mod rng;
 pub mod verify;

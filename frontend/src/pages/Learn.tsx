@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { flavorFor, suitColor, Tart } from "@/components/wonder";
 import { DoorArt } from "@/components/doors";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
-import { api, mapAvailable, type Problem } from "@/lib/api";
+import { ProficiencyMeter, SuggestionCards, useProficiency } from "@/components/proficiency";
+import { api, mapAvailable, type Problem, type ProficiencyTopic } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {
   return (
@@ -25,7 +26,21 @@ function Difficulty({ n }: { n: number }) {
   );
 }
 
-function DoorCard({ p, starting, busy, opening, onOpen }: { p: Problem; starting: string | null; busy: boolean; opening: boolean; onOpen: () => void }) {
+function DoorCard({
+  p,
+  starting,
+  busy,
+  opening,
+  onOpen,
+  topic,
+}: {
+  p: Problem;
+  starting: string | null;
+  busy: boolean;
+  opening: boolean;
+  onOpen: () => void;
+  topic?: ProficiencyTopic;
+}) {
   const [flipped, setFlipped] = useState(false);
   const openDoor = onOpen;
   const f = flavorFor(p.id);
@@ -59,11 +74,16 @@ function DoorCard({ p, starting, busy, opening, onOpen }: { p: Problem; starting
             {p.rewardStatus === "forfeited" && <Badge variant="destructive">Off with it</Badge>}
           </div>
           {f && <p className="text-sm text-muted-foreground">{f.blurb}</p>}
+          {topic && topic.solves > 0 && <ProficiencyMeter value={topic.proficiency} level={topic.level} fading={topic.fading} />}
           <div className="mt-auto flex items-center justify-between gap-2 pt-1">
             <div className="space-y-1">
               <Difficulty n={p.difficulty} />
               <span className="flex items-center gap-1 text-sm font-medium">
-                {p.rewardStatus ? (
+                {p.rewardStatus === "failed" || p.rewardStatus === "minting" ? (
+                  <span className="text-muted-foreground" title="Your reward is saved and will be delivered once payouts are set up.">
+                    <Tart /> Tarts saved, delivery pending
+                  </span>
+                ) : p.rewardStatus ? (
                   <span className="text-muted-foreground">Unbirthday practice</span>
                 ) : (
                   <>
@@ -123,6 +143,7 @@ export function Learn() {
   const [starting, setStarting] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [hasMap, setHasMap] = useState(false);
+  const prof = useProficiency();
   useEffect(() => {
     void mapAvailable().then(setHasMap);
   }, []);
@@ -164,7 +185,7 @@ export function Learn() {
       <main className="mx-auto grid max-w-[90rem] gap-8 px-4 py-10 xl:grid-cols-[16rem_minmax(0,1fr)_17rem]">
         <aside aria-label="Your progress" className="hidden xl:block">
           <div className="sticky top-24">
-            <YourDreamPanel problems={problems} />
+            <YourDreamPanel problems={problems} proficiency={prof} />
           </div>
         </aside>
         <div className="min-w-0 space-y-10">
@@ -175,6 +196,10 @@ export function Learn() {
             Every door opens onto a different dream. Find your own way through and you'll wake up with tarts.
           </p>
         </section>
+
+        {problems && prof && (
+          <SuggestionCards suggestions={prof.suggestions} busy={starting !== null || openingId !== null} onOpen={(id) => openDoor(id)} />
+        )}
 
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 min-[1780px]:grid-cols-3">
           {!problems && !loadFailed && <DealtCards count={5} label="Unlocking the doors" />}
@@ -191,11 +216,12 @@ export function Learn() {
               busy={starting !== null || openingId !== null}
               opening={openingId === p.id}
               onOpen={() => openDoor(p.id)}
+              topic={prof?.topics.find((t) => t.templateId === p.id)}
             />
           ))}
         </section>
         <p className="-mt-6 text-center text-xs text-muted-foreground">
-          Everyone dreams different numbers, so shared answers won't get you anywhere. Already earned one? It becomes an unbirthday: practice, no tarts.
+          Everyone dreams different numbers, so shared answers won't get you anywhere. Already earned one? It becomes an unbirthday: practice, no tarts. Repeats count less and less toward proficiency, so the suggestions point you somewhere new.
         </p>
 
         <section className="parchment mx-auto max-w-3xl space-y-3 rounded-2xl p-6">
