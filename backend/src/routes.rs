@@ -1,0 +1,606 @@
+//! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
+use crate::anticheat::{compute_flags, TelemetryEvent};
+use crate::answers::{is_correct, is_locked, parse_answer};
+use crate::auth::{session_cookie, AuthUser, COOKIE};
+use crate::claims::verify_message;
+use crate::context::problem_context;
+use crate::custom::{intake_problem, intake_topic, CUSTOM_MAX};
+use crate::error::{ApiResult, AppError};
+use crate::llm::{complete_json, Kind};
+use crate::models::{new_id, Event, ProblemSession, Reward, User};
+use crate::problems::{get_template, TEMPLATES};
+use crate::prompts::{self, opening_message};
+use crate::resources::learn_more_links;
+use crate::rewards::{compute_reward, RewardInput, RewardStatus};
+use crate::sessions::*;
+use crate::solana::{explorer_address_url, explorer_tx_url, generate_user_wallet};
+use crate::state::AppState;
+use crate::tts::synthesize;
+use crate::tutor::tutor_reply;
+use crate::verify::{verdict_chips, verdict_lines};
+use axum::body::Body;
+use axum::extract::{Path, State};
+use axum::http::{header, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use axum_extra::extract::cookie::{Cookie, CookieJar};
+use chrono::Utc;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::time::{Duration, Instant};
+
+pub fn api_router() -> Router<AppState> {
+    Router::new()
+        .route("/api/auth/login", post(login))
+        .route("/api/auth/logout", post(logout))
+        .route("/api/me", get(me))
+        .route("/api/problems", get(problems))
+        .route("/api/features", get(features))
+        .route("/api/tts", post(tts))
+        .route("/api/sessions", post(create_session))
+        .route("/api/sessions/{id}", get(get_session))
+        .route("/api/sessions/{id}/similar", post(similar))
+        .route("/api/sessions/{id}/chat", post(chat))
+        .route("/api/sessions/{id}/hint", post(hint))
+        .route("/api/sessions/{id}/answer", post(answer))
+        .route("/api/sessions/{id}/explain", post(explain))
+        .route("/api/sessions/{id}/events", post(events))
+        .route("/api/sessions/{id}/resources", get(resources))
+}
+
+type J = Json<Value>;
+
+// ---------- auth ----------
+
+#[derive(Deserialize)]
+struct LoginBody {
+    username: Option<String>,
+}
+
+async fn login(State(st): State<AppState>, jar: CookieJar, Json(b): Json<LoginBody>) -> ApiResult<(CookieJar, J)> {
+    let username = b.username.unwrap_or_default().trim().to_lowercase();
+    let valid = (2..=24).contains(&username.len()) && username.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if !valid {
+        return Err(AppError::bad("Usernames are 2–24 characters: letters, numbers, - and _."));
+    }
+    let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1").bind(&username).fetch_optional(&st.pool).await? {
+        Some(u) => u,
+        None => {
+            let (pubkey, secret) = generate_user_wallet();
+            sqlx::query("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING")
+                .bind(new_id())
+                .bind(&username)
+                .bind(&pubkey)
+                .bind(&secret)
+                .execute(&st.pool)
+                .await?;
+            sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1").bind(&username).fetch_one(&st.pool).await?
+        }
+    };
+    let jar = jar.add(session_cookie(&st, &user.id));
+    Ok((jar, Json(json!({ "username": user.username, "walletPubkey": user.wallet_pubkey }))))
+}
+
+async fn logout(jar: CookieJar) -> (CookieJar, J) {
+    (jar.remove(Cookie::build(COOKIE).path("/")), Json(json!({ "ok": true })))
+}
+
+async fn me(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
+    let on_chain = match &st.solana {
+        Some(s) => s.token_balance(&user.wallet_pubkey).await,
+        None => None,
+    };
+    let (balance, source) = match on_chain {
+        Some(b) => (b, "chain"),
+        None => {
+            let sum: Option<i64> = sqlx::query_scalar("SELECT SUM(amount)::BIGINT FROM rewards WHERE user_id = $1 AND status = 'paid'")
+                .bind(&user.id)
+                .fetch_one(&st.pool)
+                .await?;
+            (st.cfg.from_base_units(sum.unwrap_or(0)), "db")
+        }
+    };
+    Ok(Json(json!({
+        "username": user.username,
+        "walletPubkey": user.wallet_pubkey,
+        "walletUrl": explorer_address_url(&user.wallet_pubkey),
+        "balance": balance,
+        "balanceSource": source,
+        "earnedToday": earned_today(&st, &user.id).await?,
+        "dailyCap": st.cfg.daily_cap,
+    })))
+}
+
+async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT template_id, status FROM rewards WHERE user_id = $1").bind(&user.id).fetch_all(&st.pool).await?;
+    let list: Vec<Value> = TEMPLATES
+        .iter()
+        .map(|t| {
+            let status = rows.iter().find(|(id, _)| id == t.id).map(|(_, s)| s.clone());
+            json!({
+                "id": t.id,
+                "title": t.title,
+                "concept": t.concept,
+                "difficulty": t.difficulty,
+                "earned": status.as_deref() == Some("paid"),
+                "rewardStatus": status,
+                "maxReward": 100 * t.difficulty,
+            })
+        })
+        .collect();
+    Ok(Json(Value::Array(list)))
+}
+
+async fn features(State(st): State<AppState>) -> J {
+    Json(json!({
+        "tts": st.cfg.tts_enabled(),
+        "learnMore": st.cfg.resources_enabled(),
+        "llmProvider": st.cfg.active_llm_provider(),
+        "solana": st.solana.is_some(),
+    }))
+}
+
+// ---------- sessions ----------
+
+#[derive(Deserialize)]
+struct CustomBody {
+    kind: Option<String>,
+    text: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CreateBody {
+    #[serde(rename = "templateId")]
+    template_id: Option<String>,
+    custom: Option<CustomBody>,
+}
+
+async fn create_session(State(st): State<AppState>, AuthUser(user): AuthUser, Json(b): Json<CreateBody>) -> ApiResult<J> {
+    if let Some(c) = b.custom {
+        let kind = match c.kind.as_deref() {
+            Some("problem") => "problem",
+            Some("topic") => "topic",
+            _ => return Err(AppError::bad("Choose Problem or Topic.")),
+        };
+        let text = c.text.unwrap_or_default().trim().to_string();
+        if text.is_empty() {
+            return Err(AppError::bad("Paste a problem or name a topic first."));
+        }
+        if text.chars().count() > CUSTOM_MAX {
+            return Err(AppError::bad(format!("Please keep it under {CUSTOM_MAX} characters.")));
+        }
+        let custom_ref = if kind == "problem" { intake_problem(&st, &text).await } else { intake_topic(&st, &text).await };
+        let s = sqlx::query_as::<_, ProblemSession>(
+            "INSERT INTO problem_sessions (id, user_id, source, custom_text, custom_ref, template_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+        )
+        .bind(new_id())
+        .bind(&user.id)
+        .bind(if kind == "problem" { "custom_problem" } else { "custom_topic" })
+        .bind(&text)
+        .bind(serde_json::to_value(&custom_ref)?)
+        .bind(custom_ref.matched_template_id.clone())
+        .fetch_one(&st.pool)
+        .await?;
+        let ctx = problem_context(&s)?;
+        insert_message(&st.pool, &s.id, "tutor", opening_message(&ctx), None).await?;
+        return Ok(Json(json!({ "sessionId": s.id })));
+    }
+    let s = create_bank_session(&st, &user, b.template_id.as_deref().unwrap_or_default(), None).await?;
+    Ok(Json(json!({ "sessionId": s.id })))
+}
+
+async fn get_session(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    Ok(Json(session_view(&st, &s).await?))
+}
+
+async fn similar(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    if s.source == "bank" {
+        return Err(AppError::bad("This is already a verified problem."));
+    }
+    let ctx = problem_context(&s)?;
+    let Some(matched) = ctx.custom_ref.matched_template_id else {
+        return Err(AppError::not_found("No verified problem matches this concept yet."));
+    };
+    let bank = create_bank_session(&st, &user, &matched, Some(&s.id)).await?;
+    Ok(Json(json!({ "sessionId": bank.id })))
+}
+
+#[derive(Deserialize)]
+struct ChatBody {
+    message: Option<String>,
+}
+
+async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<ChatBody>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    let message = b.message.unwrap_or_default().trim().to_string();
+    if message.is_empty() {
+        return Err(AppError::bad("Type a message first."));
+    }
+    if message.chars().count() > 2000 {
+        return Err(AppError::bad("Please keep messages under 2000 characters."));
+    }
+    {
+        let mut rate = st.chat_rate.lock().unwrap();
+        let now = Instant::now();
+        if rate.get(&user.id).is_some_and(|t| now.duration_since(*t) < Duration::from_secs(2)) {
+            return Err(AppError::new(StatusCode::TOO_MANY_REQUESTS, "Slow down a little, one message every 2 seconds."));
+        }
+        rate.insert(user.id.clone(), now);
+    }
+    let ctx = problem_context(&s)?;
+    // Neuro-symbolic verification (bank sessions only; custom sessions have no ground truth).
+    let verdicts = if ctx.is_bank() { verify_message(&st, &message, &ctx.checkpoints).await } else { vec![] };
+    let verdict_json = (!verdicts.is_empty()).then(|| serde_json::to_value(&verdicts).unwrap_or(Value::Null));
+    let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
+    let hist = history(&st.pool, &s.id).await?;
+    let r = tutor_reply(&st, &ctx, s.hints_used, &hist, &verdict_lines(&verdicts), None).await?;
+    let tutor_msg = insert_message(&st.pool, &s.id, "tutor", &r.reply, None).await?;
+    Ok(Json(json!({
+        "reply": r.reply,
+        "messageId": tutor_msg.id,
+        "userMessageId": user_msg.id,
+        "provider": r.provider,
+        "verdicts": verdict_chips(&verdicts),
+    })))
+}
+
+async fn hint(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    if s.source != "bank" {
+        return Err(AppError::bad("Hints are only available on problems from the bank."));
+    }
+    if s.status != "active" {
+        return Err(AppError::bad("You've already solved this one."));
+    }
+    if s.hints_used >= 3 {
+        return Err(AppError::bad("All 3 hints are already revealed."));
+    }
+    let n = sqlx::query("UPDATE problem_sessions SET hints_used = hints_used + 1 WHERE id = $1 AND hints_used = $2")
+        .bind(&s.id)
+        .bind(s.hints_used)
+        .execute(&st.pool)
+        .await?
+        .rows_affected();
+    if n != 1 {
+        return Err(AppError::new(StatusCode::CONFLICT, "Please try again."));
+    }
+    let ctx = problem_context(&s)?;
+    let used = s.hints_used + 1;
+    Ok(Json(json!({ "hint": ctx.hints[(used - 1) as usize], "hintsUsed": used })))
+}
+
+#[derive(Deserialize)]
+struct AnswerBody {
+    answer: Option<String>,
+}
+
+const DIAGNOSIS_FALLBACK: &str = "Not quite. Go back through your work one step at a time. Which step are you least sure about?";
+
+async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<AnswerBody>) -> ApiResult<Response> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    let ctx = problem_context(&s)?;
+    let raw = b.answer.unwrap_or_default();
+    let Some(correct_answer) = ctx.answer else {
+        return Err(AppError::bad("There's no answer check for this one."));
+    };
+    let is_bank = ctx.is_bank();
+    if is_bank && s.status != "active" {
+        return Err(AppError::bad("You've already solved this one."));
+    }
+    if is_bank && is_locked(s.wrong_attempts, s.hints_used) {
+        let msg = if s.hints_used < 3 {
+            "Answers are locked. Reveal the next hint to unlock 2 more attempts."
+        } else {
+            "You're out of attempts for this problem. Keep chatting with the tutor to understand it."
+        };
+        return Err(AppError::new(StatusCode::LOCKED, msg));
+    }
+    let value = match parse_answer(&raw) {
+        Ok(v) => v,
+        Err(e) => return Ok((StatusCode::BAD_REQUEST, Json(json!({ "error": e, "counted": false })))
+            .into_response()),
+    };
+
+    if is_correct(value, correct_answer, ctx.tolerance) {
+        if !is_bank {
+            return Ok(Json(json!({ "correct": true, "wrongAttempts": s.wrong_attempts, "locked": false, "practice": true })).into_response());
+        }
+        let now = Utc::now();
+        let n = sqlx::query("UPDATE problem_sessions SET status = 'solved', solved_at = $2 WHERE id = $1 AND status = 'active'")
+            .bind(&s.id)
+            .bind(now)
+            .execute(&st.pool)
+            .await?
+            .rows_affected();
+        if n != 1 {
+            return Err(AppError::new(StatusCode::CONFLICT, "Already submitted."));
+        }
+        let evs = sqlx::query_as::<_, Event>("SELECT * FROM events WHERE session_id = $1 AND type IN ('hidden','visible','paste')")
+            .bind(&s.id)
+            .fetch_all(&st.pool)
+            .await?;
+        let telemetry: Vec<TelemetryEvent> = evs
+            .iter()
+            .map(|e| TelemetryEvent { kind: e.kind.clone(), target: e.data["target"].as_str().map(String::from), at: e.created_at })
+            .collect();
+        let flags = compute_flags(s.started_at, now, ctx.template.unwrap().min_solve_seconds, &telemetry);
+        sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'solve', $3)")
+            .bind(new_id())
+            .bind(&s.id)
+            .bind(json!({ "flags": flags }))
+            .execute(&st.pool)
+            .await?;
+        let practice = reward_elsewhere(&st.pool, &user.id, s.template_id.as_deref().unwrap_or_default(), &s.id).await?;
+        return Ok(Json(json!({ "correct": true, "wrongAttempts": s.wrong_attempts, "locked": false, "flagged": !flags.is_empty(), "practice": practice })).into_response());
+    }
+
+    // Wrong answer
+    let mut wrong = s.wrong_attempts;
+    if is_bank {
+        wrong = sqlx::query_scalar("UPDATE problem_sessions SET wrong_attempts = wrong_attempts + 1 WHERE id = $1 RETURNING wrong_attempts")
+            .bind(&s.id)
+            .fetch_one(&st.pool)
+            .await?;
+    }
+    let hist = history(&st.pool, &s.id).await?;
+    let tutor_text = match tutor_reply(&st, &ctx, s.hints_used, &hist, &[], Some(prompts::wrong_answer_line(&raw))).await {
+        Ok(r) => r.reply,
+        Err(e) => {
+            tracing::warn!("[answer] diagnosis failed: {e}");
+            DIAGNOSIS_FALLBACK.into()
+        }
+    };
+    let msg = insert_message(&st.pool, &s.id, "tutor", &tutor_text, None).await?;
+    Ok(Json(json!({
+        "correct": false,
+        "wrongAttempts": wrong,
+        "locked": is_bank && is_locked(wrong, s.hints_used),
+        "tutorReply": tutor_text,
+        "messageId": msg.id,
+    }))
+    .into_response())
+}
+
+#[derive(Deserialize)]
+struct ExplainBody {
+    text: Option<String>,
+}
+
+/// Mint a reward row that is in status "minting"; returns the updated row.
+async fn settle(st: &AppState, reward: &Reward, wallet: &str) -> anyhow::Result<Reward> {
+    let (status, sig) = match &st.solana {
+        None => {
+            tracing::warn!("[mint] Solana not configured (MINT_ADDRESS / MINT_AUTHORITY_SECRET)");
+            ("failed", None)
+        }
+        Some(sol) => match sol.mint_with_retry(wallet, reward.amount.max(0) as u64).await {
+            Ok(sig) => {
+                tracing::info!("[mint] {} LEARN → {wallet}: {}", st.cfg.from_base_units(reward.amount), explorer_tx_url(&sig));
+                ("paid", Some(sig))
+            }
+            Err(e) => {
+                tracing::error!("[mint] failed: {e}");
+                ("failed", None)
+            }
+        },
+    };
+    Ok(sqlx::query_as::<_, Reward>("UPDATE rewards SET status = $2, tx_sig = $3 WHERE id = $1 RETURNING *")
+        .bind(&reward.id)
+        .bind(status)
+        .bind(sig)
+        .fetch_one(&st.pool)
+        .await?)
+}
+
+fn practice_reward(msg: &str) -> Value {
+    json!({ "amount": 0, "status": "practice", "breakdown": msg })
+}
+
+async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<ExplainBody>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    if s.source != "bank" {
+        return Err(AppError::bad("Practice sessions don't pay out. Try a verified problem on this concept to earn LEARN."));
+    }
+    if s.status == "active" {
+        return Err(AppError::bad("Solve the problem first."));
+    }
+    let prev_pass = s.explain_passed.unwrap_or(true);
+    let prev_feedback = s.explain_feedback.clone().unwrap_or_default();
+
+    // Retry path: a previous mint failed.
+    if let Some(existing) = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1").bind(&s.id).fetch_optional(&st.pool).await? {
+        if existing.status == "failed" {
+            let claimed = sqlx::query_as::<_, Reward>("UPDATE rewards SET status = 'minting' WHERE id = $1 AND status = 'failed' RETURNING *")
+                .bind(&existing.id)
+                .fetch_optional(&st.pool)
+                .await?;
+            if let Some(r) = claimed {
+                let settled = settle(&st, &r, &user.wallet_pubkey).await?;
+                return Ok(Json(json!({ "pass": prev_pass, "feedback": prev_feedback, "reward": reward_json(&st.cfg, &settled) })));
+            }
+        }
+        return Ok(Json(json!({ "pass": prev_pass, "feedback": prev_feedback, "reward": reward_json(&st.cfg, &existing) })));
+    }
+    if s.explanation.is_some() {
+        return Ok(Json(json!({ "pass": prev_pass, "feedback": prev_feedback, "reward": practice_reward("Practice mode: no reward") })));
+    }
+
+    let text = b.text.unwrap_or_default().trim().to_string();
+    if text.chars().count() < 10 {
+        return Err(AppError::bad("Write a sentence or two explaining why your method works."));
+    }
+    if text.chars().count() > 1500 {
+        return Err(AppError::bad("Please keep it under 1500 characters."));
+    }
+    let ctx = problem_context(&s)?;
+    let mut pass = true;
+    let mut feedback = "Nice work explaining your reasoning!".to_string();
+    if let Some(v) = complete_json(&st, Kind::Check, &prompts::grader(&ctx, &text), None).await? {
+        if let Some(p) = v["pass"].as_bool() {
+            pass = p;
+            if let Some(f) = v["feedback"].as_str().filter(|f| !f.trim().is_empty()) {
+                feedback = f.trim().chars().take(400).collect();
+            }
+        }
+    }
+
+    let marked = sqlx::query(
+        "UPDATE problem_sessions SET explanation = $2, explain_passed = $3, explain_feedback = $4, status = 'done' WHERE id = $1 AND explanation IS NULL",
+    )
+    .bind(&s.id)
+    .bind(&text)
+    .bind(pass)
+    .bind(&feedback)
+    .execute(&st.pool)
+    .await?
+    .rows_affected();
+    if marked != 1 {
+        return Err(AppError::new(StatusCode::CONFLICT, "Already submitted."));
+    }
+
+    let template_id = s.template_id.clone().unwrap_or_default();
+    if reward_elsewhere(&st.pool, &user.id, &template_id, &s.id).await? {
+        return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("Practice mode: no reward (you've already earned on this problem)") })));
+    }
+
+    let solve: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'solve' ORDER BY created_at DESC LIMIT 1")
+        .bind(&s.id)
+        .fetch_optional(&st.pool)
+        .await?;
+    let flags: Vec<String> = solve
+        .and_then(|d| d.get("flags").cloned())
+        .and_then(|f| serde_json::from_value(f).ok())
+        .unwrap_or_default();
+    let r = compute_reward(&RewardInput {
+        difficulty: ctx.difficulty,
+        hints_used: s.hints_used,
+        wrong_attempts: s.wrong_attempts,
+        explain_passed: pass,
+        flagged: !flags.is_empty(),
+        earned_today: earned_today(&st, &user.id).await?,
+        daily_cap: st.cfg.daily_cap,
+    });
+    let status = if r.status == RewardStatus::Forfeited { "forfeited" } else if r.amount == 0 { "paid" } else { "minting" };
+    let inserted = sqlx::query_as::<_, Reward>(
+        "INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status, flags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING RETURNING *",
+    )
+    .bind(new_id())
+    .bind(&user.id)
+    .bind(&s.id)
+    .bind(&template_id)
+    .bind(st.cfg.to_base_units(r.amount as f64))
+    .bind(json!({ "items": r.breakdown, "summary": r.summary }))
+    .bind(status)
+    .bind((!flags.is_empty()).then(|| json!(flags)))
+    .fetch_optional(&st.pool)
+    .await?;
+    let Some(mut reward) = inserted else {
+        return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("Practice mode: no reward") })));
+    };
+    if status == "minting" {
+        reward = settle(&st, &reward, &user.wallet_pubkey).await?;
+    }
+    if status == "forfeited" {
+        tracing::info!("[reward] forfeited for {} on {template_id} (flags: {})", user.username, flags.join(", "));
+    }
+    Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": reward_json(&st.cfg, &reward) })))
+}
+
+#[derive(Deserialize)]
+struct EventBody {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    data: Option<Value>,
+}
+
+async fn events(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, body: axum::body::Bytes) -> ApiResult<J> {
+    // sendBeacon may post without a JSON content-type, so parse the raw body.
+    let b: EventBody = serde_json::from_slice(&body).map_err(|_| AppError::bad("Unknown event."))?;
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    let kind = b.kind.unwrap_or_default();
+    if !["hidden", "visible", "paste"].contains(&kind.as_str()) {
+        return Err(AppError::bad("Unknown event."));
+    }
+    if s.source != "bank" || s.status != "active" {
+        return Ok(Json(json!({ "ok": true })));
+    }
+    let d = b.data.unwrap_or(Value::Null);
+    let mut data = serde_json::Map::new();
+    if let Some(len) = d["length"].as_f64() {
+        data.insert("length".into(), json!(len.clamp(0.0, 100_000.0).round() as i64));
+    }
+    if let Some(t) = d["target"].as_str() {
+        data.insert("target".into(), json!(t.chars().take(20).collect::<String>()));
+    }
+    sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, $3, $4)")
+        .bind(new_id())
+        .bind(&s.id)
+        .bind(&kind)
+        .bind(Value::Object(data))
+        .execute(&st.pool)
+        .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn resources(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
+    let s = load_session(&st.pool, &id, &user.id).await?;
+    if s.source != "bank" || s.status == "active" {
+        return Err(AppError::new(StatusCode::FORBIDDEN, "Solve the problem first."));
+    }
+    let Some(t) = get_template(s.template_id.as_deref().unwrap_or_default()) else {
+        return Ok(Json(json!({ "links": [] })));
+    };
+    Ok(Json(json!({ "links": learn_more_links(&st, t.id, t.learn_more_query).await })))
+}
+
+// ---------- P2: text-to-speech ----------
+
+#[derive(Deserialize)]
+struct TtsBody {
+    #[serde(rename = "sessionId")]
+    session_id: Option<String>,
+    #[serde(rename = "messageId")]
+    message_id: Option<String>,
+    #[serde(rename = "hintIndex")]
+    hint_index: Option<i64>,
+    text: Option<Value>,
+}
+
+/// Speaks a stored tutor message or a revealed hint, by reference only. Never raw text.
+async fn tts(State(st): State<AppState>, AuthUser(user): AuthUser, Json(b): Json<TtsBody>) -> ApiResult<Response> {
+    if !st.cfg.tts_enabled() {
+        return Err(AppError::not_found("Read-aloud is not enabled."));
+    }
+    if b.text.is_some() {
+        return Err(AppError::bad("Raw text is not accepted."));
+    }
+    let s = load_session(&st.pool, b.session_id.as_deref().unwrap_or_default(), &user.id).await?;
+    let text = if let Some(mid) = b.message_id {
+        let row: Option<(String, String, String)> = sqlx::query_as("SELECT session_id, role, content FROM messages WHERE id = $1")
+            .bind(&mid)
+            .fetch_optional(&st.pool)
+            .await?;
+        match row {
+            Some((sid, role, content)) if sid == s.id && role == "tutor" => content,
+            _ => return Err(AppError::not_found("Message not found.")),
+        }
+    } else if let Some(i) = b.hint_index {
+        if s.source != "bank" || i < 0 || i >= s.hints_used as i64 {
+            return Err(AppError::not_found("Hint not revealed."));
+        }
+        problem_context(&s)?.hints[i as usize].clone()
+    } else {
+        return Err(AppError::bad("Nothing to read."));
+    };
+    match synthesize(&st, &text).await {
+        Ok(audio) => Ok(([(header::CONTENT_TYPE, "audio/mpeg"), (header::CACHE_CONTROL, "private, max-age=3600")], Body::from(audio.as_ref().clone())).into_response()),
+        Err(e) => {
+            tracing::warn!("[tts] failed: {e}");
+            Err(AppError::new(StatusCode::BAD_GATEWAY, "Read-aloud is unavailable right now."))
+        }
+    }
+}
