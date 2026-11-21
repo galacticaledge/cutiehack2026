@@ -1,0 +1,79 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String           @id @default(cuid())
+  username     String           @unique
+  walletPubkey String           @unique
+  walletSecret String // devnet only. NEVER sent to client.
+  createdAt    DateTime         @default(now())
+  sessions     ProblemSession[]
+  rewards      Reward[]
+}
+
+model ProblemSession {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  source          String    @default("bank") // bank | custom_problem | custom_topic
+  templateId      String?
+  seed            Int       @default(0)
+  customText      String?
+  customRef       Json? // SERVER ONLY
+  fromSessionId   String?
+  condition       String    @default("socratic")
+  hintsUsed       Int       @default(0)
+  wrongAttempts   Int       @default(0)
+  status          String    @default("active") // active | solved | done
+  explainPassed   Boolean?
+  explanation     String?
+  explainFeedback String?
+  startedAt       DateTime  @default(now())
+  solvedAt        DateTime?
+  messages        Message[]
+  events          Event[]
+  reward          Reward?
+}
+
+model Message {
+  id        String         @id @default(cuid())
+  sessionId String
+  session   ProblemSession @relation(fields: [sessionId], references: [id])
+  role      String // user | tutor
+  content   String
+  verdicts  Json?
+  createdAt DateTime       @default(now())
+}
+
+model Event {
+  id        String         @id @default(cuid())
+  sessionId String
+  session   ProblemSession @relation(fields: [sessionId], references: [id])
+  type      String // hidden | visible | paste
+  data      Json
+  createdAt DateTime       @default(now())
+}
+
+model Reward {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  sessionId  String         @unique
+  session    ProblemSession @relation(fields: [sessionId], references: [id])
+  templateId String
+  amount     Int // base units
+  breakdown  Json
+  status     String // paid | failed | forfeited
+  flags      Json?
+  txSig      String?
+  createdAt  DateTime       @default(now())
+
+  @@unique([userId, templateId])
+}
