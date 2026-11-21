@@ -1,0 +1,8 @@
+.git
+.env
+.omc
+**/node_modules
+frontend/dist
+backend/target
+*.log
+.DS_Store
