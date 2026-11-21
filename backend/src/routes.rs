@@ -1,6 +1,10 @@
 //! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
 use crate::answers::{is_correct, is_locked, parse_answer};
-use crate::auth::{AuthUser, COOKIE, session_cookie};
+use crate::anticheat::{TelemetryEvent, compute_flags};
+use crate::auth::{
+    AuthUser, COOKIE, hash_password, session_cookie, valid_password, valid_username,
+    verify_password,
+};
 use crate::claims::verify_message;
 use crate::concepts::{CONCEPTS, bank_template_for, reward_key};
 use crate::context::CustomRef;
@@ -35,6 +39,7 @@ use std::time::{Duration, Instant};
 
 pub fn api_router() -> Router<AppState> {
     Router::new()
+        .route("/api/auth/signup", post(signup))
         .route("/api/auth/login", post(login))
         .route("/api/auth/logout", post(logout))
         .route("/api/me", get(me))
@@ -59,24 +64,71 @@ type J = Json<Value>;
 // ---------- auth ----------
 
 #[derive(Deserialize)]
-struct LoginBody {
+struct AuthBody {
     username: Option<String>,
+    password: Option<String>,
 }
 
+/// Shared username/password validation used by both signup and login.
+fn auth_input_error(username: &str, password: &str) -> Option<AppError> {
+    if !valid_username(username) {
+        return Some(AppError::bad(
+            "Usernames are 2–24 characters: lowercase letters, numbers, - and _.",
+        ));
+    }
+    if !valid_password(password) {
+        return Some(AppError::bad("Passwords are 8–72 characters."));
+    }
+    None
+}
+
+/// Create a new account and immediately start a session.
+async fn signup(
+    State(st): State<AppState>,
+    jar: CookieJar,
+    Json(b): Json<AuthBody>,
+) -> ApiResult<(CookieJar, J)> {
+    let username = b.username.unwrap_or_default().trim().to_lowercase();
+    let password = b.password.unwrap_or_default();
+    if let Some(e) = auth_input_error(&username, &password) {
+        return Err(e);
+    }
+    let (pubkey, secret) = generate_user_wallet();
+    let inserted = sqlx::query(
+        "INSERT INTO users (id, username, wallet_pubkey, wallet_secret, password_hash) \
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (username) DO NOTHING",
+    )
+    .bind(new_id())
+    .bind(&username)
+    .bind(&pubkey)
+    .bind(&secret)
+    .bind(hash_password(&password))
+    .execute(&st.pool)
+    .await?;
+    if inserted.rows_affected() == 0 {
+        return Err(AppError::conflict("That username is already taken."));
+    }
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
+        .bind(&username)
+        .fetch_one(&st.pool)
+        .await?;
+    let jar = jar.add(session_cookie(&st, &user.id));
+    Ok((
+        jar,
+        Json(json!({ "username": user.username, "walletPubkey": user.wallet_pubkey })),
+    ))
+}
+
+/// Log in with username + password and start a session.
 async fn login(
     State(st): State<AppState>,
     jar: CookieJar,
-    Json(b): Json<LoginBody>,
+    Json(b): Json<AuthBody>,
 ) -> ApiResult<(CookieJar, J)> {
     let username = b.username.unwrap_or_default().trim().to_lowercase();
-    let valid = (2..=24).contains(&username.len())
-        && username
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
-    if !valid {
-        return Err(AppError::bad(
-            "Usernames are 2–24 characters: letters, numbers, - and _.",
-        ));
+    let password = b.password.unwrap_or_default();
+    if let Some(e) = auth_input_error(&username, &password) {
+        return Err(e);
     }
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(&username)
@@ -84,21 +136,11 @@ async fn login(
         .await?
     {
         Some(u) => u,
-        None => {
-            let (pubkey, secret) = generate_user_wallet();
-            sqlx::query("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING")
-                .bind(new_id())
-                .bind(&username)
-                .bind(&pubkey)
-                .bind(&secret)
-                .execute(&st.pool)
-                .await?;
-            sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
-                .bind(&username)
-                .fetch_one(&st.pool)
-                .await?
-        }
+        None => return Err(AppError::unauthorized("Unknown username or password.")),
     };
+    if !verify_password(&password, &user.password_hash) {
+        return Err(AppError::unauthorized("Unknown username or password."));
+    }
     let jar = jar.add(session_cookie(&st, &user.id));
     Ok((
         jar,

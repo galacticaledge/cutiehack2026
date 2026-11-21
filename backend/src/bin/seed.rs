@@ -3,6 +3,7 @@
 //!   cargo run --bin seed -- --reset      wipe ONLY the four demo accounts' data, then re-seed
 //!   cargo run --bin seed -- --no-mint    clean accounts only (no history, no chain calls)
 //! Prints a presenter cheat sheet (answers) to the TERMINAL ONLY and writes demo-content.md (no answers).
+use socra::auth::hash_password;
 use socra::config::Config;
 use socra::models::{User, new_id};
 use socra::problems::{CheckpointKind, get_template};
@@ -70,20 +71,39 @@ const HISTORY: [History; 2] = [
     },
 ];
 
+/// Known password for the four demo accounts, printed to the terminal by this binary.
+pub const DEMO_PASSWORD: &str = "wonderland";
+
 async fn upsert_user(pool: &PgPool, username: &str) -> anyhow::Result<User> {
     if let Some(u) = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(username)
         .fetch_optional(pool)
         .await?
     {
+        // Backfill a hash for rows created before passwords existed.
+        if u.password_hash.is_empty() {
+            let hash = hash_password(DEMO_PASSWORD);
+            sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+                .bind(&hash)
+                .bind(&u.id)
+                .execute(pool)
+                .await?;
+            return Ok(
+                sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+                    .bind(&u.id)
+                    .fetch_one(pool)
+                    .await?,
+            );
+        }
         return Ok(u);
     }
     let (pk, sk) = generate_user_wallet();
-    Ok(sqlx::query_as::<_, User>("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ($1, $2, $3, $4) RETURNING *")
+    Ok(sqlx::query_as::<_, User>("INSERT INTO users (id, username, wallet_pubkey, wallet_secret, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING *")
         .bind(new_id())
         .bind(username)
         .bind(pk)
         .bind(sk)
+        .bind(hash_password(DEMO_PASSWORD))
         .fetch_one(pool)
         .await?)
 }
@@ -307,7 +327,11 @@ async fn main() -> anyhow::Result<()> {
     for name in DEMO_ACCOUNTS {
         users.push(upsert_user(&pool, name).await?);
     }
-    println!("Demo accounts: {}", DEMO_ACCOUNTS.join(", "));
+    println!(
+        "Demo accounts: {} (password: {})",
+        DEMO_ACCOUNTS.join(", "),
+        DEMO_PASSWORD
+    );
     if do_reset {
         let ids: Vec<String> = users.iter().map(|u| u.id.clone()).collect();
         reset(&pool, &ids).await?;

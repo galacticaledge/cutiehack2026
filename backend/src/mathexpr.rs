@@ -3,6 +3,8 @@
 //! (`21x^2`, `2(x+1)`), functions sqrt/sin/cos/tan/exp/log/ln/abs, constants pi/e,
 //! and at most one named variable. Anything else is rejected.
 
+pub const TARGET_PRECISION: f64 = 1e-12;
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     Num(f64),
@@ -298,9 +300,11 @@ pub fn eval_number(input: &str) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn n(s: &str) -> Option<f64> {
         eval_number(s)
     }
+
     #[test]
     fn arithmetic() {
         assert_eq!(n("1+2*3"), Some(7.0));
@@ -309,16 +313,33 @@ mod tests {
         assert_eq!(n("3/4"), Some(0.75));
         assert_eq!(n("sqrt(16)"), Some(4.0));
         assert_eq!(n("2(3+1)"), Some(8.0));
-        assert!((n("2pi").unwrap() - 2.0 * std::f64::consts::PI).abs() < 1e-12);
+        assert!((n("2pi").unwrap() - 2.0 * std::f64::consts::PI).abs() < TARGET_PRECISION);
         assert_eq!(n("1/0"), None);
         assert_eq!(n("foo"), None);
         assert_eq!(n("2+"), None);
         assert_eq!(n("(1"), None);
     }
+
     #[test]
     fn implicit_mult_with_var() {
         let e = parse("21x^2+8x-3", Some("x")).unwrap();
         assert_eq!(eval(&e, 2.0), 21.0 * 4.0 + 16.0 - 3.0);
         assert!(parse("21y^2", Some("x")).is_none());
+    }
+
+    #[test]
+    fn trig() {
+        assert_eq!(n("sin(0)"), Some(0.0));
+        assert_eq!(n("cos(0)"), Some(1.0));
+        assert!(n("sin(pi/2)").unwrap() - 1.0 < TARGET_PRECISION);
+        assert!(n("cos(pi/2)").unwrap() < TARGET_PRECISION);
+        assert!(n("sin(pi)").unwrap() < TARGET_PRECISION);
+        assert!(n("cos(pi)").unwrap() + 1.0 < TARGET_PRECISION);
+        assert!(n("sin(3*pi/2)").unwrap() + 1.0 < TARGET_PRECISION);
+        assert!(n("cos(3*pi/2)").unwrap() < TARGET_PRECISION);
+
+        // Can specify direct multiples of a given variable
+        assert!(n("sin(3pi/2)").unwrap() + 1.0 < TARGET_PRECISION);
+        assert!(n("cos(3pi/2)").unwrap() < TARGET_PRECISION);
     }
 }

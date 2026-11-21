@@ -40,6 +40,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:${{ job.services.postgres.ports[5432] }}/postgres
+          SESSION_SECRET: ci-session-secret-0123456789-abcdef
         run: cargo test
 
       - name: Run PostgreSQL integration tests
