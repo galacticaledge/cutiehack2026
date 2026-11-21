@@ -108,6 +108,8 @@ export interface SessionView {
   hintsUsed: number;
   revealedHints: string[];
   wrongAttempts: number;
+  attemptsToday: number;
+  attemptsDateUtc: string;
   attemptsLeft: number | null;
   locked: boolean;
   status: "active" | "solved" | "done";
@@ -137,12 +139,15 @@ export interface ConceptNode {
   subject: string;
   prereqs: string[];
   status: "mastered" | "available" | "locked";
+  proficiency: "new" | "learning" | "demonstrated" | "proficient";
+  attemptsToday: number;
   rewarded: boolean;
   bankTemplateId: string | null;
 }
 
 export interface ConceptMap {
   concepts: ConceptNode[];
+  attemptsDateUtc: string;
   topicRewardsToday: number;
   dailyTopicCap: number;
   questBase: number;
@@ -185,28 +190,3 @@ export function isGuestName(username: string) {
   return /^(guest|copycat)-/.test(username);
 }
 
-export interface ProficiencyTopic {
-  templateId: string;
-  title: string;
-  concept: string;
-  difficulty: number;
-  proficiency: number;
-  earned: number;
-  level: "Unexplored" | "Curious" | "Learning" | "Skilled" | "Mastered";
-  solves: number;
-  lastSolvedAt: string | null;
-  fading: boolean;
-}
-
-export interface Suggestion {
-  templateId: string;
-  title: string;
-  kind: "new" | "strengthen" | "review" | "foundation";
-  reason: string;
-}
-
-export interface Proficiency {
-  topics: ProficiencyTopic[];
-  suggestions: Suggestion[];
-  overall: number;
-}

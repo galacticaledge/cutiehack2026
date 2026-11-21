@@ -1,20 +1,25 @@
 //! Session services and the client-safe session view.
 use crate::answers::{attempts_allowed, is_locked};
+use crate::anticheat::{SKETCH_FAILED, TelemetryEvent, compute_flags};
 use crate::concepts::{Concept, concept_of_key, missing_prereqs, reward_key};
 use crate::config::Config;
-use crate::context::problem_context;
+use crate::context::{ProblemContext, problem_context};
 use crate::error::{ApiResult, AppError};
-use crate::models::{Message, ProblemSession, Reward, User, new_id};
+use crate::models::{Event, Message, ProblemSession, Reward, User, new_id};
 use crate::problems::get_template;
+use crate::proficiency::utc_day;
 use crate::prompts::opening_message;
 use crate::rewards::{QUEST_BASE, bank_base, potential_reward};
 use crate::rng::{hash_seed, random_seed};
 use crate::solana::explorer_tx_url;
 use crate::state::AppState;
 use crate::verify::{Verdict, verdict_chips};
+use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::collections::HashSet;
+use std::ops::Range;
 
 pub const DEMO_ACCOUNTS: [&str; 4] = ["demo", "copycat", "demo-b", "copycat-b"];
 
@@ -180,6 +185,122 @@ pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<P
     }
 }
 
+pub(crate) fn ensure_answer_unlocked(s: &ProblemSession) -> ApiResult<()> {
+    if is_locked(s.wrong_attempts, s.hints_used) {
+        let msg = if s.hints_used < 3 && s.source == "bank" {
+            "The little door is locked. Drink the next bottle to find the key (2 more attempts)."
+        } else {
+            "You're out of attempts for this problem. Keep chatting with the tutor to understand it."
+        };
+        return Err(AppError::new(StatusCode::LOCKED, msg));
+    }
+    Ok(())
+}
+
+pub(crate) struct CheckedAnswer {
+    pub wrong_attempts: i32,
+    pub hints_used: i32,
+    pub flagged: bool,
+}
+
+pub(crate) async fn record_checked_answer(
+    pool: &PgPool,
+    s: &ProblemSession,
+    ctx: &ProblemContext,
+    correct: bool,
+) -> ApiResult<CheckedAnswer> {
+    let concept_id = s
+        .template_id
+        .as_deref()
+        .and_then(concept_of_key)
+        .ok_or_else(|| anyhow::anyhow!("checked session {} has no concept", s.id))?;
+    let mut tx = pool.begin().await?;
+    // Serialize accepted answers and hints for this session, never tutor or grader calls.
+    let current = sqlx::query_as::<_, ProblemSession>(
+        "SELECT * FROM problem_sessions WHERE id = $1 AND user_id = $2 FOR NO KEY UPDATE",
+    )
+    .bind(&s.id)
+    .bind(&s.user_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::not_found("Session not found."))?;
+    if current.status != "active" {
+        return Err(AppError::new(StatusCode::CONFLICT, "Already submitted."));
+    }
+    ensure_answer_unlocked(&current)?;
+
+    let attempted_at: DateTime<Utc> = sqlx::query_scalar(
+        "INSERT INTO answer_attempts (id, user_id, concept_id, session_id, correct, hints_used)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING attempted_at",
+    )
+    .bind(new_id())
+    .bind(&current.user_id)
+    .bind(concept_id)
+    .bind(&current.id)
+    .bind(correct)
+    .bind(current.hints_used)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let mut wrong_attempts = current.wrong_attempts;
+    let mut flagged = false;
+    if correct {
+        let evs = sqlx::query_as::<_, Event>(
+            "SELECT * FROM events WHERE session_id = $1 AND type IN ('hidden','visible','paste')",
+        )
+        .bind(&current.id)
+        .fetch_all(&mut *tx)
+        .await?;
+        let telemetry: Vec<TelemetryEvent> = evs
+            .into_iter()
+            .map(|e| TelemetryEvent {
+                kind: e.kind,
+                target: e.data["target"].as_str().map(String::from),
+                at: e.created_at,
+            })
+            .collect();
+        let mut flags = compute_flags(
+            current.started_at,
+            attempted_at,
+            ctx.min_solve_seconds,
+            &telemetry,
+        );
+        let last_sketch: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'sketch' ORDER BY created_at DESC LIMIT 1")
+            .bind(&current.id)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if last_sketch.is_some_and(|d| d["sound"] == false) {
+            flags.push(SKETCH_FAILED);
+        }
+        flagged = !flags.is_empty();
+        // A solved session must already have its flags available when explain-back reads it.
+        sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'solve', $3)")
+            .bind(new_id())
+            .bind(&current.id)
+            .bind(json!({ "flags": flags }))
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("UPDATE problem_sessions SET status = 'solved', solved_at = $2 WHERE id = $1")
+            .bind(&current.id)
+            .bind(attempted_at)
+            .execute(&mut *tx)
+            .await?;
+    } else {
+        wrong_attempts = sqlx::query_scalar(
+            "UPDATE problem_sessions SET wrong_attempts = wrong_attempts + 1 WHERE id = $1 RETURNING wrong_attempts",
+        )
+        .bind(&current.id)
+        .fetch_one(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(CheckedAnswer {
+        wrong_attempts,
+        hints_used: current.hints_used,
+        flagged,
+    })
+}
+
 pub async fn create_bank_session(
     state: &AppState,
     user: &User,
@@ -214,9 +335,43 @@ pub fn reward_json(cfg: &Config, r: &Reward) -> Value {
     })
 }
 
+#[derive(sqlx::FromRow)]
+struct SessionWithAttempts {
+    #[sqlx(flatten)]
+    session: ProblemSession,
+    attempts_today: i64,
+}
+
+// Read the counter and session status from the same snapshot.
+async fn load_session_with_attempts(
+    pool: &PgPool,
+    id: &str,
+    user_id: &str,
+    today: &Range<DateTime<Utc>>,
+) -> ApiResult<SessionWithAttempts> {
+    sqlx::query_as(
+        "SELECT s.*, (SELECT COUNT(*) FROM answer_attempts a
+                      WHERE a.session_id = s.id AND a.attempted_at >= $3 AND a.attempted_at < $4)
+                      AS attempts_today
+         FROM problem_sessions s WHERE s.id = $1 AND s.user_id = $2",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(today.start)
+    .bind(today.end)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Session not found."))
+}
+
 /// Client-safe state. NEVER includes the answer, checkpoints or customRef.
-pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Value> {
-    let ctx = problem_context(s)?;
+pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResult<Value> {
+    let today = utc_day(Utc::now());
+    let SessionWithAttempts {
+        session: s,
+        attempts_today,
+    } = load_session_with_attempts(&state.pool, id, user_id, &today).await?;
+    let ctx = problem_context(&s)?;
     let messages = history(&state.pool, &s.id).await?;
     let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
         .bind(&s.id)
@@ -278,6 +433,8 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "hintsUsed": s.hints_used,
         "revealedHints": ctx.hints.iter().take(s.hints_used.max(0) as usize).collect::<Vec<_>>(),
         "wrongAttempts": s.wrong_attempts,
+        "attemptsToday": attempts_today,
+        "attemptsDateUtc": today.start.date_naive().to_string(),
         "attemptsLeft": if earns { Some((attempts_allowed(s.hints_used) - s.wrong_attempts).max(0)) } else { None },
         "locked": earns && is_locked(s.wrong_attempts, s.hints_used),
         "status": s.status,
@@ -298,4 +455,115 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "matchedTemplate": if !is_bank { matched.map(|t| json!({ "id": t.id, "title": t.title })) } else { None },
         "messages": msgs,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proficiency::concept_progress;
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn attempt_counts_use_utc_boundaries_and_the_right_scope(pool: PgPool) {
+        sqlx::query("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ('u', 'u', 'pub', 'test'), ('v', 'v', 'pub-v', 'test')")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO problem_sessions (id, user_id, template_id) VALUES
+            ('s', 'u', 'alg-linear-1'), ('s2', 'u', 'alg-linear-1'), ('other', 'v', 'alg-linear-1')")
+            .execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO answer_attempts (id, user_id, session_id, concept_id, attempted_at, correct, hints_used)
+             VALUES ('before', 'u', 's', 'linear-equations', '2026-03-08 23:59:59.999999+00', false, 0),
+                    ('start', 'u', 's', 'linear-equations', '2026-03-09 00:00:00+00', false, 0),
+                    ('last', 'u', 's2', 'linear-equations', '2026-03-09 23:59:59.999999+00', true, 0),
+                    ('next', 'u', 's', 'linear-equations', '2026-03-10 00:00:00+00', true, 0),
+                    ('other', 'v', 'other', 'linear-equations', '2026-03-09 00:00:00+00', true, 0)",
+        ).execute(&pool).await.unwrap();
+        let today = utc_day("2026-03-09T09:00:00Z".parse().unwrap());
+        let view = load_session_with_attempts(&pool, "s", "u", &today)
+            .await
+            .unwrap();
+        assert_eq!(view.attempts_today, 1);
+        let progress = concept_progress(&pool, "u", &today).await.unwrap();
+        assert_eq!(progress["linear-equations"].attempts_today, 2);
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn checked_answer_counts_are_atomic_under_concurrency(pool: PgPool) {
+        sqlx::query("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ('u', 'u', 'pub', 'test')")
+            .execute(&pool).await.unwrap();
+        let s = sqlx::query_as::<_, ProblemSession>(
+            "INSERT INTO problem_sessions (id, user_id, template_id, wrong_attempts)
+             VALUES ('s', 'u', 'alg-linear-1', 4) RETURNING *",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let ctx = problem_context(&s).unwrap();
+        // Keep a fixed counting window even if the test straddles UTC midnight.
+        let window =
+            Utc::now() - chrono::Duration::minutes(1)..Utc::now() + chrono::Duration::minutes(1);
+        let view = || load_session_with_attempts(&pool, &s.id, &s.user_id, &window);
+        assert_eq!(view().await.unwrap().attempts_today, 0);
+        let (a, b) = tokio::join!(
+            record_checked_answer(&pool, &s, &ctx, false),
+            record_checked_answer(&pool, &s, &ctx, false),
+        );
+        let (accepted, rejected) = match (a, b) {
+            (Ok(a), Err(b)) | (Err(b), Ok(a)) => (a, b),
+            _ => panic!("expected exactly one accepted wrong answer"),
+        };
+        assert_eq!(accepted.wrong_attempts, 5);
+        assert_eq!(rejected.status, StatusCode::LOCKED);
+        assert_eq!(view().await.unwrap().attempts_today, 1);
+
+        sqlx::query("UPDATE problem_sessions SET hints_used = 1 WHERE id = 's'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        // A failed solve event insert rolls back the correct attempt too.
+        sqlx::query("ALTER TABLE events ADD CONSTRAINT test_reject_solve CHECK (type <> 'solve')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let err = record_checked_answer(&pool, &s, &ctx, true)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(err.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            load_session(&pool, &s.id, &s.user_id).await.unwrap().status,
+            "active"
+        );
+        assert_eq!(view().await.unwrap().attempts_today, 1);
+        sqlx::query("ALTER TABLE events DROP CONSTRAINT test_reject_solve")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let (a, b) = tokio::join!(
+            record_checked_answer(&pool, &s, &ctx, true),
+            record_checked_answer(&pool, &s, &ctx, true),
+        );
+        let (accepted, rejected) = match (a, b) {
+            (Ok(a), Err(b)) | (Err(b), Ok(a)) => (a, b),
+            _ => panic!("expected exactly one accepted correct answer"),
+        };
+        assert_eq!(accepted.hints_used, 1);
+        assert_eq!(rejected.status, StatusCode::CONFLICT);
+        let attempts: Vec<(bool, i32, DateTime<Utc>)> = sqlx::query_as(
+            "SELECT correct, hints_used, attempted_at FROM answer_attempts WHERE session_id = 's' ORDER BY correct",
+        ).fetch_all(&pool).await.unwrap();
+        let view = view().await.unwrap();
+        let solved = view.session;
+        assert_eq!(solved.status, "solved");
+        assert_eq!(solved.wrong_attempts, 5);
+        assert_eq!(attempts.len(), 2);
+        assert_eq!((attempts[0].0, attempts[0].1), (false, 0));
+        assert_eq!((attempts[1].0, attempts[1].1), (true, 1));
+        assert_eq!(solved.solved_at, Some(attempts[1].2));
+        assert_eq!(view.attempts_today, 2);
+        let progress = concept_progress(&pool, &s.user_id, &window).await.unwrap();
+        assert_eq!(progress["linear-equations"].attempts_today, 2);
+    }
 }

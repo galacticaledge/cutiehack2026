@@ -11,8 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { flavorFor, suitColor, Tart } from "@/components/wonder";
 import { DoorArt } from "@/components/doors";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
-import { ProficiencyMeter, SuggestionCards, useProficiency } from "@/components/proficiency";
-import { api, mapAvailable, type Problem, type ProficiencyTopic } from "@/lib/api";
+import { conceptForTemplate, LevelBadge, LevelSteps, SuggestionCards, suggestFrom, useConceptMap } from "@/components/proficiency";
+import { api, mapAvailable, type ConceptNode, type Problem } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {
   return (
@@ -39,7 +39,7 @@ function DoorCard({
   busy: boolean;
   opening: boolean;
   onOpen: () => void;
-  topic?: ProficiencyTopic;
+  topic?: ConceptNode;
 }) {
   const [flipped, setFlipped] = useState(false);
   const openDoor = onOpen;
@@ -74,7 +74,12 @@ function DoorCard({
             {p.rewardStatus === "forfeited" && <Badge variant="destructive">Off with it</Badge>}
           </div>
           {f && <p className="text-sm text-muted-foreground">{f.blurb}</p>}
-          {topic && topic.solves > 0 && <ProficiencyMeter value={topic.proficiency} level={topic.level} fading={topic.fading} />}
+          {topic && topic.proficiency !== "new" && (
+            <div className="space-y-1.5">
+              <LevelBadge level={topic.proficiency} attemptsToday={topic.attemptsToday} />
+              <LevelSteps level={topic.proficiency} />
+            </div>
+          )}
           <div className="mt-auto flex items-center justify-between gap-2 pt-1">
             <div className="space-y-1">
               <Difficulty n={p.difficulty} />
@@ -143,7 +148,7 @@ export function Learn() {
   const [starting, setStarting] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [hasMap, setHasMap] = useState(false);
-  const prof = useProficiency();
+  const concepts = useConceptMap();
   useEffect(() => {
     void mapAvailable().then(setHasMap);
   }, []);
@@ -185,7 +190,7 @@ export function Learn() {
       <main className="mx-auto grid max-w-[90rem] gap-8 px-4 py-10 xl:grid-cols-[16rem_minmax(0,1fr)_17rem]">
         <aside aria-label="Your progress" className="hidden xl:block">
           <div className="sticky top-24">
-            <YourDreamPanel problems={problems} proficiency={prof} />
+            <YourDreamPanel problems={problems} concepts={concepts} />
           </div>
         </aside>
         <div className="min-w-0 space-y-10">
@@ -197,8 +202,12 @@ export function Learn() {
           </p>
         </section>
 
-        {problems && prof && (
-          <SuggestionCards suggestions={prof.suggestions} busy={starting !== null || openingId !== null} onOpen={(id) => openDoor(id)} />
+        {problems && concepts && (
+          <SuggestionCards
+            suggestions={suggestFrom(concepts)}
+            busy={starting !== null || openingId !== null}
+            onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title } }, c.id))}
+          />
         )}
 
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 min-[1780px]:grid-cols-3">
@@ -216,12 +225,12 @@ export function Learn() {
               busy={starting !== null || openingId !== null}
               opening={openingId === p.id}
               onOpen={() => openDoor(p.id)}
-              topic={prof?.topics.find((t) => t.templateId === p.id)}
+              topic={conceptForTemplate(concepts, p.id)}
             />
           ))}
         </section>
         <p className="-mt-6 text-center text-xs text-muted-foreground">
-          Everyone dreams different numbers, so shared answers won't get you anywhere. Already earned one? It becomes an unbirthday: practice, no tarts. Repeats count less and less toward proficiency, so the suggestions point you somewhere new.
+          Everyone dreams different numbers, so shared answers won't get you anywhere. Already earned one? It becomes an unbirthday: practice, no tarts. Repeating the same question counts once toward proficiency, so the suggestions point you somewhere new.
         </p>
 
         <section className="parchment mx-auto max-w-3xl space-y-3 rounded-2xl p-6">

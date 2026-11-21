@@ -16,7 +16,7 @@ import { AnswerDoor, type DoorState } from "@/components/doors";
 import { DrinkMeBottles } from "@/components/potions";
 import { AnswerPreview, MathKeys } from "@/components/mathpad";
 import { TypedMarkdown } from "@/components/typed";
-import { ProficiencyMeter, useProficiency } from "@/components/proficiency";
+import { conceptForTemplate, LevelBadge, LevelSteps, suggestFrom, useConceptMap } from "@/components/proficiency";
 import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
@@ -92,7 +92,7 @@ export function Workspace() {
   // A weak testimony gets the jury's note and another try (the server counts tries).
   const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
   // After the trial: how this topic's proficiency stands now, and where to go next.
-  const prof = useProficiency(s?.status === "done" && s.source === "bank" ? `${s.id}:done` : null);
+  const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -517,6 +517,11 @@ export function Workspace() {
                 </p>
               )}
               {isQuest && s.practiceReason && <p className="text-sm text-muted-foreground">{s.practiceReason}</p>}
+              {earns && s.attemptsDateUtc && (
+                <p className="text-sm text-muted-foreground">
+                  Attempts on this problem on {s.attemptsDateUtc} (UTC): {s.attemptsToday}
+                </p>
+              )}
               {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
 
               {isBank && (
@@ -643,22 +648,21 @@ export function Workspace() {
                   <p className="text-muted-foreground">No tarts for this one (unbirthday practice or the daily cap).</p>
                 )}
                 {(() => {
-                  const topic = prof?.topics.find((t) => t.templateId === s.templateId);
-                  const next = prof?.suggestions.find((sg) => sg.templateId !== s.templateId);
+                  const topic = isQuest ? concepts?.concepts.find((c) => c.id === s.conceptId) : conceptForTemplate(concepts, s.templateId);
+                  const next = suggestFrom(concepts, 5).find((sg) => sg.concept.id !== topic?.id);
                   if (!topic) return null;
                   return (
                     <div className="space-y-2 rounded-xl border border-[var(--border)] bg-secondary/50 p-3" aria-label="Proficiency">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">Your proficiency in this topic</p>
-                      <ProficiencyMeter value={topic.proficiency} level={topic.level} fading={topic.fading} />
-                      {topic.solves > 1 && (
-                        <p className="text-xs text-muted-foreground">
-                          Solve #{topic.solves} here. Repeats count less each time, so new topics grow you faster.
-                        </p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">Your proficiency in {topic.title}</p>
+                      <LevelBadge level={topic.proficiency} attemptsToday={topic.attemptsToday} />
+                      <LevelSteps level={topic.proficiency} />
+                      {topic.proficiency === "demonstrated" && (
+                        <p className="text-xs text-muted-foreground">Solve a different problem on this topic and convince the court again to become Proficient. Repeating the same question counts once.</p>
                       )}
                       {next && (
                         <p className="text-sm">
                           <span className="text-muted-foreground">Next: </span>
-                          <span className="font-semibold">{next.title}</span>
+                          <span className="font-semibold">{next.concept.title}</span>
                           <span className="text-muted-foreground">. {next.reason}</span>
                         </p>
                       )}

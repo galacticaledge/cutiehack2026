@@ -7,6 +7,7 @@ import { DreamFooter } from "@/components/scenery";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Tart } from "@/components/wonder";
+import { LevelBadge } from "@/components/proficiency";
 import { api, ApiError, type ConceptMap, type ConceptNode, type Features } from "@/lib/api";
 
 /** Each subject is a region of Wonderland. */
@@ -115,6 +116,11 @@ export function WonderMap() {
               <span className="flex items-center gap-1">
                 <Tart /> New-topic tarts today: <span className="font-semibold tabular-nums">{map.topicRewardsToday} / {map.dailyTopicCap}</span>
               </span>
+              {map.attemptsDateUtc && (
+                <span className="text-muted-foreground" title="Proficiency and attempts are tracked separately from rewards.">
+                  Attempts counted for {map.attemptsDateUtc} (UTC)
+                </span>
+              )}
             </p>
           )}
         </section>
@@ -220,6 +226,9 @@ export function WonderMap() {
                             ))}
                           </p>
                         )}
+                        <div className="mt-2">
+                          <LevelBadge level={sel.proficiency ?? "new"} attemptsToday={sel.attemptsToday} />
+                        </div>
                         <p className="mt-1 text-sm text-muted-foreground">{earnLabel(sel)}</p>
                         <div className="mt-3 flex justify-end">
                           <Button size="sm" disabled={starting !== null} onClick={() => start(sel)}>

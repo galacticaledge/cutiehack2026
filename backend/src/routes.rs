@@ -1,16 +1,16 @@
 //! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
 use crate::answers::{is_correct, is_locked, parse_answer};
-use crate::anticheat::{SKETCH_FAILED, TelemetryEvent, compute_flags};
 use crate::auth::{AuthUser, COOKIE, session_cookie};
 use crate::claims::verify_message;
-use crate::concepts::{CONCEPTS, bank_template_for, missing_prereqs, reward_key};
+use crate::concepts::{CONCEPTS, bank_template_for, reward_key};
 use crate::context::CustomRef;
 use crate::context::problem_context;
 use crate::custom::{CUSTOM_MAX, classify_topic, generate_quest, intake_problem};
 use crate::error::{ApiResult, AppError};
 use crate::llm::{Kind, complete_json};
-use crate::models::{Event, Message, ProblemSession, Reward, User, new_id};
+use crate::models::{Message, ProblemSession, Reward, User, new_id};
 use crate::problems::{TEMPLATES, get_template};
+use crate::proficiency::{Proficiency, concept_progress, utc_day};
 use crate::prompts::{self, opening_message};
 use crate::resources::learn_more_links;
 use crate::rewards::{QUEST_BASE, RewardInput, RewardStatus, bank_base, compute_reward};
@@ -41,7 +41,6 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/problems", get(problems))
         .route("/api/concepts", get(concepts))
         .route("/api/journal", get(journal))
-        .route("/api/proficiency", get(proficiency))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
@@ -167,21 +166,6 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
         })
         .collect();
     Ok(Json(Value::Array(list)))
-}
-
-/// Proficiency per topic (carried across visits) and what to learn next.
-async fn proficiency(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
-    let solves = crate::proficiency::load(&st.pool, &user.id).await?;
-    let topics = crate::proficiency::topics(&solves, Utc::now());
-    let suggestions = crate::proficiency::suggestions(&topics);
-    let overall = if topics.is_empty() {
-        0
-    } else {
-        topics.iter().map(|t| t.proficiency).sum::<i64>() / topics.len() as i64
-    };
-    Ok(Json(
-        json!({ "topics": topics, "suggestions": suggestions, "overall": overall }),
-    ))
 }
 
 /// Dream journal: the user's finished verified problems, newest first. Never includes answers.
@@ -366,21 +350,31 @@ async fn topic_session(st: &AppState, user: &User, text: &str) -> ApiResult<Topi
 
 /// The knowledge map: every node with the student's status on it.
 async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
-    let mastered = mastered_concepts(&st.pool, &user.id).await?;
+    let today = utc_day(Utc::now());
     let rewarded = rewarded_concepts(&st.pool, &user.id).await?;
+    let progress = concept_progress(&st.pool, &user.id, &today).await?;
+    let mastered = |id: &str| {
+        matches!(
+            progress.get(id).map(|p| &p.proficiency),
+            Some(Proficiency::Demonstrated | Proficiency::Proficient)
+        )
+    };
     let list: Vec<Value> = CONCEPTS
         .iter()
         .map(|c| {
-            let status = if mastered.contains(c.id) {
+            let status = if mastered(c.id) {
                 "mastered"
-            } else if missing_prereqs(c.id, &mastered).is_empty() {
+            } else if c.prereqs.iter().all(|p| mastered(p)) {
                 "available"
             } else {
                 "locked"
             };
+            let evidence = progress.get(c.id);
             json!({
                 "id": c.id,
                 "title": c.title,
+                "proficiency": evidence.map(|p| &p.proficiency).unwrap_or(&Proficiency::New),
+                "attemptsToday": evidence.map_or(0, |p| p.attempts_today),
                 "subject": c.subject,
                 "prereqs": c.prereqs,
                 "status": status,
@@ -391,6 +385,7 @@ async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
         .collect();
     Ok(Json(json!({
         "concepts": list,
+        "attemptsDateUtc": today.start.date_naive().to_string(),
         "topicRewardsToday": topic_rewards_today(&st.pool, &user.id).await?,
         "dailyTopicCap": st.cfg.daily_topic_cap,
         "questBase": QUEST_BASE,
@@ -402,8 +397,7 @@ async fn get_session(
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
-    Ok(Json(session_view(&st, &s).await?))
+    Ok(Json(session_view(&st, &id, &user.id).await?))
 }
 
 async fn similar(
@@ -560,7 +554,7 @@ async fn hint(
         return Err(AppError::bad("All 3 hints are already revealed."));
     }
     let n = sqlx::query(
-        "UPDATE problem_sessions SET hints_used = hints_used + 1 WHERE id = $1 AND hints_used = $2",
+        "UPDATE problem_sessions SET hints_used = hints_used + 1 WHERE id = $1 AND hints_used = $2 AND status = 'active'",
     )
     .bind(&s.id)
     .bind(s.hints_used)
@@ -596,17 +590,12 @@ async fn answer(
     let Some(correct_answer) = ctx.answer else {
         return Err(AppError::bad("There's no answer check for this one."));
     };
-    let is_bank = ctx.earns(); // bank or generated topic problem: verified answer, tracked attempts
-    if is_bank && s.status != "active" {
-        return Err(AppError::bad("You've already solved this one."));
-    }
-    if is_bank && is_locked(s.wrong_attempts, s.hints_used) {
-        let msg = if s.hints_used < 3 && ctx.is_bank() {
-            "The little door is locked. Drink the next bottle to find the key (2 more attempts)."
-        } else {
-            "You're out of attempts for this problem. Keep chatting with the tutor to understand it."
-        };
-        return Err(AppError::new(StatusCode::LOCKED, msg));
+    let checked = ctx.earns(); // Bank and quest checks count, including practice.
+    if checked {
+        if s.status != "active" {
+            return Err(AppError::bad("You've already solved this one."));
+        }
+        ensure_answer_unlocked(&s)?;
     }
     let value = match parse_answer(&raw) {
         Ok(v) => v,
@@ -619,48 +608,19 @@ async fn answer(
         }
     };
 
-    if is_correct(value, correct_answer, ctx.tolerance) {
-        if !is_bank {
-            return Ok(Json(json!({ "correct": true, "wrongAttempts": s.wrong_attempts, "locked": false, "practice": true })).into_response());
-        }
-        let now = Utc::now();
-        let n = sqlx::query("UPDATE problem_sessions SET status = 'solved', solved_at = $2 WHERE id = $1 AND status = 'active'")
-            .bind(&s.id)
-            .bind(now)
-            .execute(&st.pool)
-            .await?
-            .rows_affected();
-        if n != 1 {
-            return Err(AppError::new(StatusCode::CONFLICT, "Already submitted."));
-        }
-        let evs = sqlx::query_as::<_, Event>(
-            "SELECT * FROM events WHERE session_id = $1 AND type IN ('hidden','visible','paste')",
-        )
-        .bind(&s.id)
-        .fetch_all(&st.pool)
-        .await?;
-        let telemetry: Vec<TelemetryEvent> = evs
-            .iter()
-            .map(|e| TelemetryEvent {
-                kind: e.kind.clone(),
-                target: e.data["target"].as_str().map(String::from),
-                at: e.created_at,
-            })
-            .collect();
-        let mut flags = compute_flags(s.started_at, now, ctx.min_solve_seconds, &telemetry);
-        let last_sketch: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'sketch' ORDER BY created_at DESC LIMIT 1")
-            .bind(&s.id)
-            .fetch_optional(&st.pool)
-            .await?;
-        if last_sketch.is_some_and(|d| d["sound"] == false) {
-            flags.push(SKETCH_FAILED);
-        }
-        sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'solve', $3)")
-            .bind(new_id())
-            .bind(&s.id)
-            .bind(json!({ "flags": flags }))
-            .execute(&st.pool)
-            .await?;
+    let correct = is_correct(value, correct_answer, ctx.tolerance);
+    let result = if checked {
+        Some(record_checked_answer(&st.pool, &s, &ctx, correct).await?)
+    } else {
+        None
+    };
+    let wrong = result
+        .as_ref()
+        .map_or(s.wrong_attempts, |r| r.wrong_attempts);
+    if correct {
+        let Some(result) = result else {
+            return Ok(Json(json!({ "correct": true, "wrongAttempts": wrong, "locked": false, "practice": true })).into_response());
+        };
         let practice = ctx.custom_ref.practice_reason.is_some()
             || reward_elsewhere(
                 &st.pool,
@@ -669,22 +629,15 @@ async fn answer(
                 &s.id,
             )
             .await?;
-        return Ok(Json(json!({ "correct": true, "wrongAttempts": s.wrong_attempts, "locked": false, "flagged": !flags.is_empty(), "practice": practice })).into_response());
+        return Ok(Json(json!({ "correct": true, "wrongAttempts": wrong, "locked": false, "flagged": result.flagged, "practice": practice })).into_response());
     }
 
-    // Wrong answer
-    let mut wrong = s.wrong_attempts;
-    if is_bank {
-        wrong = sqlx::query_scalar("UPDATE problem_sessions SET wrong_attempts = wrong_attempts + 1 WHERE id = $1 RETURNING wrong_attempts")
-            .bind(&s.id)
-            .fetch_one(&st.pool)
-            .await?;
-    }
+    let hints_used = result.map_or(s.hints_used, |r| r.hints_used);
     let hist = history(&st.pool, &s.id).await?;
     let tutor_text = match tutor_reply(
         &st,
         &ctx,
-        s.hints_used,
+        hints_used,
         &hist,
         &[],
         Some(prompts::wrong_answer_line(&raw)),
@@ -701,7 +654,7 @@ async fn answer(
     Ok(Json(json!({
         "correct": false,
         "wrongAttempts": wrong,
-        "locked": is_bank && is_locked(wrong, s.hints_used),
+        "locked": checked && is_locked(wrong, hints_used),
         "tutorReply": tutor_text,
         "messageId": msg.id,
     }))
@@ -763,6 +716,21 @@ async fn settle(st: &AppState, reward: &Reward, wallet: &str) -> anyhow::Result<
 
 fn practice_reward(msg: &str) -> Value {
     json!({ "amount": 0, "status": "practice", "breakdown": msg })
+}
+
+fn explain_grade(verdict: Option<Value>) -> (bool, String, &'static str) {
+    let default_feedback = || "Nice work explaining your reasoning!".to_string();
+    if let Some(v) = verdict
+        && let Some(pass) = v["pass"].as_bool()
+    {
+        let feedback = v["feedback"]
+            .as_str()
+            .filter(|f| !f.trim().is_empty())
+            .map_or_else(default_feedback, |f| f.trim().chars().take(400).collect());
+        (pass, feedback, "grader")
+    } else {
+        (true, default_feedback(), "fallback")
+    }
 }
 
 async fn explain(
@@ -830,22 +798,16 @@ async fn explain(
         .and_then(|d| d.get("flags").cloned())
         .and_then(|f| serde_json::from_value(f).ok())
         .unwrap_or_default();
-    let mut pass = true;
-    let mut feedback = "Nice work explaining your reasoning!".to_string();
-    match complete_json(&st, Kind::Check, &prompts::grader(&ctx, &text), None).await {
-        Ok(Some(v)) => {
-            if let Some(p) = v["pass"].as_bool() {
-                pass = p;
-                if let Some(f) = v["feedback"].as_str().filter(|f| !f.trim().is_empty()) {
-                    feedback = f.trim().chars().take(400).collect();
-                }
-            }
-        }
-        Ok(None) => {}
-        // A flagged solve must really be graded; otherwise an LLM outage would wave it through.
+    let verdict = match complete_json(&st, Kind::Check, &prompts::grader(&ctx, &text), None).await {
+        Ok(v) => v,
+        // Preserve the rejection of grader errors on flagged solves.
         Err(e) if !flags.is_empty() => return Err(e.into()),
-        Err(e) => tracing::warn!("[grader] unavailable, accepting unflagged explanation: {e}"),
-    }
+        Err(e) => {
+            tracing::warn!("[grader] unavailable, accepting unflagged explanation: {e}");
+            None
+        }
+    };
+    let (pass, feedback, grade_source) = explain_grade(verdict);
 
     // A weak testimony isn't final: the student gets up to TESTIMONY_TRIES tries. Earlier
     // tries are kept as events (research data); only the last one settles the reward.
@@ -870,12 +832,15 @@ async fn explain(
     }
 
     let marked = sqlx::query(
-        "UPDATE problem_sessions SET explanation = $2, explain_passed = $3, explain_feedback = $4, status = 'done' WHERE id = $1 AND explanation IS NULL",
+        "UPDATE problem_sessions SET explanation = $2, explain_passed = $3, explain_feedback = $4,
+         explain_grade_source = $5, explain_graded_at = clock_timestamp(), status = 'done'
+         WHERE id = $1 AND explanation IS NULL",
     )
     .bind(&s.id)
     .bind(&text)
     .bind(pass)
     .bind(&feedback)
+    .bind(grade_source)
     .execute(&st.pool)
     .await?
     .rows_affected();
@@ -1105,5 +1070,137 @@ async fn tts(
                 "Read-aloud is unavailable right now.",
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn answer_handler_counts_checked_practice_but_not_custom_or_rejected_answers(
+        pool: sqlx::PgPool,
+    ) {
+        let cfg = crate::config::Config {
+            openai_api_key: None,
+            openai_base_url: String::new(),
+            openai_model: String::new(),
+            tutor_effort: String::new(),
+            check_effort: String::new(),
+            database_url: String::new(),
+            session_secret: String::new(),
+            daily_cap: 1000.0,
+            daily_topic_cap: 3,
+            demo_fixed_seeds: false,
+            solana_rpc_url: String::new(),
+            mint_authority_secret: None,
+            mint_address: None,
+            token_decimals: 2,
+            elevenlabs_api_key: None,
+            elevenlabs_voice_id: None,
+            elevenlabs_model_id: String::new(),
+            keenable_api_key: None,
+            solari_api_key: None,
+            solari_base_url: String::new(),
+            solari_template: String::new(),
+            keenable_base_url: String::new(),
+            static_dir: String::new(),
+            port: 0,
+            secure_cookies: false,
+        };
+        let st = AppState {
+            pool: pool.clone(),
+            cfg: cfg.into(),
+            http: reqwest::Client::new(),
+            solana: None,
+            chat_rate: Default::default(),
+            tts_cache: Default::default(),
+            resource_cache: Default::default(),
+            solari_lock: Default::default(),
+        };
+        let user = sqlx::query_as::<_, User>(
+            "INSERT INTO users (id, username, wallet_pubkey, wallet_secret)
+             VALUES ('u', 'u', 'pub', 'test') RETURNING *",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO problem_sessions (id, user_id, source, template_id, custom_ref) VALUES
+             ('quest', 'u', 'quest', 'concept:fractions', $1),
+             ('custom', 'u', 'custom_problem', NULL, $2)",
+        )
+        .bind(json!({
+            "conceptId": "fractions",
+            "practiceReason": "Practice fixture",
+            "quest": { "conceptId": "fractions", "prompt": "Fixture", "answer": 2.0,
+                       "tolerance": 0.01, "steps": [] }
+        }))
+        .bind(json!({ "numericAnswer": 2.0 }))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let submit = |id: &str, text: &str| {
+            answer(
+                State(st.clone()),
+                AuthUser(user.clone()),
+                Path(id.to_owned()),
+                Json(AnswerBody {
+                    answer: Some(text.to_owned()),
+                }),
+            )
+        };
+        assert_eq!(
+            submit("quest", "invalid").await.unwrap().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(submit("quest", "2").await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            submit("quest", "2").await.err().unwrap().status,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            submit("custom", "2").await.unwrap().status(),
+            StatusCode::OK
+        );
+        let attempts: Vec<(String, String, bool)> = sqlx::query_as(
+            "SELECT session_id, concept_id, correct FROM answer_attempts WHERE user_id = 'u'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            attempts,
+            vec![("quest".to_owned(), "fractions".to_owned(), true)]
+        );
+    }
+
+    #[test]
+    fn explain_grade_requires_an_explicit_boolean_verdict_for_grader_provenance() {
+        for pass in [true, false] {
+            assert_eq!(
+                explain_grade(Some(
+                    json!({ "pass": pass, "feedback": "  Check the signs.  " })
+                )),
+                (pass, "Check the signs.".to_owned(), "grader")
+            );
+        }
+        for verdict in [
+            None,
+            Some(json!({})),
+            Some(json!({ "pass": "true", "feedback": "Ignore this." })),
+        ] {
+            assert_eq!(
+                explain_grade(verdict),
+                (
+                    true,
+                    "Nice work explaining your reasoning!".to_owned(),
+                    "fallback"
+                )
+            );
+        }
+        assert_eq!(explain_grade(Some(json!({ "pass": true }))).2, "grader");
     }
 }
