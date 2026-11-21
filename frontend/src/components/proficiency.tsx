@@ -102,8 +102,52 @@ const KIND: Record<Suggestion["kind"], { label: string; icon: typeof Sparkles }>
   new: { label: "New for you", icon: Sparkles },
 };
 
-export function SuggestionCards({ suggestions, onOpen, busy }: { suggestions: Suggestion[]; onOpen: (c: ConceptNode) => void; busy: boolean }) {
+export function SuggestionCards({
+  suggestions,
+  onOpen,
+  busy,
+  compact = false,
+}: {
+  suggestions: Suggestion[];
+  onOpen: (c: ConceptNode) => void;
+  busy: boolean;
+  compact?: boolean;
+}) {
   if (!suggestions.length) return null;
+  if (compact) {
+    return (
+      <section aria-labelledby="suggested-heading" className="parchment space-y-2.5 rounded-2xl p-5">
+        <h2 id="suggested-heading" className="font-display text-xl leading-tight">
+          Suggested for you
+        </h2>
+        <ul className="space-y-2">
+          {suggestions.map(({ concept: c, kind, reason }) => {
+            const k = KIND[kind];
+            const Icon = k.icon;
+            return (
+              <li key={c.id} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-background/50 px-3 py-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[var(--tan)]" title={k.label}>
+                  <Icon className="size-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-display text-base leading-tight">{c.title}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tan)]">{k.label}</span>
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground" title={reason}>
+                    {reason}
+                  </p>
+                </div>
+                <Button size="xs" variant="outline" disabled={busy} onClick={() => onOpen(c)} aria-label={`${c.bankTemplateId ? "Open the door" : "Explore"}: ${c.title}`}>
+                  {c.bankTemplateId ? "Open" : "Explore"}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
   return (
     <section aria-labelledby="suggested-heading" className="space-y-3">
       <h2 id="suggested-heading" className="font-display text-2xl">

@@ -149,6 +149,7 @@ export function Learn() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [hasMap, setHasMap] = useState(false);
   const concepts = useConceptMap();
+  const suggestions = problems ? suggestFrom(concepts) : [];
   useEffect(() => {
     void mapAvailable().then(setHasMap);
   }, []);
@@ -202,13 +203,64 @@ export function Learn() {
           </p>
         </section>
 
-        {problems && concepts && (
-          <SuggestionCards
-            suggestions={suggestFrom(concepts)}
-            busy={starting !== null || openingId !== null}
-            onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title } }, c.id))}
+        {/* Top row: compact suggestions on the left, the Caterpillar's "ask anything" box beside them. */}
+        <div className={suggestions.length ? "grid items-start gap-5 lg:grid-cols-2" : ""}>
+          {suggestions.length > 0 && (
+            <SuggestionCards
+              compact
+              suggestions={suggestions}
+              busy={starting !== null || openingId !== null}
+              onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title } }, c.id))}
+            />
+          )}
+        <section aria-labelledby="ask-cat-heading" className={`parchment space-y-3 rounded-2xl p-5 ${suggestions.length ? "" : "mx-auto max-w-3xl"}`}>
+          <div>
+            <h2 id="ask-cat-heading" className="font-display text-xl leading-tight">“Who are <em>you</em>?” asked the Caterpillar.</h2>
+            <p className="text-sm text-muted-foreground">
+              …and what are you stuck on? Paste a homework problem or name a topic. The Cat will guide you, but it won't do it for you.
+            </p>
+          </div>
+          <div className="inline-flex rounded-full border bg-background/60 p-0.5" role="tablist">
+            {(["problem", "topic"] as const).map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={kind === k}
+                onClick={() => setKind(k)}
+                className={`rounded-full px-4 py-1 text-sm capitalize transition ${kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={2000}
+            rows={kind === "problem" ? 3 : 1}
+            className="bg-background/60"
+            placeholder={kind === "problem" ? "Paste your homework problem here…" : "e.g. recursion, the chain rule, free fall"}
           />
-        )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">
+              {kind === "topic" && hasMap ? (
+                <>
+                  Topics on the{" "}
+                  <Link to="/map" className="font-medium text-[var(--tan)] underline">
+                    Map of Wonderland
+                  </Link>{" "}
+                  get a fresh, verified problem that can earn tarts.
+                </>
+              ) : (
+                "Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does."
+              )}
+            </span>
+            <Button disabled={!text.trim() || starting !== null || openingId !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
+              {starting === "custom" ? "The Caterpillar is reading…" : "Ask the Cat"}
+            </Button>
+          </div>
+        </section>
+        </div>
 
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 min-[1780px]:grid-cols-3">
           {!problems && !loadFailed && <DealtCards count={5} label="Unlocking the doors" />}
@@ -233,53 +285,6 @@ export function Learn() {
           Everyone dreams different numbers, so shared answers won't get you anywhere. Already earned one? It becomes an unbirthday: practice, no tarts. Repeating the same question counts once toward proficiency, so the suggestions point you somewhere new.
         </p>
 
-        <section className="parchment mx-auto max-w-3xl space-y-3 rounded-2xl p-6">
-          <div>
-            <h2 className="font-display text-2xl">“Who are <em>you</em>?” asked the Caterpillar.</h2>
-            <p className="text-sm text-muted-foreground">
-              …and what are you stuck on? Paste a homework problem or name a topic. The Cat will guide you, but it won't do it for you.
-            </p>
-          </div>
-          <div className="inline-flex rounded-full border bg-background/60 p-0.5" role="tablist">
-            {(["problem", "topic"] as const).map((k) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={kind === k}
-                onClick={() => setKind(k)}
-                className={`rounded-full px-4 py-1 text-sm capitalize transition ${kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={2000}
-            rows={kind === "problem" ? 5 : 2}
-            className="bg-background/60"
-            placeholder={kind === "problem" ? "Paste your homework problem here…" : "e.g. recursion, the chain rule, free fall"}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">
-              {kind === "topic" && hasMap ? (
-                <>
-                  Topics on the{" "}
-                  <Link to="/map" className="font-medium text-[var(--tan)] underline">
-                    Map of Wonderland
-                  </Link>{" "}
-                  get a fresh, verified problem that can earn tarts.
-                </>
-              ) : (
-                "Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does."
-              )}
-            </span>
-            <Button disabled={!text.trim() || starting !== null || openingId !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
-              {starting === "custom" ? "The Caterpillar is reading…" : "Ask the Cat"}
-            </Button>
-          </div>
-        </section>
         </div>
         <aside aria-label="How rewards work" className="hidden xl:block">
           <div className="sticky top-24">
