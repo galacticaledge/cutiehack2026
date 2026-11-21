@@ -99,6 +99,9 @@ export interface SessionView {
   title: string;
   prompt: string;
   difficulty: number;
+  checkpointCount: number;
+  startedAt: string;
+  solvedAt: string | null;
   hintsUsed: number;
   revealedHints: string[];
   wrongAttempts: number;
@@ -110,6 +113,7 @@ export interface SessionView {
   hasAnswerCheck: boolean;
   explainPassed: boolean | null;
   explainFeedback: string | null;
+  explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
   messages: ChatMessage[];
@@ -120,4 +124,19 @@ export interface Features {
   learnMore: boolean;
   llmProvider: string;
   solana: boolean;
+}
+
+export interface JournalEntry {
+  sessionId: string;
+  templateId: string;
+  title: string;
+  difficulty: number;
+  startedAt: string;
+  solvedAt: string | null;
+  hintsUsed: number;
+  wrongAttempts: number;
+  explanation: string | null;
+  explainPassed: boolean | null;
+  explainFeedback: string | null;
+  reward: RewardView | null;
 }

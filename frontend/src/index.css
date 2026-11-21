@@ -7,7 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "IM Fell English", "Iowan Old Style", Georgia, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -49,72 +50,91 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* "Dream to Wonderland": Cutie Hack 2026's sky, cream, gold and slate, plus a Cheshire accent. */
+  --background: #e8f3fb;
+  --foreground: #334356;
+  --card: #faf8f1;
+  --card-foreground: #334356;
+  --popover: #faf8f1;
+  --popover-foreground: #334356;
+  --primary: #334356;
+  --primary-foreground: #faf8f1;
+  --secondary: #e2eef7;
+  --secondary-foreground: #334356;
+  --muted: #eef3f6;
+  --muted-foreground: #5b6a7c;
+  --accent: #f6e7c8;
+  --accent-foreground: #5f4a2c;
+  --destructive: #c8314a;
+  --border: #dccfb3;
+  --input: #cdbf9f;
+  --ring: #8d7350;
+  --chart-1: #334356;
+  --chart-2: #c8314a;
+  --chart-3: #e0b775;
+  --chart-4: #6aa6d6;
+  --chart-5: #8d7350;
+  --radius: 0.85rem;
+  --sidebar: #faf8f1;
+  --sidebar-foreground: #334356;
+  --sidebar-primary: #334356;
+  --sidebar-primary-foreground: #faf8f1;
+  --sidebar-accent: #e2eef7;
+  --sidebar-accent-foreground: #334356;
+  --sidebar-border: #dccfb3;
+  --sidebar-ring: #8d7350;
+  /* Wonderland accents */
+  --heart: #c8314a;
+  --gold: #a87b2e;
+  --gold-soft: #e0b775;
+  --tan: #8d7350;
+  --sky: #b9deff;
+  --cheshire: #7b4bb3;
+  --potion: #2f8f86;
+  --night: #334356;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Through the Looking-Glass: the same dream, at midnight. */
+  --background: #171128;
+  --foreground: #efe6fb;
+  --card: #231a3a;
+  --card-foreground: #efe6fb;
+  --popover: #231a3a;
+  --popover-foreground: #efe6fb;
+  --primary: #b78cf0;
+  --primary-foreground: #1b1430;
+  --secondary: #2f2450;
+  --secondary-foreground: #e6dcf5;
+  --muted: #2a2045;
+  --muted-foreground: #b3a6cc;
+  --accent: #3a2040;
+  --accent-foreground: #ffd6e2;
+  --destructive: #f0647a;
+  --border: #3b2f5c;
+  --input: #46386b;
+  --ring: #b78cf0;
+  --chart-1: #b78cf0;
+  --chart-2: #f0647a;
+  --chart-3: #e8bf5a;
+  --chart-4: #5cc2b8;
+  --chart-5: #efe6fb;
+  --sidebar: #231a3a;
+  --sidebar-foreground: #efe6fb;
+  --sidebar-primary: #b78cf0;
+  --sidebar-primary-foreground: #1b1430;
+  --sidebar-accent: #2f2450;
+  --sidebar-accent-foreground: #e6dcf5;
+  --sidebar-border: #3b2f5c;
+  --sidebar-ring: #b78cf0;
+  --heart: #f0647a;
+  --gold: #e8bf5a;
+  --potion: #5cc2b8;
+  --night: #0f0a1c;
+  --gold-soft: #e8bf5a;
+  --tan: #d9bf8f;
+  --sky: #2a3a5c;
+  --cheshire: #c79bf5;
 }
 
 @layer base {
@@ -123,6 +143,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 50% 40% at 85% 0%, rgba(224, 183, 117, 0.35) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 45% at 8% 5%, rgba(251, 214, 230, 0.55) 0%, transparent 70%),
+      linear-gradient(180deg, #b9deff 0%, #d6ecf7 38%, #eef6fb 70%, #faf8f1 100%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='.85'%3E%3Ccircle cx='12' cy='20' r='1'/%3E%3Ccircle cx='90' cy='44' r='1.4'/%3E%3Ccircle cx='140' cy='12' r='.8'/%3E%3Ccircle cx='54' cy='110' r='1.1'/%3E%3Ccircle cx='128' cy='130' r='1'/%3E%3Ccircle cx='20' cy='146' r='.8'/%3E%3C/g%3E%3C/svg%3E");
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;
@@ -140,3 +168,357 @@
 .md :not(pre) > code { background: var(--muted); padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
 .md strong { font-weight: 600; }
 .md .katex-display { overflow-x: auto; overflow-y: hidden; }
+
+/* ---------- Wonderland ---------- */
+.font-display { font-family: var(--font-display); letter-spacing: 0.005em; }
+
+/* The checkerboard floor of the hall. */
+.checker {
+  height: 10px;
+  background: repeating-conic-gradient(var(--night) 0 25%, #faf8f1 0 50%) 0 0 / 20px 20px;
+  opacity: 0.85;
+}
+
+/* Parchment cards with a faint gilt edge. */
+.parchment {
+  background: linear-gradient(180deg, #fdfcf7 0%, #faf8f1 100%);
+  border: 1.5px solid rgba(141, 115, 80, 0.45);
+  box-shadow: 0 0 0 4px rgba(250, 248, 241, 0.7), 0 0 0 5px rgba(141, 115, 80, 0.18), 0 14px 34px -20px rgba(51, 67, 86, 0.55);
+}
+
+/* Playing-card problem tiles. */
+.playing-card {
+  position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.playing-card:hover { transform: translateY(-4px) rotate(-0.6deg); }
+.pip { position: absolute; font-family: var(--font-display); line-height: 1; font-size: 1.1rem; }
+.pip-tl { top: 0.6rem; left: 0.75rem; }
+.pip-br { bottom: 0.6rem; right: 0.75rem; transform: rotate(180deg); }
+
+/* The Cheshire Cat fades in and out while thinking. */
+@keyframes cheshire { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+.cheshire-fade { animation: cheshire 2.4s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); } 50% { transform: translateY(-10px) rotate(var(--r, 0deg)); } }
+.float { animation: float 6s ease-in-out infinite; }
+
+/* Falling cards when the tarts arrive. */
+@keyframes fall {
+  0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--spin, 540deg)); opacity: 0.9; }
+}
+.falling-card { position: fixed; top: 0; z-index: 60; pointer-events: none; animation: fall var(--dur, 3.2s) cubic-bezier(0.3, 0.1, 0.5, 1) forwards; }
+
+/* Drink Me hint labels. */
+.drink-me { background: linear-gradient(180deg, #eaf7f5, #dff1ee); border: 1px solid #b9ddd7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cheshire-fade, .float, .falling-card { animation: none !important; }
+  .falling-card { display: none; }
+  .playing-card:hover { transform: none; }
+}
+
+/* ---------- Looking-Glass (dark) overrides ---------- */
+.dark body {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 60% 45% at 8% 0%, #3a1d45 0%, transparent 70%),
+    radial-gradient(ellipse 55% 50% at 100% 15%, #22265a 0%, transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 110%, #1c2c4a 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23fff8dc' fill-opacity='.55'%3E%3Ccircle cx='12' cy='20' r='1'/%3E%3Ccircle cx='90' cy='44' r='1.4'/%3E%3Ccircle cx='140' cy='12' r='.8'/%3E%3Ccircle cx='54' cy='110' r='1.1'/%3E%3Ccircle cx='128' cy='130' r='1'/%3E%3Ccircle cx='20' cy='146' r='.8'/%3E%3C/g%3E%3C/svg%3E");
+}
+.dark .parchment {
+  background: linear-gradient(180deg, #2a2044 0%, #221a38 100%);
+  border-color: #4a3a6e;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 34px -18px rgba(0, 0, 0, 0.8);
+}
+.dark .drink-me { background: linear-gradient(180deg, #17393a, #143130); border-color: #2c6461; }
+.dark .checker { background: repeating-conic-gradient(#0f0a1c 0 25%, #b3a6cc 0 50%) 0 0 / 20px 20px; opacity: 0.55; }
+.dark .grin-mirror { transform: scaleX(-1); }
+
+@keyframes through-glass {
+  0% { transform: scaleX(1); filter: none; }
+  45% { transform: scaleX(0.02); filter: blur(2px) brightness(1.6); }
+  55% { transform: scaleX(0.02); filter: blur(2px) brightness(1.6); }
+  100% { transform: scaleX(1); filter: none; }
+}
+.through-glass #root { animation: through-glass 0.65s ease-in-out; }
+
+/* ---------- Side rails (wide screens only) ---------- */
+.rail {
+  position: fixed;
+  top: 66px;
+  bottom: 0;
+  width: calc((100vw - 90rem) / 2);
+  display: none;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+@media (min-width: 1700px) { .rail { display: block; } }
+.rail-left { left: 0; }
+.rail-right { right: 0; display: none; flex-direction: column; align-items: center; gap: 1.5rem; padding: 0 0.9rem 2rem; }
+@media (min-width: 1700px) { .rail-right { display: flex; } }
+
+/* The rabbit hole: a dark funnel with things tumbling through it. */
+/* The opening of the rabbit hole: an earthy rim with darkness falling away beneath it. */
+.hole-mouth {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 78%;
+  height: 46px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 45%, #1d2633 0%, #334356 45%, rgba(51, 67, 86, 0.55) 62%, transparent 72%);
+  box-shadow: 0 0 0 5px rgba(141, 115, 80, 0.35), 0 0 0 9px rgba(116, 160, 90, 0.25);
+}
+.hole-mouth::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 12%;
+  right: 12%;
+  height: 60vh;
+  background: linear-gradient(180deg, rgba(51, 67, 86, 0.18), transparent);
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);
+}
+.dark .hole-mouth { background: radial-gradient(ellipse at 50% 45%, #000 0%, #0f0a1c 50%, transparent 72%); box-shadow: 0 0 0 5px rgba(217, 191, 143, 0.2); }
+@keyframes tumble {
+  0% { transform: translate3d(0, -8vh, 0) rotate(0deg) scale(0.7); opacity: 0; }
+  8% { opacity: 0.55; }
+  50% { transform: translate3d(var(--sway, 10px), 45vh, 0) rotate(200deg) scale(1); }
+  92% { opacity: 0.45; }
+  100% { transform: translate3d(0, 100vh, 0) rotate(400deg) scale(1.1); opacity: 0; }
+}
+.tumble { position: absolute; top: 0; width: 26px; height: 26px; color: var(--tan); animation: tumble 20s linear infinite; }
+.rail-caption { position: absolute; bottom: 1.2rem; width: 100%; text-align: center; font-style: italic; color: var(--muted-foreground); font-size: 0.95rem; }
+
+/* Pocket watch on a chain. */
+@keyframes swing { 0%, 100% { transform: rotate(9deg); } 50% { transform: rotate(-9deg); } }
+.pendulum { display: flex; flex-direction: column; align-items: center; transform-origin: top center; animation: swing 3.6s ease-in-out infinite; }
+.chain { width: 2px; height: 70px; background: repeating-linear-gradient(180deg, #c9962b 0 4px, transparent 4px 6px); }
+@keyframes tick { to { transform: rotate(360deg); } }
+.tick-forever { transform-origin: 24px 27px; animation: tick 60s steps(60) infinite; }
+
+.quote-card { max-width: 13rem; border-radius: 0.9rem; padding: 1rem 1rem 0.8rem; font-size: 0.95rem; line-height: 1.35; transform: rotate(-1.5deg); }
+.quote-card figcaption { margin-top: 0.5rem; font-size: 0.72rem; color: var(--muted-foreground); text-align: right; }
+.suit-ribbon { margin-top: auto; writing-mode: vertical-rl; letter-spacing: 0.6em; color: var(--heart); opacity: 0.45; font-size: 1.3rem; }
+
+/* Keep page content above the rails (header keeps its own sticky positioning). */
+main { position: relative; z-index: 1; }
+
+/* ---------- Card-flip reveals ---------- */
+@keyframes flip-in {
+  0% { transform: perspective(700px) rotateY(88deg); opacity: 0; }
+  60% { transform: perspective(700px) rotateY(-8deg); opacity: 1; }
+  100% { transform: perspective(700px) rotateY(0); }
+}
+.flip-in { animation: flip-in 0.65s cubic-bezier(0.3, 0.7, 0.4, 1) both; backface-visibility: hidden; }
+.quote-card.flip-in { animation-name: flip-in-tilted; }
+@keyframes flip-in-tilted {
+  0% { transform: perspective(700px) rotate(-1.5deg) rotateY(88deg); opacity: 0; }
+  100% { transform: perspective(700px) rotate(-1.5deg) rotateY(0); opacity: 1; }
+}
+
+/* ---------- Shrinking tart ---------- */
+.tart-size { transition: width 0.6s cubic-bezier(0.4, 1.6, 0.6, 1), height 0.6s cubic-bezier(0.4, 1.6, 0.6, 1); }
+@keyframes shrink-pop { 0% { transform: scale(1); } 30% { transform: scale(0.55) rotate(-12deg); } 100% { transform: scale(1); } }
+@keyframes grow-pop { 0% { transform: scale(1); } 40% { transform: scale(1.4) rotate(8deg); } 100% { transform: scale(1); } }
+.shrink-pop { animation: shrink-pop 0.8s ease; }
+.grow-pop { animation: grow-pop 0.8s ease; }
+
+/* ---------- The Cat appearing as you get steps right ---------- */
+.grin-progress { transition: opacity 0.9s ease, filter 0.9s ease; }
+@keyframes appear { 0% { transform: scale(1); } 40% { transform: scale(1.25) rotate(-6deg); } 100% { transform: scale(1); } }
+.grin-appear { animation: appear 0.9s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tumble, .pendulum, .tick-forever, .flip-in, .shrink-pop, .grow-pop, .grin-appear { animation: none !important; }
+  .through-glass #root { animation: none !important; }
+}
+
+/* ---------- Dream clouds ---------- */
+.clouds { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+@keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+.cloud { position: absolute; left: 0; color: #ffffff; opacity: 0.85; animation: drift linear infinite; filter: drop-shadow(0 6px 10px rgba(51, 67, 86, 0.08)); }
+.cloud.blue { color: #d6ecf7; opacity: 0.9; }
+.dark .cloud { color: #2c2450; opacity: 0.45; filter: none; }
+.dark .cloud.blue { color: #1f2d4f; }
+
+/* ---------- Flip cards (Hall of Doors) ---------- */
+.flip-card { perspective: 1200px; }
+.flip-inner { display: grid; transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.3, 1); transform-style: preserve-3d; height: 100%; }
+.flip-card.is-flipped .flip-inner { transform: rotateY(180deg); }
+.flip-face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip-back { transform: rotateY(180deg); }
+.card-back-pattern {
+  background-color: var(--night);
+  background-image: radial-gradient(circle at 50% 50%, transparent 0 9px, rgba(224, 183, 117, 0.25) 9px 10px, transparent 10px),
+    repeating-linear-gradient(45deg, rgba(250, 248, 241, 0.07) 0 6px, transparent 6px 12px);
+  background-size: 28px 28px, auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud { animation: none !important; transform: translateX(var(--rest-x, 0)); }
+  .tumble { animation: none !important; top: var(--rest, 30%); opacity: 0.4; }
+  .flip-inner { transition: none; }
+}
+
+/* Landing floaters give way to the side rails on wide screens. */
+@media (min-width: 1340px) { .landing-floater { display: none !important; } }
+
+/* ---------- Cat moods ---------- */
+.cat-face { transition: transform 0.4s cubic-bezier(0.4, 1.6, 0.6, 1); transform-origin: 32px 32px; }
+
+/* ---------- Falling intro ---------- */
+.falling-intro {
+  position: fixed; inset: 0; z-index: 80; cursor: pointer; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 30%, #3d4f66 0%, #223042 55%, #141b26 100%);
+  animation: intro-out 2.3s ease forwards;
+}
+@keyframes intro-out { 0%, 78% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+@keyframes intro-fall { from { transform: translateY(-15vh) rotate(0deg); } to { transform: translateY(115vh) rotate(540deg); } }
+.intro-tumble { position: absolute; top: 0; width: 44px; height: 44px; color: #e0b775; opacity: 0.8; animation: intro-fall 1.6s cubic-bezier(0.5, 0, 0.75, 0.6) infinite; }
+@keyframes intro-text { 0% { opacity: 0; transform: translateY(-20px) scale(0.95); } 25%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(30px) scale(1.05); } }
+.intro-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: clamp(2rem, 6vw, 4rem); font-style: italic; color: #faf8f1; animation: intro-text 2.1s ease forwards; }
+.intro-skip { position: absolute; bottom: 2rem; width: 100%; text-align: center; font-size: 0.75rem; color: #b9deff; opacity: 0.7; }
+
+/* ---------- White Rabbit tour ---------- */
+.tour-spotlight {
+  position: fixed; border-radius: 1rem; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(20, 27, 38, 0.62), 0 0 0 3px #e0b775;
+  transition: all 0.35s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-face, .tour-spotlight { transition: none; }
+}
+
+/* ---------- Answer door ---------- */
+.answer-door { position: relative; width: 34px; height: 44px; flex-shrink: 0; perspective: 260px; }
+.door-frame { position: absolute; inset: -2px; border-radius: 19px 19px 3px 3px; background: #241a10; }
+.door-light {
+  position: absolute; inset: 0; border-radius: 17px 17px 2px 2px; opacity: 0;
+  background: radial-gradient(ellipse at 50% 60%, #fffaf1 0%, #fbe7b5 45%, #e0b775 100%);
+  transition: opacity 0.5s ease, box-shadow 0.5s ease;
+}
+.door-panel { position: absolute; inset: 0; transform-origin: 2px 50%; transition: transform 0.75s cubic-bezier(0.3, 0.7, 0.3, 1); }
+.door-open .door-panel { transform: rotateY(-108deg); }
+.door-open .door-light { opacity: 1; box-shadow: 0 0 18px 6px rgba(224, 183, 117, 0.7); }
+@keyframes rattle {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-5deg) translateX(-1px); }
+  30% { transform: rotate(4deg) translateX(1px); }
+  45% { transform: rotate(-4deg); }
+  60% { transform: rotate(3deg); }
+  75% { transform: rotate(-2deg); }
+}
+.door-rattle .door-panel { animation: rattle 0.55s ease; transform-origin: 50% 100%; }
+.door-locked { filter: saturate(0.4) brightness(0.9); }
+
+/* ---------- Illustrated Hall of Doors art ---------- */
+.door-art { position: relative; width: 100%; max-width: 8.5rem; aspect-ratio: 100 / 120; margin: 0 auto; perspective: 700px; }
+.door-art-light { position: absolute; inset: 2px 4px 0; border-radius: 50% 50% 4px 4px / 40% 40% 4px 4px; opacity: 0.25; transition: opacity 0.6s ease; }
+.door-art-panel { position: absolute; inset: 0; transform-origin: 6% 50%; transition: transform 0.8s cubic-bezier(0.3, 0.7, 0.3, 1); filter: drop-shadow(0 6px 8px rgba(51, 67, 86, 0.25)); }
+.door-art.is-open .door-art-panel { transform: rotateY(-100deg); }
+.door-art.is-open .door-art-light { opacity: 1; box-shadow: 0 0 30px 10px rgba(224, 183, 117, 0.55); }
+.playing-card:hover .door-art:not(.is-open) .door-art-panel { transform: rotateY(-14deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .door-panel, .door-art-panel { transition: none; }
+  .door-rattle .door-panel { animation: none; }
+}
+
+/* ---------- Drink Me bottles ---------- */
+.potion { width: 26px; height: 41px; overflow: visible; transform-origin: 50% 100%; }
+.potion-liquid { transition: transform 0.8s cubic-bezier(0.5, 0, 0.6, 1); }
+.potion-cork { transition: transform 0.4s ease, opacity 0.4s ease; transform-origin: 14px 9px; }
+.potion-empty .potion-cork { transform: translate(6px, -9px) rotate(40deg); opacity: 0; }
+.potion-empty { opacity: 0.75; }
+@keyframes gulp {
+  0% { transform: rotate(0) scale(1); }
+  20% { transform: rotate(-18deg) scale(1.08); }
+  45% { transform: rotate(-24deg) scale(1.08); }
+  70% { transform: rotate(6deg) scale(0.96); }
+  100% { transform: rotate(0) scale(1); }
+}
+.potion-gulp { animation: gulp 0.85s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .potion-liquid, .potion-cork { transition: none; }
+  .potion-gulp { animation: none; }
+}
+
+/* ---------- Messages arrive; the Cat materialises ---------- */
+@keyframes msg-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes msg-in-cat { 0% { opacity: 0; filter: blur(4px); transform: translateX(-6px); } 60% { filter: blur(0); } 100% { opacity: 1; transform: none; } }
+.msg-in { animation: msg-in 0.35s ease-out both; }
+.msg-in-cat { animation: msg-in-cat 0.6s ease-out both; }
+
+.cat-appearing .ca-face { animation: ca-face 2.6s ease-in-out infinite; }
+.cat-appearing .ca-eyes { animation: ca-eyes 2.6s ease-in-out infinite; }
+.cat-appearing .ca-grin { stroke-dasharray: 100; animation: ca-grin 2.6s ease-in-out infinite; }
+.cat-appearing .ca-teeth { animation: ca-teeth 2.6s ease-in-out infinite; }
+@keyframes ca-face { 0%, 10% { opacity: 0; } 45%, 80% { opacity: 0.9; } 100% { opacity: 0; } }
+@keyframes ca-eyes { 0% { opacity: 0.45; } 12%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ca-grin { 0%, 20% { stroke-dashoffset: 100; opacity: 1; } 55%, 80% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes ca-teeth { 0%, 50% { opacity: 0; } 62%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-in, .msg-in-cat { animation: none; }
+  .cat-appearing .ca-face, .cat-appearing .ca-eyes, .cat-appearing .ca-grin, .cat-appearing .ca-teeth { animation: none; opacity: 1; stroke-dashoffset: 0; }
+}
+
+/* ---------- Dealt-card loading placeholders ---------- */
+.card-skeleton {
+  position: relative; overflow: hidden;
+  background-color: var(--night);
+  background-image: radial-gradient(circle at 50% 50%, transparent 0 9px, rgba(224, 183, 117, 0.22) 9px 10px, transparent 10px),
+    repeating-linear-gradient(45deg, rgba(250, 248, 241, 0.06) 0 6px, transparent 6px 12px);
+  background-size: 28px 28px, auto;
+  box-shadow: 0 0 0 4px rgba(250, 248, 241, 0.6), 0 14px 30px -18px rgba(51, 67, 86, 0.6);
+}
+.card-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(250, 248, 241, 0.16) 50%, transparent 70%);
+  transform: translateX(-100%); animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+@keyframes deal-in {
+  from { opacity: 0; transform: translateY(-60px) rotate(var(--tilt, -4deg)) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.deal-in { animation: deal-in 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .deal-in, .card-skeleton::after { animation: none; }
+}
+
+/* ---------- Footer scenery ---------- */
+.footer-scene { display: block; width: 100%; height: 110px; margin-bottom: -1px; }
+@media (min-width: 768px) { .footer-scene { height: 140px; } }
+.dark .footer-scene { filter: brightness(0.55) saturate(0.75) hue-rotate(-10deg); }
+
+/* ---------- Sparkle trail ---------- */
+.sparkle-layer { position: fixed; inset: 0; pointer-events: none; z-index: 65; overflow: hidden; }
+.sparkle { position: absolute; transform: translate(-50%, -50%); line-height: 1; animation: sparkle 0.9s ease-out forwards; text-shadow: 0 0 6px currentColor; }
+@keyframes sparkle {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(45deg); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.5) rotate(120deg); }
+}
+
+/* ---------- Hearts burst ---------- */
+.hearts-burst { position: fixed; left: 50%; top: 45%; width: 0; height: 0; z-index: 75; pointer-events: none; }
+.burst-heart {
+  position: absolute; left: 0; top: 0; font-size: var(--size); line-height: 1;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(0.3);
+  animation: heart-out 1.2s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  text-shadow: 0 2px 6px rgba(200, 49, 74, 0.3);
+}
+@keyframes heart-out {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(0.3); }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(1.1); }
+}

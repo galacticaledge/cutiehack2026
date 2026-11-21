@@ -1,4 +1,4 @@
-//! Pure reward formula (SPEC §10). Amounts here are whole LEARN.
+//! Pure reward formula (SPEC §10). Amounts here are whole tokens.
 use serde::Serialize;
 
 pub const BASE: f64 = 100.0;
@@ -70,7 +70,7 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
             value: base,
         },
         BreakdownItem {
-            label: "Hints",
+            label: "Drink Me",
             value: hm,
         },
         BreakdownItem {
@@ -78,7 +78,7 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
             value: am,
         },
         BreakdownItem {
-            label: "Understanding",
+            label: "Testimony",
             value: um,
         },
     ];
@@ -87,7 +87,9 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
             amount: 0,
             status: RewardStatus::Forfeited,
             breakdown,
-            summary: "Flagged solve and the explanation didn't pass: reward forfeited".into(),
+            summary:
+                "Suspicious solve and the testimony didn't convince the court: off with the tarts!"
+                    .into(),
             capped: false,
         };
     }
@@ -102,7 +104,7 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
         .filter(|(idx, b)| *idx == 0 || b.value != 1.0)
         .map(|(_, b)| format!("{} {}", b.label, fmt(b.value)))
         .collect();
-    let mut summary = format!("{} = {} LEARN", parts.join(" × "), floored);
+    let mut summary = format!("{} = {} TARTS", parts.join(" × "), floored);
     if raw < 0.2 * base {
         summary.push_str(" (minimum)");
     }
@@ -241,7 +243,7 @@ mod tests {
         assert_eq!(r.amount, 135);
         assert_eq!(
             r.summary,
-            "Base 200 × Hints 0.75 × Attempts 0.9 = 135 LEARN"
+            "Base 200 × Drink Me 0.75 × Attempts 0.9 = 135 TARTS"
         );
     }
 }

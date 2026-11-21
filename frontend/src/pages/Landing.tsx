@@ -1,13 +1,55 @@
+import { Clock, Coffee, FlaskConical, KeyRound, Rabbit } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CheshireGrin, Tart } from "@/components/wonder";
+import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
+import { CastPanel, WhyPanel } from "@/components/guides";
+import { SparkleTrail } from "@/components/extras";
 import { api } from "@/lib/api";
+
+const FLOATERS = [
+  { Icon: Clock, cls: "left-[6%] top-[14%] size-10", r: "-12deg", delay: "0s" },
+  { Icon: Coffee, cls: "right-[8%] top-[20%] size-9", r: "10deg", delay: "1.2s" },
+  { Icon: KeyRound, cls: "left-[10%] bottom-[18%] size-8", r: "24deg", delay: "2.1s" },
+  { Icon: FlaskConical, cls: "right-[12%] bottom-[22%] size-9", r: "-8deg", delay: "0.6s" },
+  { Icon: Rabbit, cls: "left-[46%] top-[6%] size-8", r: "6deg", delay: "1.7s" },
+];
+
+const STEPS = [
+  { suit: "♠", title: "Fall down the rabbit hole", body: "Pick a dream. The Cheshire Cat asks questions and never hands you the answer." },
+  { suit: "♥", title: "Testify at the trial", body: "Solved it? Explain why it works. Real understanding, not just a number." },
+  { suit: "♦", title: "Wake up with tarts", body: "TARTS land in your Solana devnet wallet, with a receipt on the explorer." },
+];
 
 export function Landing() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vanishes, setVanishes] = useState(0);
+  const [hidden, setHidden] = useState(false);
+
+  async function guestPass() {
+    setLoading(true);
+    setError(null);
+    try {
+      const name = `guest-${Math.random().toString(36).slice(2, 8)}`;
+      await api("/api/auth/login", { username: name });
+      const { sessionId } = await api<{ sessionId: string }>("/api/sessions", { templateId: "cs-trace-loop-1" });
+      navigate(`/learn/${sessionId}`, { state: { fresh: true } });
+    } catch (err) {
+      setError((err as Error).message);
+      setLoading(false);
+    }
+  }
+
+  function poke() {
+    if (hidden) return;
+    setHidden(true);
+    setVanishes((n) => n + 1);
+    setTimeout(() => setHidden(false), 1100);
+  }
   const navigate = useNavigate();
 
   async function submit(e: React.FormEvent) {
@@ -25,43 +67,95 @@ export function Landing() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-8 px-4 py-16">
-      <div className="space-y-3">
-        <h1 className="text-4xl font-bold tracking-tight">Socra</h1>
-        <p className="text-lg text-muted-foreground">
-          An AI tutor that never gives you the answer. It guides you to it, and pays you in crypto for actually learning.
-        </p>
-      </div>
-
-      <form onSubmit={submit} className="flex gap-2">
-        <Input
-          autoFocus
-          placeholder="Pick a username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="h-10"
-          aria-label="Username"
+    <div className="relative min-h-screen overflow-hidden">
+      {FLOATERS.map(({ Icon, cls, r, delay }, i) => (
+        <Icon
+          key={i}
+          aria-hidden="true"
+          className={`float pointer-events-none absolute hidden text-[var(--tan)]/30 md:block landing-floater ${cls}`}
+          style={{ "--r": r, animationDelay: delay } as React.CSSProperties}
+          strokeWidth={1.4}
         />
-        <Button type="submit" size="lg" className="h-10 px-4" disabled={loading || !username.trim()}>
-          {loading ? "Starting…" : "Start learning"}
-        </Button>
-      </form>
-      {error && <p className="-mt-6 text-sm text-destructive">{error}</p>}
+      ))}
 
-      <ol className="grid gap-3 text-sm sm:grid-cols-3">
-        <li className="rounded-lg border p-3">
-          <span className="font-semibold">1. Work it out.</span> Chat with a Socratic tutor that asks, never tells.
-        </li>
-        <li className="rounded-lg border p-3">
-          <span className="font-semibold">2. Explain why.</span> Show you understand, not just the final number.
-        </li>
-        <li className="rounded-lg border p-3">
-          <span className="font-semibold">3. Get paid.</span> LEARN tokens land in your Solana devnet wallet.
-        </li>
-      </ol>
-      <p className="text-xs text-muted-foreground">
-        Built on UC Irvine research showing slow, Socratic AI tutoring improves learning. Testnet tokens only.
-      </p>
-    </main>
+      <SparkleTrail />
+      <LookingGlassToggle className="absolute right-4 top-4 z-10 border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
+      <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-2xl flex-col justify-center gap-9 px-4 py-16">
+        <div className="space-y-4 text-center">
+          <button
+            type="button"
+            onClick={poke}
+            className="mx-auto block rounded-full focus-visible:outline-2"
+            aria-label="Poke the Cheshire Cat"
+            title="Go on, poke the Cat"
+          >
+            <CheshireGrin className={`grin-mirror float size-24 drop-shadow-lg transition-opacity duration-500 ${hidden ? "opacity-0" : "opacity-100"}`} />
+          </button>
+          <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
+            {vanishes > 0 && `The Cat has vanished ${vanishes} ${vanishes === 1 ? "time" : "times"}${vanishes >= 6 ? ". Six impossible things before breakfast!" : ""}`}
+          </p>
+          <p className="inline-flex items-center gap-2 rounded-full border border-[var(--tan)]/40 bg-[#faf8f1]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tan)] dark:bg-white/5">
+            ✦ Dream to Wonderland · Cutie Hack 2026 ✦
+          </p>
+          <h1 className="font-display text-6xl leading-none text-[var(--night)] dark:text-foreground sm:text-7xl">
+            Socra
+            <span className="mt-2 block text-2xl italic text-[var(--tan)] sm:text-3xl">a Socratic dream in Wonderland</span>
+          </h1>
+          <p className="mx-auto max-w-lg text-lg text-muted-foreground">
+            A tutor that, like the Cheshire Cat, answers your questions with questions. Find your own way out of the dream and wake up with{" "}
+            <span className="inline-flex items-center gap-1 font-semibold text-[var(--heart)]">
+              TARTS <Tart />
+            </span>
+            .
+          </p>
+        </div>
+
+        <form onSubmit={submit} className="parchment mx-auto flex w-full max-w-md gap-2 rounded-2xl p-2">
+          <Input
+            autoFocus
+            placeholder="Who are YOU? (pick a username)"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="h-11 border-0 bg-transparent text-base shadow-none focus-visible:ring-0"
+            aria-label="Username"
+          />
+          <Button type="submit" size="lg" className="h-11 px-5" disabled={loading || !username.trim()}>
+            {loading ? "Falling…" : "Follow the rabbit"}
+          </Button>
+        </form>
+        <p className="-mt-5 text-center text-sm text-muted-foreground">
+          Just looking?{" "}
+          <button type="button" onClick={guestPass} disabled={loading} className="font-semibold text-[var(--tan)] underline-offset-2 hover:underline disabled:opacity-50">
+            Use a guest pass to the Mad Hatter's tea party →
+          </button>
+        </p>
+        {error && <p className="-mt-6 text-center text-sm text-destructive">{error}</p>}
+
+        <ol className="grid gap-3 sm:grid-cols-3">
+          {STEPS.map((s, i) => (
+            <li key={s.title} className="parchment playing-card rounded-xl p-4 pt-8 text-sm">
+              <span className={`pip pip-tl ${s.suit === "♠" ? "" : "text-[var(--heart)]"}`}>{s.suit}</span>
+              <p className="font-display text-lg leading-tight">
+                {i + 1}. {s.title}
+              </p>
+              <p className="mt-1 text-muted-foreground">{s.body}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Inspired by UC Irvine research (SIGCSE 2026) on slow, Socratic-paced AI tutoring.
+          <br />
+          Built with AIsa · ElevenLabs · Keenable · Solana devnet
+        </p>
+      </main>
+      <aside className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+        <CastPanel />
+      </aside>
+      <aside className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+        <WhyPanel />
+      </aside>
+      <DreamFooter />
+    </div>
   );
 }

@@ -24,7 +24,7 @@ pub fn seed_for(cfg: &Config, username: &str, template_id: &str) -> i64 {
     }
 }
 
-/// Whole LEARN paid today.
+/// Whole tokens paid today.
 pub async fn earned_today(state: &AppState, user_id: &str) -> anyhow::Result<f64> {
     let sum: Option<i64> = sqlx::query_scalar(
         "SELECT SUM(amount)::BIGINT FROM rewards WHERE user_id = $1 AND status = 'paid' AND created_at >= date_trunc('day', now())",
@@ -70,7 +70,7 @@ pub async fn insert_message(
 
 pub async fn history(pool: &PgPool, session_id: &str) -> anyhow::Result<Vec<Message>> {
     Ok(sqlx::query_as::<_, Message>(
-        "SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at ASC LIMIT 500",
+        "SELECT * FROM (SELECT * FROM messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT 500) m ORDER BY created_at ASC",
     )
     .bind(session_id)
     .fetch_all(pool)
@@ -169,6 +169,10 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "title": ctx.title,
         "prompt": ctx.display_prompt,
         "difficulty": ctx.difficulty,
+        // Number of machine-checkable steps (never their values): drives the Cheshire grin's progress.
+        "checkpointCount": ctx.checkpoints.iter().filter(|c| c.id != "final").count(),
+        "startedAt": s.started_at,
+        "solvedAt": s.solved_at,
         "hintsUsed": s.hints_used,
         "revealedHints": ctx.hints.iter().take(s.hints_used.max(0) as usize).collect::<Vec<_>>(),
         "wrongAttempts": s.wrong_attempts,
@@ -180,6 +184,7 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "hasAnswerCheck": is_bank || ctx.answer.is_some(),
         "explainPassed": s.explain_passed,
         "explainFeedback": s.explain_feedback,
+        "explanation": s.explanation, // the student's own testimony (for the share card)
         "reward": reward.as_ref().map(|r| reward_json(&state.cfg, r)),
         "matchedTemplate": if !is_bank { matched.map(|t| json!({ "id": t.id, "title": t.title })) } else { None },
         "messages": msgs,

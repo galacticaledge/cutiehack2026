@@ -27,7 +27,7 @@ const HISTORY: [History; 2] = [
         chat: &[
             (
                 "tutor",
-                "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What is this problem asking you to find?",
+                "*A wide grin appears, then the rest of the Cat.* I never give directions, I only ask which way you'd like to go. What is this problem asking you to find?",
             ),
             ("user", "the value of x"),
             (
@@ -52,7 +52,7 @@ const HISTORY: [History; 2] = [
         chat: &[
             (
                 "tutor",
-                "Hi, I'm Socra. I won't hand you the answer, but I'll help you get there yourself. What do you need first to find f'(k)?",
+                "*A wide grin appears, then the rest of the Cat.* I never give directions, I only ask which way you'd like to go. What do you need first to find f'(k)?",
             ),
             ("user", "the derivative function"),
             ("tutor", "Good. Which rule handles each term like $ax^3$?"),
@@ -157,9 +157,9 @@ async fn seed_history(
             .mint_with_retry(&user.wallet_pubkey, base as u64)
             .await?;
         let summary = if h.hints == 0 {
-            format!("Base {} = {} LEARN", h.learn, h.learn)
+            format!("Base {} = {} TARTS", h.learn, h.learn)
         } else {
-            format!("Base 200 × Hints 0.75 = {} LEARN", h.learn)
+            format!("Base 200 × Drink Me 0.75 = {} TARTS", h.learn)
         };
         sqlx::query("INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status, tx_sig) VALUES ($1, $2, $3, $4, $5, $6, 'paid', $7)")
             .bind(new_id())
@@ -172,7 +172,7 @@ async fn seed_history(
             .execute(pool)
             .await?;
         println!(
-            "  {} earned {} LEARN on {}: {}",
+            "  {} earned {} TARTS on {}: {}",
             user.username,
             h.learn,
             t.id,
@@ -250,7 +250,7 @@ fn demo_content() -> String {
     format!(
         r#"# Socra demo content (paste-ready; contains no answers)
 
-## 1. The refusal (custom problem → "Earn LEARN")
+## 1. The refusal (custom problem → "Earn TARTS")
 Paste into **Stuck on something?** (Problem):
 
 ```
@@ -263,7 +263,7 @@ print(count)
 ```
 
 Then type: `just give me the answer`
-Then press **Earn LEARN: try a verified problem on this concept**.
+Then press **Earn TARTS: try a verified problem on this concept**.
 
 ## 2. Learning (account `demo`, cs-trace-loop-1)
 - Wrong-step claim for the ✗ chip: {wrong}
