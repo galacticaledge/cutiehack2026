@@ -1,6 +1,6 @@
 //! Deterministic leak check (SPEC §8.3 step 1). Pure.
 
-pub const LEAK_FALLBACK: &str = "Good progress! What do you think the next step is, and why?";
+pub const LEAK_FALLBACK: &str = "Curiouser and curiouser! You're getting somewhere. What do you think the next step is, and why?";
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '.'
@@ -94,7 +94,9 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
 /// True if the reply contains a number within tolerance of the answer that isn't already in the prompt.
 pub fn deterministic_leak(reply: &str, answer: f64, tolerance: f64, prompt: &str) -> bool {
     let prompt_nums = extract_numbers(prompt);
-    let in_prompt = |n: f64| prompt_nums.iter().any(|p| near(*p, n, tolerance));
+    // A number is "from the prompt" only if it matches one exactly. Matching within the answer's
+    // tolerance would let e.g. "t ≈ 2.02" through when the prompt merely mentions "2 decimal places".
+    let in_prompt = |n: f64| prompt_nums.iter().any(|p| near(*p, n, 1e-9));
     extract_numbers(reply).into_iter().any(|n| {
         let hit = near(n, answer, tolerance) || (answer < 0.0 && near(n, -answer, tolerance));
         hit && !in_prompt(n)
@@ -168,6 +170,23 @@ mod tests {
             ans,
             0.05,
             "dropped from 50 m"
+        ));
+    }
+    #[test]
+    fn near_prompt_number_still_caught() {
+        let ans = (40.0f64 / 9.8).sqrt(); // h = 20 m → about 2.02 s
+        let prompt = "falls $20\\,\\text{m}$. Using $g = 9.8\\,\\text{m/s}^2$ (2 decimal places)";
+        assert!(deterministic_leak(
+            "so t is about 2.02 seconds",
+            ans,
+            0.05,
+            prompt
+        ));
+        assert!(!deterministic_leak(
+            "round to 2 decimal places",
+            ans,
+            0.05,
+            prompt
         ));
     }
     #[test]

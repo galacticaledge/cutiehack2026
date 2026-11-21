@@ -38,7 +38,7 @@ export function KnowledgeMap() {
     if (c.rewarded) return "Earned";
     if (c.status === "locked") return "Locked";
     if (c.bankTemplateId) return "Verified problem";
-    return capReached ? "Daily limit reached" : `Up to ${map?.questBase ?? 50} LEARN`;
+    return capReached ? "Daily limit reached" : `Up to ${map?.questBase ?? 50} tarts`;
   }
 
   const subjects = map ? [...new Set(map.concepts.map((c) => c.subject))] : [];
@@ -50,7 +50,7 @@ export function KnowledgeMap() {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">Knowledge map</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Each topic pays LEARN once, after you solve a fresh problem on it and explain why your method works. A topic unlocks for rewards when you've mastered what it builds on.
+            Each topic pays tarts once, after you solve a fresh problem on it and explain why your method works. A topic unlocks for rewards when you've mastered what it builds on.
             Asking for the same topic in different words lands on the same spot on the map.
           </p>
           {map && (

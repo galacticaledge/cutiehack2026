@@ -56,7 +56,7 @@ pub struct Template {
 pub static TEMPLATES: [Template; 5] = [
     Template {
         id: "alg-linear-1",
-        title: "Solve a linear equation",
+        title: "The White Rabbit's Pocket Watch",
         concept: "linear-equations",
         difficulty: 1,
         min_solve_seconds: 20,
@@ -65,7 +65,7 @@ pub static TEMPLATES: [Template; 5] = [
     },
     Template {
         id: "cs-trace-loop-1",
-        title: "Trace a loop (CS1)",
+        title: "The Mad Hatter's Tea Loop",
         concept: "code-tracing-loops",
         difficulty: 2,
         min_solve_seconds: 40,
@@ -74,7 +74,7 @@ pub static TEMPLATES: [Template; 5] = [
     },
     Template {
         id: "calc-deriv-poly-1",
-        title: "Evaluate a derivative",
+        title: "The Caterpillar's Mushroom",
         concept: "derivatives-power-rule",
         difficulty: 2,
         min_solve_seconds: 40,
@@ -83,7 +83,7 @@ pub static TEMPLATES: [Template; 5] = [
     },
     Template {
         id: "kin-freefall-1",
-        title: "Free fall time",
+        title: "Down the Rabbit Hole",
         concept: "kinematics-free-fall",
         difficulty: 2,
         min_solve_seconds: 40,
@@ -92,7 +92,7 @@ pub static TEMPLATES: [Template; 5] = [
     },
     Template {
         id: "cs-trace-nested-1",
-        title: "Count nested loop iterations (CS1)",
+        title: "The Queen's Croquet Count",
         concept: "code-tracing-nested-loops",
         difficulty: 3,
         min_solve_seconds: 60,
@@ -118,7 +118,7 @@ fn gen_linear(seed: i64) -> GeneratedProblem {
     };
     GeneratedProblem {
         prompt: format!(
-            "Solve for $x$: ${a}x {} {} = {c}$",
+            "The White Rabbit is late, late, late! He scribbled a riddle on his pocket watch, and the hands won't move until someone solves it.\n\nSolve for $x$: ${a}x {} {} = {c}$",
             if b >= 0 { "+" } else { "-" },
             b.abs()
         ),
@@ -168,7 +168,9 @@ fn gen_trace_loop(seed: i64) -> GeneratedProblem {
         "total = 0\nfor i in range({a}, {b}):\n    if i % {k} == 0:\n        total += i\nprint(total)"
     );
     GeneratedProblem {
-        prompt: format!("What does this Python code print?\n\n```python\n{code}\n```"),
+        prompt: format!(
+            "At the Mad Hatter's tea party it is always six o'clock, so the Hatter passes the endless tea-time with this little program. What does this Python code print?\n\n```python\n{code}\n```"
+        ),
         answer: total as f64,
         tolerance: 0.0,
         solution_steps: vec![
@@ -255,11 +257,13 @@ fn gen_deriv(seed: i64) -> GeneratedProblem {
     let latex =
         latex_term(a, "x^3", true) + &latex_term(b, "x^2", false) + &latex_term(c, "x", false);
     GeneratedProblem {
-        prompt: format!("Let $f(x) = {latex}$. Find $f'({k})$."),
+        prompt: format!(
+            "\"One side will make you grow taller, and the other side will make you grow shorter.\" After a nibble of the Caterpillar's mushroom, Alice's height is modelled by\n\n$$f(x) = {latex}$$\n\nHow fast is her height changing at $x = {k}$? Find $f'({k})$."
+        ),
         answer: answer as f64,
         tolerance: 1e-9,
         solution_steps: vec![
-            "Apply the power rule to each term: d/dx of x^n is n·x^(n-1).".into(),
+            "Apply the power rule to each term: the derivative of x^n is n times x to the power one less.".into(),
             "Write f'(x) as a polynomial in x.".into(),
             format!("Substitute x = {k} into f'(x) (the student should do the arithmetic)."),
         ],
@@ -286,17 +290,17 @@ fn gen_freefall(seed: i64) -> GeneratedProblem {
     let answer = (2.0 * h / g).sqrt();
     GeneratedProblem {
         prompt: format!(
-            "A ball is dropped from rest from a height of ${h}\\,\\text{{m}}$. Using $g = 9.8\\,\\text{{m/s}}^2$ and ignoring air resistance, how long does it take to hit the ground? Give your answer in seconds (2 decimal places, or an exact expression like `sqrt(...)`)."
+            "Alice tumbles down the rabbit hole, starting from rest, and falls ${h}\\,\\text{{m}}$ to the bottom. (In the book she drifts past cupboards and jars of marmalade. Here, physics wins.) Using $g = 9.8\\,\\text{{m/s}}^2$ and ignoring air resistance, how long does it take to hit the ground? Give your answer in seconds (2 decimal places, or an exact expression like `sqrt(...)`)."
         ),
         answer,
         tolerance: 0.05,
         solution_steps: vec![
-            "The ball is dropped, so the initial velocity is v₀ = 0.".into(),
+            "Alice starts from rest, so the initial velocity is v₀ = 0.".into(),
             "Use the displacement equation h = v₀t + ½gt², which becomes h = ½gt².".into(),
             "Solve for t symbolically: t² = 2h/g, so t = √(2h/g). Then the student substitutes the numbers.".into(),
         ],
         hints: [
-            "What is the ball's initial velocity if it's dropped?".into(),
+            "What is Alice's initial velocity if she starts falling from rest?".into(),
             "Which kinematics equation relates distance, acceleration and time when you don't know the final velocity?".into(),
             "With $v_0 = 0$ you get $h = \\tfrac{1}{2} g t^2$. Solve that for $t$.".into(),
         ],
@@ -318,7 +322,9 @@ fn gen_nested(seed: i64) -> GeneratedProblem {
         "count = 0\nfor i in range({n}):\n    for j in range(i, {m}):\n        count += 1\nprint(count)"
     );
     GeneratedProblem {
-        prompt: format!("What does this Python code print?\n\n```python\n{code}\n```"),
+        prompt: format!(
+            "The Queen of Hearts has ordered her card-soldiers to bend into croquet hoops, and she wants them counted. \"Off with their heads\" if the count is wrong! What does this Python code print?\n\n```python\n{code}\n```"
+        ),
         answer: count as f64,
         tolerance: 0.0,
         solution_steps: vec![

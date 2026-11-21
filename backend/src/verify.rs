@@ -1,4 +1,3 @@
-//! Symbolic side of the neuro-symbolic pipeline (SPEC §8.5). Pure: no LLM.
 use crate::mathexpr::{eval, eval_number, normalize_math, parse};
 use crate::problems::{Checkpoint, CheckpointKind};
 use serde::{Deserialize, Serialize};
@@ -291,6 +290,7 @@ mod tests {
         assert_eq!(v("t2", "10.22"), Status::Correct);
         assert_eq!(v("t2", "10.4"), Status::Incorrect);
     }
+
     #[test]
     fn expressions() {
         assert_eq!(v("derivative", "21x^2+8x-3"), Status::Correct);
@@ -298,6 +298,7 @@ mod tests {
         assert_eq!(v("derivative", "f'(x) = 21x^2 + 8x - 3"), Status::Correct);
         assert_eq!(v("derivative", "21x^2 + 8x"), Status::Incorrect);
     }
+
     #[test]
     fn lists() {
         assert_eq!(v("kept_values", "[3, 6, 9]"), Status::Correct);
@@ -305,6 +306,7 @@ mod tests {
         assert_eq!(v("kept_values", "[9, 6, 3]"), Status::Incorrect);
         assert_eq!(v("kept_values", "[3, 6]"), Status::Incorrect);
     }
+
     #[test]
     fn list_items_can_be_arithmetic() {
         assert_eq!(
@@ -345,11 +347,13 @@ mod tests {
         assert_eq!(v("kept_values", "some numbers"), Status::Unverifiable);
         assert_eq!(v("unknown", "21"), Status::Unverifiable);
     }
+
     #[test]
     fn final_never_judged() {
         assert_eq!(v("final", "7"), Status::Final);
         assert_eq!(v("final", "8"), Status::Final);
     }
+
     #[test]
     fn rendering_never_leaks_expected_values() {
         let verdicts = verify_claims(
@@ -388,6 +392,7 @@ mod tests {
             ]
         );
     }
+
     #[test]
     fn templates_self_consistent() {
         for t in TEMPLATES.iter() {
@@ -430,6 +435,7 @@ mod tests {
             }
         }
     }
+
     #[test]
     fn different_seeds_differ() {
         for t in TEMPLATES.iter() {
@@ -438,6 +444,7 @@ mod tests {
             assert!(prompts.len() > 1, "{}", t.id);
         }
     }
+
     #[test]
     fn derivative_matches_numeric_slope() {
         let p = (TEMPLATES[2].generate)(77);
