@@ -243,7 +243,7 @@
   55% { transform: scaleX(0.02); filter: blur(2px) brightness(1.6); }
   100% { transform: scaleX(1); filter: none; }
 }
-.through-glass #root { animation: through-glass 0.65s ease-in-out; }
+.through-glass #root { animation: through-glass 0.32s ease-in-out; }
 
 /* ---------- Side rails (wide screens only) ---------- */
 .rail {

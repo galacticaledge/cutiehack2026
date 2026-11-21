@@ -202,9 +202,10 @@ export function useLookingGlass() {
       applyDark(next);
       return;
     }
+    // A quick flip: colours swap at the narrowest point, and the next click is accepted right after.
     root.classList.add("through-glass");
-    setTimeout(() => applyDark(next), 280);
-    setTimeout(() => root.classList.remove("through-glass"), 700);
+    setTimeout(() => applyDark(next), 140);
+    setTimeout(() => root.classList.remove("through-glass"), 330);
   }
   return { on, toggle };
 }

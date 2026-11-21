@@ -144,8 +144,12 @@ export function WakeUp() {
  *  purple cat fades in gently instead: no flashing. */
 export function Flashbang() {
   const [mode, setMode] = useState<"off" | "video" | "still">("off");
+  const [shownAt, setShownAt] = useState(0);
   useEffect(() => {
-    const go = () => setMode(reducedMotion() ? "still" : "video");
+    const go = () => {
+      setShownAt(Date.now());
+      setMode(reducedMotion() ? "still" : "video");
+    };
     window.addEventListener("socra:flashbang", go);
     return () => window.removeEventListener("socra:flashbang", go);
   }, []);
@@ -162,7 +166,13 @@ export function Flashbang() {
   }, [mode]);
   if (mode === "off") return null;
   return (
-    <div className={`flashbang ${mode === "still" ? "flashbang-still" : ""}`} onClick={() => setMode("off")} role="presentation" aria-hidden="true">
+    <div
+      className={`flashbang ${mode === "still" ? "flashbang-still" : ""}`}
+      // People reach the Easter egg by spam-clicking, so ignore clicks for a moment or the next one would close it instantly.
+      onClick={() => Date.now() - shownAt > 1200 && setMode("off")}
+      role="presentation"
+      aria-hidden="true"
+    >
       {mode === "video" ? (
         <video
           src="/easter/flashbang.mp4"
