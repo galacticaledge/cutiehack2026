@@ -94,7 +94,10 @@ export interface RewardView {
 
 export interface SessionView {
   id: string;
-  source: "bank" | "custom_problem" | "custom_topic";
+  source: "bank" | "quest" | "custom_problem" | "custom_topic";
+  conceptId?: string | null;
+  practiceReason?: string | null;
+  checkedBy?: "engine" | "sandbox" | null;
   templateId: string | null;
   title: string;
   prompt: string;
@@ -115,9 +118,27 @@ export interface SessionView {
   messages: ChatMessage[];
 }
 
+export interface ConceptNode {
+  id: string;
+  title: string;
+  subject: string;
+  prereqs: string[];
+  status: "mastered" | "available" | "locked";
+  rewarded: boolean;
+  bankTemplateId: string | null;
+}
+
+export interface ConceptMap {
+  concepts: ConceptNode[];
+  topicRewardsToday: number;
+  dailyTopicCap: number;
+  questBase: number;
+}
+
 export interface Features {
   tts: boolean;
   learnMore: boolean;
   llmProvider: string;
   solana: boolean;
+  codeRunner: boolean;
 }

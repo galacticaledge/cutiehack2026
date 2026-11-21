@@ -85,7 +85,7 @@ export function Workspace() {
   }, [s?.messages.length]);
 
   // Anti-cheat telemetry (bank problems only, while active).
-  const tracking = s?.source === "bank" && s.status === "active";
+  const tracking = (s?.source === "bank" || s?.source === "quest") && s.status === "active";
   useEffect(() => {
     if (!tracking) return;
     const onVis = () => postEvent(sessionId, document.visibilityState === "hidden" ? "hidden" : "visible");
@@ -111,6 +111,9 @@ export function Workspace() {
   }
 
   const isBank = s.source === "bank";
+  const isQuest = s.source === "quest";
+  // Verified answer + explain-back + possible payout (bank problems and generated topic problems).
+  const earns = isBank || isQuest;
 
   async function sendChat(e: React.FormEvent) {
     e.preventDefault();
@@ -159,7 +162,7 @@ export function Workspace() {
     try {
       const r = await api<{ correct: boolean; flagged?: boolean; practice?: boolean }>(`/api/sessions/${sessionId}/answer`, { answer });
       if (r.correct) {
-        if (isBank) {
+        if (earns) {
           setFlagged(Boolean(r.flagged));
           setExplainOpen(true);
         } else {
@@ -218,13 +221,15 @@ export function Workspace() {
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle>{s.title}</CardTitle>
-                {!isBank && <Badge variant="secondary">Practice mode</Badge>}
-                {isBank && s.practice && <Badge variant="secondary">Practice mode: already earned</Badge>}
-                {s.status !== "active" && isBank && <Badge>Solved</Badge>}
+                {!earns && <Badge variant="secondary">Practice mode</Badge>}
+                {isQuest && <Badge variant="outline">New topic</Badge>}
+                {earns && s.practice && <Badge variant="secondary">{isQuest ? "Practice mode" : "Practice mode: already earned"}</Badge>}
+                {s.status !== "active" && earns && <Badge>Solved</Badge>}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isBank ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
+              {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
+              {isQuest && s.practiceReason && <p className="text-sm text-muted-foreground">{s.practiceReason}</p>}
 
               {isBank && (
                 <div className="space-y-2">
@@ -253,12 +258,12 @@ export function Workspace() {
           {s.hasAnswerCheck && s.status === "active" && (
             <Card>
               <CardContent className="space-y-3 pt-0">
-                {!isBank && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
+                {!earns && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
                 <form onSubmit={submitAnswer} className="flex gap-2">
                   <Input
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
-                    onPaste={(e) => isBank && postEvent(sessionId, "paste", { length: e.clipboardData.getData("text").length, target: "answer" })}
+                    onPaste={(e) => earns && postEvent(sessionId, "paste", { length: e.clipboardData.getData("text").length, target: "answer" })}
                     placeholder="Your final answer, e.g. 7, -3/4, sqrt(2)"
                     maxLength={40}
                     disabled={s.locked || submitting}
@@ -268,11 +273,11 @@ export function Workspace() {
                     {submitting ? "Checking…" : "Submit"}
                   </Button>
                 </form>
-                {isBank && (
+                {earns && (
                   <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
                     <span>
                       {s.locked
-                        ? s.hintsUsed < 3
+                        ? isBank && s.hintsUsed < 3
                           ? "Locked: reveal the next hint for 2 more attempts."
                           : "Out of attempts. Keep talking it through with the tutor."
                         : `Attempts left: ${s.attemptsLeft}`}
@@ -284,7 +289,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {isBank && s.status === "solved" && (
+          {earns && s.status === "solved" && (
             <Card>
               <CardContent className="flex items-center justify-between gap-3 pt-0">
                 <span className="text-sm">Correct! Explain your reasoning to {s.practice ? "finish" : "claim your reward"}.</span>
@@ -293,7 +298,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {isBank && s.status === "done" && (
+          {earns && s.status === "done" && (
             <Card>
               <CardHeader>
                 <CardTitle>Result</CardTitle>
@@ -352,7 +357,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {!isBank &&
+          {!earns &&
             (s.matchedTemplate ? (
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-0">
@@ -365,10 +370,10 @@ export function Workspace() {
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-sm text-muted-foreground">Practice mode: no LEARN for this one.</p>
+              <p className="text-sm text-muted-foreground">{s.practiceReason ?? "Practice mode: no LEARN for this one."}</p>
             ))}
 
-          {isBank && s.status === "active" && (
+          {earns && s.status === "active" && (
             <p className="text-xs text-muted-foreground">We note tab switches and pastes to keep rewards fair. We never see other tabs or sites.</p>
           )}
         </div>
@@ -412,7 +417,13 @@ export function Workspace() {
               </Button>
             </form>
             <p className="mt-2 text-xs text-muted-foreground">
-              {isBank ? "Steps are checked by a math engine, not by AI." : "Practice mode: steps aren't machine-checked here."}
+              {isBank
+                ? "Steps are checked by a math engine, not by AI."
+                : isQuest
+                  ? s.checkedBy === "sandbox"
+                    ? "The answer comes from running this exact program in an isolated Solari sandbox, not from AI."
+                    : "Your final answer is checked by a math engine. Steps in chat aren't."
+                  : "Practice mode: steps aren't machine-checked here."}
             </p>
           </div>
         </Card>
@@ -426,8 +437,10 @@ export function Workspace() {
               {flagged
                 ? "This solve was flagged (very fast, pasted, or after leaving the tab). A solid explanation pays out normally; a weak one forfeits this reward."
                 : s.practice
-                  ? "Practice mode: you've already earned on this problem."
-                  : "In 1–2 sentences, explain why your method works. Showing understanding doubles your reward."}
+                  ? "Practice mode: no reward on this one, but explaining still counts toward mastering the topic."
+                  : isQuest
+                    ? "In 1–2 sentences, explain why your method works. New topics pay only when the explanation passes."
+                    : "In 1–2 sentences, explain why your method works. Showing understanding doubles your reward."}
             </DialogDescription>
           </DialogHeader>
           <Textarea value={explainText} onChange={(e) => setExplainText(e.target.value)} rows={4} maxLength={1500} placeholder="My method works because…" />

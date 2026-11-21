@@ -14,6 +14,8 @@ pub struct AppState {
     pub chat_rate: Arc<Mutex<HashMap<String, Instant>>>,
     pub tts_cache: Arc<Mutex<HashMap<String, bytes_cache::Bytes>>>,
     pub resource_cache: Arc<Mutex<HashMap<String, Vec<crate::resources::Link>>>>,
+    /// One Solari sandbox at a time (free plan concurrency is 1).
+    pub solari_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 pub mod bytes_cache {
@@ -38,6 +40,7 @@ impl AppState {
             chat_rate: Default::default(),
             tts_cache: Default::default(),
             resource_cache: Default::default(),
+            solari_lock: Default::default(),
         })
     }
 }

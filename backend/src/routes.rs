@@ -4,14 +4,17 @@ use crate::answers::{is_correct, is_locked, parse_answer};
 use crate::auth::{session_cookie, AuthUser, COOKIE};
 use crate::claims::verify_message;
 use crate::context::problem_context;
-use crate::custom::{intake_problem, intake_topic, CUSTOM_MAX};
+use crate::concepts::{bank_template_for, missing_prereqs, reward_key, CONCEPTS};
+use crate::context::CustomRef;
+use crate::custom::{classify_topic, generate_quest, intake_problem, CUSTOM_MAX};
 use crate::error::{ApiResult, AppError};
 use crate::llm::{complete_json, Kind};
 use crate::models::{new_id, Event, ProblemSession, Reward, User};
 use crate::problems::{get_template, TEMPLATES};
 use crate::prompts::{self, opening_message};
 use crate::resources::learn_more_links;
-use crate::rewards::{compute_reward, RewardInput, RewardStatus};
+use crate::rewards::{bank_base, compute_reward, RewardInput, RewardStatus, QUEST_BASE};
+use crate::rng::random_seed;
 use crate::sessions::*;
 use crate::solana::{explorer_address_url, explorer_tx_url, generate_user_wallet};
 use crate::state::AppState;
@@ -36,6 +39,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/auth/logout", post(logout))
         .route("/api/me", get(me))
         .route("/api/problems", get(problems))
+        .route("/api/concepts", get(concepts))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
@@ -138,6 +142,7 @@ async fn features(State(st): State<AppState>) -> J {
         "learnMore": st.cfg.resources_enabled(),
         "llmProvider": st.cfg.active_llm_provider(),
         "solana": st.solana.is_some(),
+        "codeRunner": st.cfg.code_runner_enabled(),
     }))
 }
 
@@ -170,7 +175,11 @@ async fn create_session(State(st): State<AppState>, AuthUser(user): AuthUser, Js
         if text.chars().count() > CUSTOM_MAX {
             return Err(AppError::bad(format!("Please keep it under {CUSTOM_MAX} characters.")));
         }
-        let custom_ref = if kind == "problem" { intake_problem(&st, &text).await } else { intake_topic(&st, &text).await };
+        let custom_ref = if kind == "problem" { TopicOutcome::Practice(intake_problem(&st, &text).await) } else { topic_session(&st, &user, &text).await? };
+        let custom_ref = match custom_ref {
+            TopicOutcome::Session(id) => return Ok(Json(json!({ "sessionId": id }))),
+            TopicOutcome::Practice(r) => r,
+        };
         let s = sqlx::query_as::<_, ProblemSession>(
             "INSERT INTO problem_sessions (id, user_id, source, custom_text, custom_ref, template_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
@@ -188,6 +197,93 @@ async fn create_session(State(st): State<AppState>, AuthUser(user): AuthUser, Js
     }
     let s = create_bank_session(&st, &user, b.template_id.as_deref().unwrap_or_default(), None).await?;
     Ok(Json(json!({ "sessionId": s.id })))
+}
+
+enum TopicOutcome {
+    /// A generated problem on a knowledge-graph node (new or reused).
+    Session(String),
+    /// Practice-only custom session with this reference.
+    Practice(CustomRef),
+}
+
+/// Topic → knowledge-graph node → generated, engine-checked problem when possible.
+async fn topic_session(st: &AppState, user: &User, text: &str) -> ApiResult<TopicOutcome> {
+    let class = classify_topic(st, text).await;
+    let practice = |reason: Option<String>| CustomRef {
+        academic: Some(class.academic),
+        concept_id: class.concept.map(|c| c.id.to_string()),
+        matched_template_id: class.concept.and_then(|c| bank_template_for(c.id)).map(String::from),
+        practice_reason: reason,
+        ..Default::default()
+    };
+    if !class.academic {
+        return Ok(TopicOutcome::Practice(practice(None)));
+    }
+    let Some(c) = class.concept else {
+        return Ok(TopicOutcome::Practice(practice(Some("This topic isn't on the knowledge map yet, so it's practice only.".into()))));
+    };
+    if bank_template_for(c.id).is_some() {
+        return Ok(TopicOutcome::Practice(practice(Some(format!(
+            "{} has a verified problem in the bank. Use \"Earn LEARN\" below to earn on it.",
+            c.title
+        )))));
+    }
+    if let Some(existing) = active_quest(&st.pool, &user.id, c.id).await? {
+        return Ok(TopicOutcome::Session(existing.id));
+    }
+    let reason = topic_block_reason(st, &user.id, c).await?;
+    let seed = random_seed();
+    let Some(quest) = generate_quest(st, c, seed).await else {
+        return Ok(TopicOutcome::Practice(practice(Some("Couldn't build a checked problem for this topic right now, so it's practice only.".into()))));
+    };
+    let r = CustomRef { quest: Some(quest), ..practice(reason) };
+    let s = sqlx::query_as::<_, ProblemSession>(
+        "INSERT INTO problem_sessions (id, user_id, source, template_id, seed, custom_text, custom_ref) VALUES ($1, $2, 'quest', $3, $4, $5, $6) RETURNING *",
+    )
+    .bind(new_id())
+    .bind(&user.id)
+    .bind(reward_key(c.id))
+    .bind(seed)
+    .bind(text)
+    .bind(serde_json::to_value(&r)?)
+    .fetch_one(&st.pool)
+    .await?;
+    let ctx = problem_context(&s)?;
+    insert_message(&st.pool, &s.id, "tutor", opening_message(&ctx), None).await?;
+    Ok(TopicOutcome::Session(s.id))
+}
+
+/// The knowledge map: every node with the student's status on it.
+async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
+    let mastered = mastered_concepts(&st.pool, &user.id).await?;
+    let rewarded = rewarded_concepts(&st.pool, &user.id).await?;
+    let list: Vec<Value> = CONCEPTS
+        .iter()
+        .map(|c| {
+            let status = if mastered.contains(c.id) {
+                "mastered"
+            } else if missing_prereqs(c.id, &mastered).is_empty() {
+                "available"
+            } else {
+                "locked"
+            };
+            json!({
+                "id": c.id,
+                "title": c.title,
+                "subject": c.subject,
+                "prereqs": c.prereqs,
+                "status": status,
+                "rewarded": rewarded.contains(c.id),
+                "bankTemplateId": bank_template_for(c.id),
+            })
+        })
+        .collect();
+    Ok(Json(json!({
+        "concepts": list,
+        "topicRewardsToday": topic_rewards_today(&st.pool, &user.id).await?,
+        "dailyTopicCap": st.cfg.daily_topic_cap,
+        "questBase": QUEST_BASE,
+    })))
 }
 
 async fn get_session(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
@@ -286,12 +382,12 @@ async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): 
     let Some(correct_answer) = ctx.answer else {
         return Err(AppError::bad("There's no answer check for this one."));
     };
-    let is_bank = ctx.is_bank();
+    let is_bank = ctx.earns(); // bank or generated topic problem: verified answer, tracked attempts
     if is_bank && s.status != "active" {
         return Err(AppError::bad("You've already solved this one."));
     }
     if is_bank && is_locked(s.wrong_attempts, s.hints_used) {
-        let msg = if s.hints_used < 3 {
+        let msg = if s.hints_used < 3 && ctx.is_bank() {
             "Answers are locked. Reveal the next hint to unlock 2 more attempts."
         } else {
             "You're out of attempts for this problem. Keep chatting with the tutor to understand it."
@@ -326,14 +422,15 @@ async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): 
             .iter()
             .map(|e| TelemetryEvent { kind: e.kind.clone(), target: e.data["target"].as_str().map(String::from), at: e.created_at })
             .collect();
-        let flags = compute_flags(s.started_at, now, ctx.template.unwrap().min_solve_seconds, &telemetry);
+        let flags = compute_flags(s.started_at, now, ctx.min_solve_seconds, &telemetry);
         sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'solve', $3)")
             .bind(new_id())
             .bind(&s.id)
             .bind(json!({ "flags": flags }))
             .execute(&st.pool)
             .await?;
-        let practice = reward_elsewhere(&st.pool, &user.id, s.template_id.as_deref().unwrap_or_default(), &s.id).await?;
+        let practice = ctx.custom_ref.practice_reason.is_some()
+            || reward_elsewhere(&st.pool, &user.id, s.template_id.as_deref().unwrap_or_default(), &s.id).await?;
         return Ok(Json(json!({ "correct": true, "wrongAttempts": s.wrong_attempts, "locked": false, "flagged": !flags.is_empty(), "practice": practice })).into_response());
     }
 
@@ -401,7 +498,7 @@ fn practice_reward(msg: &str) -> Value {
 
 async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>, Json(b): Json<ExplainBody>) -> ApiResult<J> {
     let s = load_session(&st.pool, &id, &user.id).await?;
-    if s.source != "bank" {
+    if s.source != "bank" && s.source != "quest" {
         return Err(AppError::bad("Practice sessions don't pay out. Try a verified problem on this concept to earn LEARN."));
     }
     if s.status == "active" {
@@ -465,6 +562,23 @@ async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
     if reward_elsewhere(&st.pool, &user.id, &template_id, &s.id).await? {
         return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("Practice mode: no reward (you've already earned on this problem)") })));
     }
+    if ctx.is_quest() {
+        // Re-check at payout time: the daily topic cap may have filled since the problem was created.
+        let reason = match &ctx.custom_ref.practice_reason {
+            Some(r) => Some(r.clone()),
+            None if topic_rewards_today(&st.pool, &user.id).await? >= st.cfg.daily_topic_cap => {
+                Some(format!("You've reached today's limit of {} new-topic rewards.", st.cfg.daily_topic_cap))
+            }
+            None => None,
+        };
+        if let Some(r) = reason {
+            return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward(&format!("Practice mode: {r}")) })));
+        }
+        // New topics only pay for demonstrated understanding. No reward row, so they can try another problem.
+        if !pass {
+            return Ok(Json(json!({ "pass": pass, "feedback": feedback, "reward": practice_reward("New topics pay only when your explanation passes. Ask for this topic again to try a fresh problem.") })));
+        }
+    }
 
     let solve: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'solve' ORDER BY created_at DESC LIMIT 1")
         .bind(&s.id)
@@ -475,7 +589,7 @@ async fn explain(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
         .and_then(|f| serde_json::from_value(f).ok())
         .unwrap_or_default();
     let r = compute_reward(&RewardInput {
-        difficulty: ctx.difficulty,
+        base: if ctx.is_quest() { QUEST_BASE } else { bank_base(ctx.difficulty) },
         hints_used: s.hints_used,
         wrong_attempts: s.wrong_attempts,
         explain_passed: pass,
@@ -525,7 +639,7 @@ async fn events(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): 
     if !["hidden", "visible", "paste"].contains(&kind.as_str()) {
         return Err(AppError::bad("Unknown event."));
     }
-    if s.source != "bank" || s.status != "active" {
+    if (s.source != "bank" && s.source != "quest") || s.status != "active" {
         return Ok(Json(json!({ "ok": true })));
     }
     let d = b.data.unwrap_or(Value::Null);

@@ -2,10 +2,16 @@
 use serde::Serialize;
 
 pub const BASE: f64 = 100.0;
+/// Generated problems on knowledge-graph concepts: AI-authored, so they pay half of a d1 bank problem.
+pub const QUEST_BASE: f64 = 50.0;
+
+pub fn bank_base(difficulty: i32) -> f64 {
+    BASE * difficulty as f64
+}
 const HINT_MULT: [f64; 4] = [1.0, 0.75, 0.5, 0.3];
 
 pub struct RewardInput {
-    pub difficulty: i32,
+    pub base: f64,
     pub hints_used: i32,
     pub wrong_attempts: i32,
     pub explain_passed: bool,
@@ -49,14 +55,13 @@ fn fmt(n: f64) -> String {
 }
 
 /// Reward before the daily cap (for the "Potential reward" display).
-pub fn potential_reward(difficulty: i32, hints_used: i32, wrong: i32) -> i64 {
-    let base = BASE * difficulty as f64;
+pub fn potential_reward(base: f64, hints_used: i32, wrong: i32) -> i64 {
     let raw = base * hint_mult(hints_used) * attempt_mult(wrong);
     raw.max(0.2 * base).round() as i64
 }
 
 pub fn compute_reward(i: &RewardInput) -> RewardResult {
-    let base = BASE * i.difficulty as f64;
+    let base = i.base;
     let hm = hint_mult(i.hints_used);
     let am = attempt_mult(i.wrong_attempts);
     let um = if i.explain_passed { 1.0 } else { 0.5 };
@@ -104,7 +109,7 @@ pub fn compute_reward(i: &RewardInput) -> RewardResult {
 mod tests {
     use super::*;
     fn base() -> RewardInput {
-        RewardInput { difficulty: 1, hints_used: 0, wrong_attempts: 0, explain_passed: true, flagged: false, earned_today: 0.0, daily_cap: 1000.0 }
+        RewardInput { base: bank_base(1), hints_used: 0, wrong_attempts: 0, explain_passed: true, flagged: false, earned_today: 0.0, daily_cap: 1000.0 }
     }
 
     #[test]
@@ -119,7 +124,7 @@ mod tests {
     }
     #[test]
     fn d2_one_hint_is_150() {
-        assert_eq!(compute_reward(&RewardInput { difficulty: 2, hints_used: 1, ..base() }).amount, 150);
+        assert_eq!(compute_reward(&RewardInput { base: bank_base(2), hints_used: 1, ..base() }).amount, 150);
     }
     #[test]
     fn attempt_mult_bottoms_out() {
@@ -128,7 +133,7 @@ mod tests {
     }
     #[test]
     fn cap_clamps() {
-        let r = compute_reward(&RewardInput { difficulty: 2, earned_today: 950.0, ..base() });
+        let r = compute_reward(&RewardInput { base: bank_base(2), earned_today: 950.0, ..base() });
         assert_eq!(r.amount, 50);
         assert!(r.capped);
     }
@@ -149,8 +154,14 @@ mod tests {
         assert_eq!(r.amount, 100);
     }
     #[test]
+    fn quest_base_pays_half() {
+        assert_eq!(compute_reward(&RewardInput { base: QUEST_BASE, ..base() }).amount, 50);
+        assert_eq!(compute_reward(&RewardInput { base: QUEST_BASE, hints_used: 3, wrong_attempts: 9, explain_passed: false, ..base() }).amount, 10);
+        assert_eq!(potential_reward(QUEST_BASE, 0, 1), 45);
+    }
+    #[test]
     fn summary_text() {
-        let r = compute_reward(&RewardInput { difficulty: 2, hints_used: 1, wrong_attempts: 1, ..base() });
+        let r = compute_reward(&RewardInput { base: bank_base(2), hints_used: 1, wrong_attempts: 1, ..base() });
         assert_eq!(r.amount, 135);
         assert_eq!(r.summary, "Base 200 × Hints 0.75 × Attempts 0.9 = 135 LEARN");
     }

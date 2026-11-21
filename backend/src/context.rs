@@ -1,6 +1,8 @@
 //! SERVER ONLY view of a session's problem (includes the answer).
 use crate::models::ProblemSession;
+use crate::concepts::get_concept;
 use crate::problems::{get_template, Checkpoint, GeneratedProblem, Template};
+use crate::quest::{Quest, QUEST_MIN_SOLVE_SECONDS};
 use serde::{Deserialize, Serialize};
 
 /// AI reference solution for custom sessions. NEVER sent to the client.
@@ -14,10 +16,19 @@ pub struct CustomRef {
     #[serde(default)]
     pub steps: Vec<String>,
     pub matched_template_id: Option<String>,
+    /// Knowledge-graph node this topic mapped to.
+    #[serde(default)]
+    pub concept_id: Option<String>,
+    /// Why this session can't earn (shown to the student; written by the server).
+    #[serde(default)]
+    pub practice_reason: Option<String>,
+    /// Generated problem for source = "quest". The answer is SERVER ONLY.
+    #[serde(default)]
+    pub quest: Option<Quest>,
 }
 
 pub struct ProblemContext {
-    pub source: String, // bank | custom_problem | custom_topic
+    pub source: String, // bank | quest | custom_problem | custom_topic
     pub title: String,
     pub display_prompt: String, // safe for the client
     pub steps: Vec<String>,
@@ -26,6 +37,7 @@ pub struct ProblemContext {
     pub tolerance: f64,
     pub checkpoints: Vec<Checkpoint>, // SERVER ONLY
     pub difficulty: i32,
+    pub min_solve_seconds: i64,
     pub template: Option<&'static Template>,
     pub problem: Option<GeneratedProblem>,
     pub custom_ref: CustomRef,
@@ -36,6 +48,13 @@ pub struct ProblemContext {
 impl ProblemContext {
     pub fn is_bank(&self) -> bool {
         self.source == "bank"
+    }
+    pub fn is_quest(&self) -> bool {
+        self.source == "quest"
+    }
+    /// Server-verified answer, telemetry, explain-back and a possible payout.
+    pub fn earns(&self) -> bool {
+        self.is_bank() || self.is_quest()
     }
 }
 
@@ -54,6 +73,7 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             tolerance: p.tolerance,
             checkpoints: p.checkpoints.clone(),
             difficulty: t.difficulty,
+            min_solve_seconds: t.min_solve_seconds,
             template: Some(t),
             problem: Some(p),
             custom_ref: CustomRef::default(),
@@ -63,6 +83,27 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
     }
     let r: CustomRef = s.custom_ref.clone().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     let text = s.custom_text.clone().unwrap_or_default();
+    if s.source == "quest" {
+        let q = r.quest.clone().ok_or_else(|| anyhow::anyhow!("quest session {} has no quest", s.id))?;
+        let title = get_concept(&q.concept_id).map(|c| c.title).unwrap_or("New topic");
+        return Ok(ProblemContext {
+            source: "quest".into(),
+            title: format!("New topic: {title}"),
+            display_prompt: q.prompt.clone(),
+            steps: q.steps.clone(),
+            hints: vec![],
+            answer: Some(q.answer),
+            tolerance: q.tolerance,
+            checkpoints: vec![],
+            difficulty: 1,
+            min_solve_seconds: QUEST_MIN_SOLVE_SECONDS,
+            template: None,
+            problem: None,
+            academic: true,
+            custom_ref: r,
+            custom_text: text,
+        });
+    }
     let is_topic = s.source == "custom_topic";
     let numeric = r.numeric_answer.filter(|n| n.is_finite());
     Ok(ProblemContext {
@@ -75,6 +116,7 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
         tolerance: numeric.map(|n| (n.abs() * 1e-3).max(1e-6)).unwrap_or(0.0),
         checkpoints: vec![],
         difficulty: 0,
+        min_solve_seconds: 0,
         template: None,
         problem: None,
         academic: r.academic != Some(false),

@@ -66,6 +66,19 @@ docker compose up -d --build      # db (postgres:17) + app on http://localhost:3
 ```
 If a local Postgres already uses 5432, set `DB_PORT=5433` in `.env`. Run `seed` from the host against the Compose DB (`DATABASE_URL=postgresql://socra:socra@localhost:$DB_PORT/socra`), or inside the container: `docker compose exec app /app/seed --no-mint`.
 
+## Earning on new topics (knowledge map)
+
+Topics earn LEARN through a closed concept graph (`backend/src/concepts.rs`, ~40 nodes with prerequisite edges; page: `/map`). Anti-farming rules:
+
+- **Same topic, different words → same node.** A topic is mapped to one node by alias match, then by an LLM limited to the node list. Topics off the map are practice only.
+- **One payout per node per user** (`rewards.template_id = "concept:<id>"`, enforced by the existing unique constraint).
+- **Prerequisites first:** a node pays only after you've solved and explained every node it builds on.
+- **The student never writes the problem.** The LLM writes a template from the node title alone; the server picks the numbers, `mathexpr` computes the answer, and an independent LLM solve must agree (`backend/src/quest.rs`). Otherwise the session is practice only.
+- **No rerolling:** asking again for a node with an unfinished problem reopens that problem.
+- **Explain-back required** (no half reward), the usual anti-cheat flags (60 s minimum), base 50 instead of 100, and `DAILY_TOPIC_CAP` (default 3) new-topic rewards per day.
+- Nodes that already have a bank template earn only through the verified bank problem.
+- **Code-tracing topics run the code (Solari).** With `SOLARI_API_KEY` set, computer-science nodes get a Python program instead of a math template. The server fills in the numbers and runs that exact program in a network-less [Solari](https://www.getsolari.com/) sandbox (`backend/src/solari.rs`). What it prints is the answer. Without a key, these nodes fall back to the math path.
+
 ## Guarantees
 
 - The final answer never reaches the client: answers and checkpoints live only in `backend/src/problems.rs`; the session view omits them; every tutor reply passes the deterministic + LLM leak guard.

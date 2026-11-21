@@ -26,9 +26,14 @@ export function Header() {
   return (
     <header className="border-b bg-background">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
-        <Link to="/learn" className="text-lg font-semibold tracking-tight">
-          Socra
-        </Link>
+        <nav className="flex items-center gap-4">
+          <Link to="/learn" className="text-lg font-semibold tracking-tight">
+            Socra
+          </Link>
+          <Link to="/map" className="text-sm text-muted-foreground hover:text-foreground">
+            Knowledge map
+          </Link>
+        </nav>
         {me && (
           <div className="flex items-center gap-2 text-sm">
             <span className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 font-medium" title={`Earned today: ${me.earnedToday} / ${me.dailyCap}`}>
