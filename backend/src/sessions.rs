@@ -1,18 +1,20 @@
 //! Session services and the client-safe session view.
 use crate::answers::{attempts_allowed, is_locked};
+use crate::concepts::{Concept, concept_of_key, missing_prereqs, reward_key};
 use crate::config::Config;
 use crate::context::problem_context;
 use crate::error::{ApiResult, AppError};
 use crate::models::{Message, ProblemSession, Reward, User, new_id};
 use crate::problems::get_template;
 use crate::prompts::opening_message;
-use crate::rewards::potential_reward;
+use crate::rewards::{QUEST_BASE, bank_base, potential_reward};
 use crate::rng::{hash_seed, random_seed};
 use crate::solana::explorer_tx_url;
 use crate::state::AppState;
 use crate::verify::{Verdict, verdict_chips};
 use serde_json::{Value, json};
 use sqlx::PgPool;
+use std::collections::HashSet;
 
 pub const DEMO_ACCOUNTS: [&str; 4] = ["demo", "copycat", "demo-b", "copycat-b"];
 
@@ -49,6 +51,96 @@ pub async fn reward_elsewhere(
         .fetch_optional(pool)
         .await?;
     Ok(found.is_some())
+}
+
+/// Concepts the student has demonstrated: solved AND passed explain-back (paid or practice).
+pub async fn mastered_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<HashSet<String>> {
+    let keys: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT template_id FROM problem_sessions
+         WHERE user_id = $1 AND source IN ('bank','quest') AND status = 'done' AND explain_passed AND template_id IS NOT NULL",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(keys
+        .iter()
+        .filter_map(|k| concept_of_key(k))
+        .map(String::from)
+        .collect())
+}
+
+/// Concepts with any reward record (paid, minting, failed or forfeited).
+pub async fn rewarded_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<HashSet<String>> {
+    let keys: Vec<String> =
+        sqlx::query_scalar("SELECT template_id FROM rewards WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
+    Ok(keys
+        .iter()
+        .filter_map(|k| concept_of_key(k))
+        .map(String::from)
+        .collect())
+}
+
+/// New-topic rewards recorded today.
+pub async fn topic_rewards_today(pool: &PgPool, user_id: &str) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM rewards WHERE user_id = $1 AND template_id LIKE 'concept:%' AND created_at >= date_trunc('day', now())",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+/// Why a generated problem on `c` can't earn right now, or None if it can.
+pub async fn topic_block_reason(
+    state: &AppState,
+    user_id: &str,
+    c: &Concept,
+) -> anyhow::Result<Option<String>> {
+    if reward_elsewhere(&state.pool, user_id, &reward_key(c.id), "").await? {
+        return Ok(Some(format!(
+            "You've already earned on {}. This one is practice.",
+            c.title
+        )));
+    }
+    let missing = missing_prereqs(c.id, &mastered_concepts(&state.pool, user_id).await?);
+    if !missing.is_empty() {
+        let names = missing
+            .iter()
+            .map(|m| m.title)
+            .collect::<Vec<_>>()
+            .join(" and ");
+        return Ok(Some(format!(
+            "Master {names} first to unlock TARTS for {}. This one is practice.",
+            c.title
+        )));
+    }
+    if topic_rewards_today(&state.pool, user_id).await? >= state.cfg.daily_topic_cap {
+        return Ok(Some(format!(
+            "You've reached today's limit of {} new-topic rewards. This one is practice.",
+            state.cfg.daily_topic_cap
+        )));
+    }
+    Ok(None)
+}
+
+/// An unfinished generated problem on this concept. Reused instead of generating a new one,
+/// so a student can't reroll until they get an easy problem.
+pub async fn active_quest(
+    pool: &PgPool,
+    user_id: &str,
+    concept_id: &str,
+) -> anyhow::Result<Option<ProblemSession>> {
+    Ok(sqlx::query_as::<_, ProblemSession>(
+        "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'quest' AND template_id = $2 AND status IN ('active','solved')
+         ORDER BY started_at DESC LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(reward_key(concept_id))
+    .fetch_optional(pool)
+    .await?)
 }
 
 pub async fn insert_message(
@@ -131,16 +223,24 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         .fetch_optional(&state.pool)
         .await?;
     let is_bank = ctx.is_bank();
-    let practice = if is_bank {
-        reward_elsewhere(
-            &state.pool,
-            &s.user_id,
-            s.template_id.as_deref().unwrap_or_default(),
-            &s.id,
-        )
-        .await?
+    let earns = ctx.earns();
+    let practice_reason = ctx.custom_ref.practice_reason.clone();
+    let practice = if earns {
+        practice_reason.is_some()
+            || reward_elsewhere(
+                &state.pool,
+                &s.user_id,
+                s.template_id.as_deref().unwrap_or_default(),
+                &s.id,
+            )
+            .await?
     } else {
         true
+    };
+    let base = if ctx.is_quest() {
+        QUEST_BASE
+    } else {
+        bank_base(ctx.difficulty)
     };
     let matched = ctx
         .custom_ref
@@ -166,6 +266,8 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "id": s.id,
         "source": s.source,
         "templateId": if is_bank { s.template_id.clone() } else { None },
+        "conceptId": ctx.custom_ref.concept_id,
+        "checkedBy": ctx.custom_ref.quest.as_ref().map(|q| if q.ran_in_sandbox { "sandbox" } else { "engine" }),
         "title": ctx.title,
         "prompt": ctx.display_prompt,
         "difficulty": ctx.difficulty,
@@ -176,12 +278,13 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "hintsUsed": s.hints_used,
         "revealedHints": ctx.hints.iter().take(s.hints_used.max(0) as usize).collect::<Vec<_>>(),
         "wrongAttempts": s.wrong_attempts,
-        "attemptsLeft": if is_bank { Some((attempts_allowed(s.hints_used) - s.wrong_attempts).max(0)) } else { None },
-        "locked": is_bank && is_locked(s.wrong_attempts, s.hints_used),
+        "attemptsLeft": if earns { Some((attempts_allowed(s.hints_used) - s.wrong_attempts).max(0)) } else { None },
+        "locked": earns && is_locked(s.wrong_attempts, s.hints_used),
         "status": s.status,
         "practice": practice,
-        "potentialReward": if is_bank && !practice { potential_reward(ctx.difficulty, s.hints_used, s.wrong_attempts) } else { 0 },
-        "hasAnswerCheck": is_bank || ctx.answer.is_some(),
+        "practiceReason": practice_reason,
+        "potentialReward": if earns && !practice { potential_reward(base, s.hints_used, s.wrong_attempts) } else { 0 },
+        "hasAnswerCheck": earns || ctx.answer.is_some(),
         "explainPassed": s.explain_passed,
         "explainFeedback": s.explain_feedback,
         // Tries left at the trial (only meaningful once solved and before the final testimony).

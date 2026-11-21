@@ -1,6 +1,9 @@
 //! Anti-cheat flags (SPEC §11). Pure: evaluated when the correct answer is submitted.
 use chrono::{DateTime, Utc};
 
+/// The student stated the answer in chat, then couldn't sketch a sound approach for it.
+pub const SKETCH_FAILED: &str = "sketch_failed";
+
 pub struct TelemetryEvent {
     pub kind: String, // hidden | visible | paste
     pub target: Option<String>,

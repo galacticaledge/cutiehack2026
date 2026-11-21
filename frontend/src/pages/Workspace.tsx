@@ -757,7 +757,8 @@ export function Workspace() {
                   >
                     {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
                     {m.role === "user" ? (
-                      <Markdown>{m.content.replace(/\n/g, "  \n")}</Markdown>
+                      // Shown exactly as typed: "4*2, 4*3" must not turn into Markdown italics; line breaks kept.
+                      <p className="whitespace-pre-wrap break-words">{m.content}</p>
                     ) : (
                       <TypedMarkdown text={m.content} animate={isFresh(m.id)} onProgress={followChat} />
                     )}
@@ -849,10 +850,10 @@ export function Workspace() {
             <DialogTitle className="font-display text-2xl font-normal">{flagged ? "Who stole the tarts? ♥" : "The trial: why does it work?"}</DialogTitle>
             <DialogDescription>
               {flagged
-                ? "This solve looked suspicious (very fast, pasted, or after wandering off). Convince the court and you keep your tarts. You get 3 tries; if none convinces, it's off with their heads (this reward is forfeited)."
+                ? "This solve looked suspicious (very fast, pasted, after wandering off, or your approach in chat didn't hold up). Convince the court and you keep your tarts. You get 3 tries; if none convinces, it's off with their heads (this reward is forfeited)."
                 : s.practice
                   ? isQuest
-                    ? "Practice dream: no tarts on this one, but explaining still counts toward mastering the topic."
+                    ? "Practice dream: no tarts on this one, but your testimony still counts toward mastering the topic."
                     : "Unbirthday practice: you've already earned on this one."
                   : isQuest
                     ? "You found the answer. Now, in 1–2 sentences, testify why your method works. New topics pay only when the court is convinced."

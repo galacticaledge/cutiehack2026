@@ -22,11 +22,12 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new(cfg).await?;
     sqlx::migrate!("./migrations").run(&state.pool).await?;
     tracing::info!(
-        "llm provider: {} · solana minting: {} · tts: {} · learn-more: {}",
+        "llm provider: {} · solana minting: {} · tts: {} · learn-more: {} · solari code runner: {}",
         state.cfg.active_llm_provider(),
         state.solana.is_some(),
         state.cfg.tts_enabled(),
-        state.cfg.resources_enabled()
+        state.cfg.resources_enabled(),
+        state.cfg.code_runner_enabled()
     );
 
     // Unknown /api paths get a JSON 404, never the SPA's index.html (which would look like a 200).

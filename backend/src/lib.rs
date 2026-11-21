@@ -3,10 +3,12 @@
 // Pure, unit-tested core
 pub mod answers;
 pub mod anticheat;
+pub mod concepts;
 pub mod leak;
 pub mod mathexpr;
 pub mod problems;
 pub mod proficiency;
+pub mod quest;
 pub mod rewards;
 pub mod rng;
 pub mod verify;
@@ -25,6 +27,7 @@ pub mod resources;
 pub mod routes;
 pub mod sessions;
 pub mod solana;
+pub mod solari;
 pub mod state;
 pub mod tts;
 pub mod tutor;

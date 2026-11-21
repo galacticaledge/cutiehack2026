@@ -10,6 +10,7 @@ pub struct Config {
     pub database_url: String,
     pub session_secret: String,
     pub daily_cap: f64,
+    pub daily_topic_cap: i64,
     pub demo_fixed_seeds: bool,
     pub solana_rpc_url: String,
     pub mint_authority_secret: Option<String>,
@@ -19,6 +20,9 @@ pub struct Config {
     pub elevenlabs_voice_id: Option<String>,
     pub elevenlabs_model_id: String,
     pub keenable_api_key: Option<String>,
+    pub solari_api_key: Option<String>,
+    pub solari_base_url: String,
+    pub solari_template: String,
     pub keenable_base_url: String,
     pub static_dir: String,
     pub port: u16,
@@ -52,6 +56,7 @@ impl Config {
                 .ok_or_else(|| anyhow::anyhow!("DATABASE_URL must be set"))?,
             session_secret,
             daily_cap: or("DAILY_TOKEN_CAP", "1000").parse().unwrap_or(1000.0),
+            daily_topic_cap: or("DAILY_TOPIC_CAP", "3").parse().unwrap_or(3),
             demo_fixed_seeds: or("DEMO_FIXED_SEEDS", "false") == "true",
             solana_rpc_url: or("SOLANA_RPC_URL", "https://api.devnet.solana.com"),
             mint_authority_secret: var("MINT_AUTHORITY_SECRET"),
@@ -61,6 +66,9 @@ impl Config {
             elevenlabs_voice_id: var("ELEVENLABS_VOICE_ID"),
             elevenlabs_model_id: or("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5"),
             keenable_api_key: var("KEENABLE_API_KEY"),
+            solari_api_key: var("SOLARI_API_KEY"),
+            solari_base_url: or("SOLARI_BASE_URL", "https://api.getsolari.com"),
+            solari_template: or("SOLARI_TEMPLATE", "base"),
             keenable_base_url: or("KEENABLE_BASE_URL", "https://api.keenable.ai"),
             static_dir: or("STATIC_DIR", "../frontend/dist"),
             port: or("PORT", "3000").parse().unwrap_or(3000),
@@ -70,6 +78,10 @@ impl Config {
 
     pub fn tts_enabled(&self) -> bool {
         self.elevenlabs_api_key.is_some() && self.elevenlabs_voice_id.is_some()
+    }
+    /// Solari sandboxes run generated code-tracing problems to get their answers.
+    pub fn code_runner_enabled(&self) -> bool {
+        self.solari_api_key.is_some()
     }
     pub fn resources_enabled(&self) -> bool {
         self.keenable_api_key.is_some()
