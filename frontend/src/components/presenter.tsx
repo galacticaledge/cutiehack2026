@@ -25,7 +25,7 @@ const MOMENTS: { title: string; say: string }[] = [
   },
   {
     title: "4 · The catch",
-    say: "A copycat pastes an answer instantly: flagged. Weak testimony: off with the tarts. Everyone gets different numbers, and you have to explain it. Copying doesn't pay.",
+    say: "A copycat pastes an answer instantly: flagged. The court gives three tries to explain it; if none convinces, off with the tarts. Everyone gets different numbers, and you have to explain it. Copying doesn't pay.",
   },
 ];
 

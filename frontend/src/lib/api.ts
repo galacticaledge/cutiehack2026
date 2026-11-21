@@ -114,6 +114,7 @@ export interface SessionView {
   practice: boolean;
   potentialReward: number;
   hasAnswerCheck: boolean;
+  testimonyTriesLeft?: number;
   explainPassed: boolean | null;
   explainFeedback: string | null;
   explanation: string | null;

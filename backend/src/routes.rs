@@ -548,6 +548,19 @@ async fn answer(
     .into_response())
 }
 
+/// How many testimonies a student gets before a weak one becomes final.
+pub const TESTIMONY_TRIES: i64 = 3;
+
+/// Weak testimonies already given for this session.
+pub async fn testimony_tries(pool: &sqlx::PgPool, session_id: &str) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE session_id = $1 AND type = 'testimony_try'",
+    )
+    .bind(session_id)
+    .fetch_one(pool)
+    .await?)
+}
+
 #[derive(Deserialize)]
 struct ExplainBody {
     text: Option<String>,
@@ -672,6 +685,28 @@ async fn explain(
         // A flagged solve must really be graded; otherwise an LLM outage would wave it through.
         Err(e) if !flags.is_empty() => return Err(e.into()),
         Err(e) => tracing::warn!("[grader] unavailable, accepting unflagged explanation: {e}"),
+    }
+
+    // A weak testimony isn't final: the student gets up to TESTIMONY_TRIES tries. Earlier
+    // tries are kept as events (research data); only the last one settles the reward.
+    if !pass {
+        let tries = testimony_tries(&st.pool, &s.id).await?;
+        if tries + 1 < TESTIMONY_TRIES {
+            sqlx::query(
+                "INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'testimony_try', $3)",
+            )
+            .bind(new_id())
+            .bind(&s.id)
+            .bind(json!({ "text": text, "feedback": feedback }))
+            .execute(&st.pool)
+            .await?;
+            return Ok(Json(json!({
+                "pass": false,
+                "feedback": feedback,
+                "retry": true,
+                "triesLeft": TESTIMONY_TRIES - (tries + 1),
+            })));
+        }
     }
 
     let marked = sqlx::query(

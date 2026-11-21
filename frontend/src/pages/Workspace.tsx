@@ -87,6 +87,8 @@ export function Workspace() {
   const [flagged, setFlagged] = useState(false);
   const [explainText, setExplainText] = useState("");
   const [explaining, setExplaining] = useState(false);
+  // A weak testimony gets the jury's note and another try (the server counts tries).
+  const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -173,6 +175,7 @@ export function Workspace() {
 
   useEffect(() => {
     setS(null);
+    setJury(null);
     setLoadError(null);
     setLinks([]);
     setReaction(null);
@@ -412,7 +415,18 @@ export function Workspace() {
     setExplaining(true);
     if (!retry) play("gavel");
     try {
-      const r = await api<{ pass: boolean; feedback: string; reward: RewardView }>(`/api/sessions/${sessionId}/explain`, { text: retry ? "" : explainText });
+      const r = await api<{ pass: boolean; feedback: string; reward?: RewardView; retry?: boolean; triesLeft?: number }>(`/api/sessions/${sessionId}/explain`, {
+        text: retry ? "" : explainText,
+      });
+      if (r.retry) {
+        // Not convinced yet: keep the trial open with the jury's note and the student's words.
+        setJury({ feedback: r.feedback, triesLeft: r.triesLeft ?? 0 });
+        setReaction("puzzled");
+        play("boing");
+        await load();
+        return;
+      }
+      setJury(null);
       setExplainOpen(false);
       if (!retry) {
         if (r.pass) {
@@ -421,7 +435,7 @@ export function Workspace() {
         }
         else toast("The jury is unconvinced", { description: r.feedback });
       }
-      showRewardToast(r.reward);
+      if (r.reward) showRewardToast(r.reward);
       refreshBalance();
       await load();
     } catch (e) {
@@ -806,7 +820,7 @@ export function Workspace() {
             <DialogTitle className="font-display text-2xl font-normal">{flagged ? "Who stole the tarts? ♥" : "The trial: why does it work?"}</DialogTitle>
             <DialogDescription>
               {flagged
-                ? "This solve looked suspicious (very fast, pasted, or after wandering off). Convincing testimony keeps your tarts; weak testimony and it's off with their heads (this reward is forfeited)."
+                ? "This solve looked suspicious (very fast, pasted, or after wandering off). Convince the court and you keep your tarts. You get 3 tries; if none convinces, it's off with their heads (this reward is forfeited)."
                 : s.practice
                   ? isQuest
                     ? "Practice dream: no tarts on this one, but explaining still counts toward mastering the topic."
@@ -816,10 +830,29 @@ export function Workspace() {
                     : "You found the answer. Now, in 1–2 sentences, testify why your method works. Real understanding doubles your tarts."}
             </DialogDescription>
           </DialogHeader>
-          <Textarea value={explainText} onChange={(e) => setExplainText(e.target.value)} rows={4} maxLength={1500} placeholder="Your Majesty, my method works because…" />
-          <DialogFooter>
+          {jury && (
+            <div className="jury-note flip-in" role="status">
+              <p className="font-display text-lg leading-tight">The jury isn't convinced yet</p>
+              <p className="mt-1 text-sm">{jury.feedback}</p>
+              <p className="mt-1.5 text-xs font-semibold text-[var(--tan)]">
+                {jury.triesLeft === 1 ? "1 try left. Make it count!" : `${jury.triesLeft} tries left.`} Add to your testimony below and present it again.
+              </p>
+            </div>
+          )}
+          <Textarea
+            value={explainText}
+            onChange={(e) => setExplainText(e.target.value)}
+            rows={4}
+            maxLength={1500}
+            placeholder="Your Majesty, my method works because…"
+            aria-label="Your testimony"
+          />
+          <DialogFooter className="items-center sm:justify-between">
+            <span className="text-xs text-muted-foreground">
+              {(jury?.triesLeft ?? s.testimonyTriesLeft ?? 3) < 3 ? `${jury?.triesLeft ?? s.testimonyTriesLeft} of 3 tries left` : "You get 3 tries to convince the court"}
+            </span>
             <Button onClick={() => submitExplain(false)} disabled={explaining || explainText.trim().length < 10}>
-              {explaining ? "The jury is deliberating…" : "Present testimony"}
+              {explaining ? "The jury is deliberating…" : jury ? "Present it again" : "Present testimony"}
             </Button>
           </DialogFooter>
         </DialogContent>

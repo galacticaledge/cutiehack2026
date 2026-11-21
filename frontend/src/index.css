@@ -593,3 +593,6 @@ main { position: relative; z-index: 1; }
 /* ---------- The Cat typing ---------- */
 .type-caret { display: inline-block; width: 0.45rem; height: 0.95rem; margin-left: 1px; vertical-align: -2px; border-radius: 2px; background: var(--cheshire); animation: caret-blink 0.8s steps(2) infinite; }
 @keyframes caret-blink { 50% { opacity: 0; } }
+
+/* ---------- Jury's note on a weak testimony ---------- */
+.jury-note { border-radius: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid color-mix(in oklab, var(--heart) 35%, transparent); background: color-mix(in oklab, var(--heart) 8%, var(--card)); }

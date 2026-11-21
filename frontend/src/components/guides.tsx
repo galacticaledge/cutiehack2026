@@ -85,7 +85,7 @@ const RECIPE: { icon: typeof Tart | typeof FlaskConical; label: string; value: s
   { icon: Sparkles, label: "Base", value: "100 × ♥", note: "per heart of difficulty" },
   { icon: FlaskConical, label: "Drink Me", value: "×1 · .75 · .5 · .3", note: "for 0–3 hints" },
   { icon: X, label: "Wrong turns", value: "−10% each", note: "never below ×0.6" },
-  { icon: Gavel, label: "Testimony", value: "×1 or ×0.5", note: "convincing, or not" },
+  { icon: Gavel, label: "Testimony", value: "×1 or ×0.5", note: "convincing within 3 tries, or not" },
 ];
 
 export function TartRecipePanel() {
@@ -133,7 +133,7 @@ export function TartRecipePanel() {
           </li>
           <li className="flex gap-2">
             <Crown className="mt-0.5 size-4 shrink-0 text-[var(--heart)]" />
-            <span>Suspiciously fast or pasted solves go to trial. Weak testimony: off with the tarts.</span>
+            <span>Suspiciously fast or pasted solves go to trial. Three tries to convince the court, or it's off with the tarts.</span>
           </li>
         </ul>
       </Panel>

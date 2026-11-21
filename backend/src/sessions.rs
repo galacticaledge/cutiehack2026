@@ -184,6 +184,12 @@ pub async fn session_view(state: &AppState, s: &ProblemSession) -> ApiResult<Val
         "hasAnswerCheck": is_bank || ctx.answer.is_some(),
         "explainPassed": s.explain_passed,
         "explainFeedback": s.explain_feedback,
+        // Tries left at the trial (only meaningful once solved and before the final testimony).
+        "testimonyTriesLeft": if s.status == "solved" {
+            crate::routes::TESTIMONY_TRIES - crate::routes::testimony_tries(&state.pool, &s.id).await?
+        } else {
+            crate::routes::TESTIMONY_TRIES
+        },
         "explanation": s.explanation, // the student's own testimony (for the share card)
         "reward": reward.as_ref().map(|r| reward_json(&state.cfg, r)),
         "matchedTemplate": if !is_bank { matched.map(|t| json!({ "id": t.id, "title": t.title })) } else { None },
