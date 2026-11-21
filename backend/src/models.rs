@@ -1,4 +1,3 @@
-//! Database rows (see migrations/0001_init.sql).
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::FromRow;
@@ -9,6 +8,7 @@ pub struct User {
     pub username: String,
     pub wallet_pubkey: String,
     pub wallet_secret: String, // NEVER sent to client
+    pub password_hash: String, // Argon2id PHC string. NEVER sent to client.
     pub created_at: DateTime<Utc>,
 }
 

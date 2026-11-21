@@ -1,7 +1,9 @@
-//! Username login with an HMAC-signed session cookie.
+//! Username + password login with an HMAC-signed session cookie.
 use crate::error::AppError;
 use crate::models::User;
 use crate::state::AppState;
+use argon2::password_hash::{PasswordHash, PasswordHasher, SaltString};
+use argon2::{Argon2, PasswordVerifier};
 use axum::extract::FromRequestParts;
 use axum::http::StatusCode;
 use axum::http::request::Parts;
@@ -47,6 +49,46 @@ fn time_days(d: i64) -> time::Duration {
     time::Duration::days(d)
 }
 
+// ---------- credentials ----------
+
+/// True when a username satisfies the API's rules (2–24 chars, [a-z0-9_-]).
+pub fn valid_username(username: &str) -> bool {
+    (2..=24).contains(&username.len())
+        && username
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
+/// True when a password is within the accepted length window (8–72 chars).
+pub fn valid_password(password: &str) -> bool {
+    (8..=72).contains(&password.len())
+}
+
+/// Hash a plaintext password into an Argon2id PHC string for storage.
+pub fn hash_password(password: &str) -> String {
+    use argon2::password_hash::rand_core::OsRng;
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .expect("argon2 hash of a bounded-length password")
+        .to_string()
+}
+
+/// Constant-time check of a plaintext password against a stored Argon2id PHC string.
+/// Returns false for empty/malformed stored hashes rather than panicking.
+pub fn verify_password(password: &str, stored: &str) -> bool {
+    if stored.is_empty() {
+        return false;
+    }
+    let parsed = match PasswordHash::new(stored) {
+        Ok(h) => h,
+        Err(_) => return false,
+    };
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .is_ok()
+}
+
 /// Extractor: the logged-in user, or 401.
 pub struct AuthUser(pub User);
 
@@ -82,5 +124,31 @@ mod tests {
         assert!(read_token(&s, "abc123.AAAA").is_none());
         assert!(read_token(&"y".repeat(40), &t).is_none());
         assert!(read_token(&s, "garbage").is_none());
+    }
+
+    #[test]
+    fn password_roundtrip() {
+        let pw = "correct-horse-battery";
+        let h = hash_password(pw);
+        assert!(verify_password(pw, &h));
+        assert!(!verify_password("correct-horse-batteri", &h));
+        // each hash uses a fresh salt
+        assert_ne!(hash_password(pw), h);
+    }
+
+    #[test]
+    fn password_rejects_empty_or_garbage() {
+        assert!(!verify_password("anything", ""));
+        assert!(!verify_password("anything", "not-a-pwc-string"));
+    }
+
+    #[test]
+    fn credential_validation() {
+        assert!(valid_username("alice"));
+        assert!(!valid_username("a"));
+        assert!(!valid_username("way-too-long-username-xxxxxxxxxxxxx"));
+        assert!(!valid_username("UPPER"));
+        assert!(valid_password("abcdefgh"));
+        assert!(!valid_password("short"));
     }
 }
