@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import { Landing } from "@/pages/Landing";
 import { FallingCards } from "@/components/wonder";
 import { DreamClouds, useLookingGlass, WonderSides } from "@/components/scenery";
-import { HeartsBurst, WakeUp } from "@/components/celebrations";
+import { Flashbang, HeartsBurst, WakeUp } from "@/components/celebrations";
 import { DealtCards } from "@/components/skeletons";
 import { PresenterPanel } from "@/components/presenter";
 
@@ -60,6 +60,7 @@ export default function App() {
       <FallingCards />
       <HeartsBurst />
       <WakeUp />
+      <Flashbang />
       <PresenterPanel />
     </BrowserRouter>
   );

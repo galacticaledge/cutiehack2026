@@ -615,3 +615,8 @@ main { position: relative; z-index: 1; }
 .wakeup-text p:first-child { font-size: clamp(2.4rem, 7vw, 4.5rem); }
 .wakeup-tarts { font-weight: 700; font-size: 1.3rem; color: #c8314a; }
 @keyframes wake-text { 0%, 30% { opacity: 0; transform: translateY(14px); } 50%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* ---------- Easter egg: Cheshire flashbang ---------- */
+.flashbang { position: fixed; inset: 0; z-index: 95; display: flex; align-items: center; justify-content: center; background: #4a1a78; cursor: pointer; animation: flashbang-in 0.15s ease-out; }
+.flashbang video { width: 100%; height: 100%; object-fit: cover; }
+@keyframes flashbang-in { from { opacity: 0; } to { opacity: 1; } }

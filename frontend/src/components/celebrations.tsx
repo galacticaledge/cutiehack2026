@@ -136,3 +136,34 @@ export function WakeUp() {
     </div>
   );
 }
+
+/* ---------------- Easter egg: the Cheshire flashbang ---------------- */
+
+/** Spam the light/dark toggle (10 clicks in 4 s) and the Cat goes off like a flashbang.
+ *  Skipped for reduced motion: it's a bright full-screen flash. */
+export function Flashbang() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const go = () => {
+      if (!reducedMotion()) setOn(true);
+    };
+    window.addEventListener("socra:flashbang", go);
+    return () => window.removeEventListener("socra:flashbang", go);
+  }, []);
+  useEffect(() => {
+    if (!on) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOn(false);
+    window.addEventListener("keydown", onKey);
+    const safety = setTimeout(() => setOn(false), 6000); // never get stuck if the video can't play
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      clearTimeout(safety);
+    };
+  }, [on]);
+  if (!on) return null;
+  return (
+    <div className="flashbang" onClick={() => setOn(false)} role="presentation" aria-hidden="true">
+      <video src="/easter/flashbang.mp4" autoPlay muted playsInline onEnded={() => setOn(false)} onError={() => setOn(false)} />
+    </div>
+  );
+}
