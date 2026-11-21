@@ -2,7 +2,7 @@
 
 An AI tutor that never gives you the answer. It guides you to it, and pays you in LEARN (a Solana devnet SPL token) for actually learning. Spec: [SPEC.md](SPEC.md).
 
-**Stack:** Rust (Axum on Tokio, sqlx/Postgres, solana-sdk + spl-token) · React (Vite, Tailwind, shadcn/ui, KaTeX) · OpenAI-compatible LLM via AIsa with OpenAI fallback.
+**Stack:** Rust (Axum on Tokio, sqlx/Postgres, solana-sdk + spl-token) · React (Vite, Tailwind, shadcn/ui, KaTeX) · OpenAI Chat Completions.
 
 ## Layout
 
@@ -31,7 +31,7 @@ frontend/           Vite + React SPA
 Prereqs: Rust (stable), Node 22+, Postgres (local, or `docker compose up -d db`).
 
 ```bash
-cp .env.example .env          # fill SESSION_SECRET (32+ chars), OPENAI_API_KEY and/or AISA_API_KEY
+cp .env.example .env          # fill SESSION_SECRET (32+ chars), OPENAI_API_KEY
 
 # One-time Solana setup
 cd backend

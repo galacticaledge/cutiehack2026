@@ -1,4 +1,4 @@
-//! LLM client: AIsa (OpenAI-compatible) first, OpenAI fallback. Chat Completions API.
+//! LLM client: OpenAI Chat Completions API.
 use crate::error::LlmUnavailable;
 use crate::state::AppState;
 use serde::Serialize;
@@ -80,14 +80,6 @@ pub async fn complete(state: &AppState, kind: Kind, messages: &[Msg], json_mode:
         Kind::Check => &cfg.check_effort,
     });
     let effort = (!effort.is_empty()).then_some(effort);
-    if cfg.llm_provider != "openai" {
-        if let Some(key) = &cfg.aisa_api_key {
-            match call_once(state, &cfg.aisa_base_url, key, &cfg.aisa_model, messages, effort, json_mode).await {
-                Ok(t) => return Ok((t, "aisa")),
-                Err(e) => tracing::warn!("[llm] aisa failed, falling back: {e}"),
-            }
-        }
-    }
     let Some(key) = &cfg.openai_api_key else {
         return Err(LlmUnavailable("no provider configured".into()).into());
     };
