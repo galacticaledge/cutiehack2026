@@ -395,3 +395,130 @@ main { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   .cat-face, .tour-spotlight { transition: none; }
 }
+
+/* ---------- Answer door ---------- */
+.answer-door { position: relative; width: 34px; height: 44px; flex-shrink: 0; perspective: 260px; }
+.door-frame { position: absolute; inset: -2px; border-radius: 19px 19px 3px 3px; background: #241a10; }
+.door-light {
+  position: absolute; inset: 0; border-radius: 17px 17px 2px 2px; opacity: 0;
+  background: radial-gradient(ellipse at 50% 60%, #fffaf1 0%, #fbe7b5 45%, #e0b775 100%);
+  transition: opacity 0.5s ease, box-shadow 0.5s ease;
+}
+.door-panel { position: absolute; inset: 0; transform-origin: 2px 50%; transition: transform 0.75s cubic-bezier(0.3, 0.7, 0.3, 1); }
+.door-open .door-panel { transform: rotateY(-108deg); }
+.door-open .door-light { opacity: 1; box-shadow: 0 0 18px 6px rgba(224, 183, 117, 0.7); }
+@keyframes rattle {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-5deg) translateX(-1px); }
+  30% { transform: rotate(4deg) translateX(1px); }
+  45% { transform: rotate(-4deg); }
+  60% { transform: rotate(3deg); }
+  75% { transform: rotate(-2deg); }
+}
+.door-rattle .door-panel { animation: rattle 0.55s ease; transform-origin: 50% 100%; }
+.door-locked { filter: saturate(0.4) brightness(0.9); }
+
+/* ---------- Illustrated Hall of Doors art ---------- */
+.door-art { position: relative; width: 100%; max-width: 8.5rem; aspect-ratio: 100 / 120; margin: 0 auto; perspective: 700px; }
+.door-art-light { position: absolute; inset: 2px 4px 0; border-radius: 50% 50% 4px 4px / 40% 40% 4px 4px; opacity: 0.25; transition: opacity 0.6s ease; }
+.door-art-panel { position: absolute; inset: 0; transform-origin: 6% 50%; transition: transform 0.8s cubic-bezier(0.3, 0.7, 0.3, 1); filter: drop-shadow(0 6px 8px rgba(51, 67, 86, 0.25)); }
+.door-art.is-open .door-art-panel { transform: rotateY(-100deg); }
+.door-art.is-open .door-art-light { opacity: 1; box-shadow: 0 0 30px 10px rgba(224, 183, 117, 0.55); }
+.playing-card:hover .door-art:not(.is-open) .door-art-panel { transform: rotateY(-14deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .door-panel, .door-art-panel { transition: none; }
+  .door-rattle .door-panel { animation: none; }
+}
+
+/* ---------- Drink Me bottles ---------- */
+.potion { width: 26px; height: 41px; overflow: visible; transform-origin: 50% 100%; }
+.potion-liquid { transition: transform 0.8s cubic-bezier(0.5, 0, 0.6, 1); }
+.potion-cork { transition: transform 0.4s ease, opacity 0.4s ease; transform-origin: 14px 9px; }
+.potion-empty .potion-cork { transform: translate(6px, -9px) rotate(40deg); opacity: 0; }
+.potion-empty { opacity: 0.75; }
+@keyframes gulp {
+  0% { transform: rotate(0) scale(1); }
+  20% { transform: rotate(-18deg) scale(1.08); }
+  45% { transform: rotate(-24deg) scale(1.08); }
+  70% { transform: rotate(6deg) scale(0.96); }
+  100% { transform: rotate(0) scale(1); }
+}
+.potion-gulp { animation: gulp 0.85s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .potion-liquid, .potion-cork { transition: none; }
+  .potion-gulp { animation: none; }
+}
+
+/* ---------- Messages arrive; the Cat materialises ---------- */
+@keyframes msg-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes msg-in-cat { 0% { opacity: 0; filter: blur(4px); transform: translateX(-6px); } 60% { filter: blur(0); } 100% { opacity: 1; transform: none; } }
+.msg-in { animation: msg-in 0.35s ease-out both; }
+.msg-in-cat { animation: msg-in-cat 0.6s ease-out both; }
+
+.cat-appearing .ca-face { animation: ca-face 2.6s ease-in-out infinite; }
+.cat-appearing .ca-eyes { animation: ca-eyes 2.6s ease-in-out infinite; }
+.cat-appearing .ca-grin { stroke-dasharray: 100; animation: ca-grin 2.6s ease-in-out infinite; }
+.cat-appearing .ca-teeth { animation: ca-teeth 2.6s ease-in-out infinite; }
+@keyframes ca-face { 0%, 10% { opacity: 0; } 45%, 80% { opacity: 0.9; } 100% { opacity: 0; } }
+@keyframes ca-eyes { 0% { opacity: 0.45; } 12%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ca-grin { 0%, 20% { stroke-dashoffset: 100; opacity: 1; } 55%, 80% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes ca-teeth { 0%, 50% { opacity: 0; } 62%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-in, .msg-in-cat { animation: none; }
+  .cat-appearing .ca-face, .cat-appearing .ca-eyes, .cat-appearing .ca-grin, .cat-appearing .ca-teeth { animation: none; opacity: 1; stroke-dashoffset: 0; }
+}
+
+/* ---------- Dealt-card loading placeholders ---------- */
+.card-skeleton {
+  position: relative; overflow: hidden;
+  background-color: var(--night);
+  background-image: radial-gradient(circle at 50% 50%, transparent 0 9px, rgba(224, 183, 117, 0.22) 9px 10px, transparent 10px),
+    repeating-linear-gradient(45deg, rgba(250, 248, 241, 0.06) 0 6px, transparent 6px 12px);
+  background-size: 28px 28px, auto;
+  box-shadow: 0 0 0 4px rgba(250, 248, 241, 0.6), 0 14px 30px -18px rgba(51, 67, 86, 0.6);
+}
+.card-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(250, 248, 241, 0.16) 50%, transparent 70%);
+  transform: translateX(-100%); animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+@keyframes deal-in {
+  from { opacity: 0; transform: translateY(-60px) rotate(var(--tilt, -4deg)) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.deal-in { animation: deal-in 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .deal-in, .card-skeleton::after { animation: none; }
+}
+
+/* ---------- Footer scenery ---------- */
+.footer-scene { display: block; width: 100%; height: 110px; margin-bottom: -1px; }
+@media (min-width: 768px) { .footer-scene { height: 140px; } }
+.dark .footer-scene { filter: brightness(0.55) saturate(0.75) hue-rotate(-10deg); }
+
+/* ---------- Sparkle trail ---------- */
+.sparkle-layer { position: fixed; inset: 0; pointer-events: none; z-index: 65; overflow: hidden; }
+.sparkle { position: absolute; transform: translate(-50%, -50%); line-height: 1; animation: sparkle 0.9s ease-out forwards; text-shadow: 0 0 6px currentColor; }
+@keyframes sparkle {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(45deg); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.5) rotate(120deg); }
+}
+
+/* ---------- Hearts burst ---------- */
+.hearts-burst { position: fixed; left: 50%; top: 45%; width: 0; height: 0; z-index: 75; pointer-events: none; }
+.burst-heart {
+  position: absolute; left: 0; top: 0; font-size: var(--size); line-height: 1;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(0.3);
+  animation: heart-out 1.2s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  text-shadow: 0 2px 6px rgba(200, 49, 74, 0.3);
+}
+@keyframes heart-out {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(0.3); }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(1.1); }
+}

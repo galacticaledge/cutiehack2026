@@ -54,7 +54,7 @@ export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
         </div>
       </Panel>
 
-      <Panel title={`Doors opened · ${eaten}/${total}`}>
+      <Panel title={`Doors opened · ${problems ? `${eaten}/${total}` : "…"}`}>
         <ul className="space-y-2 text-sm">
           {problems?.map((p) => {
             const f = flavorFor(p.id);

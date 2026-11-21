@@ -1,4 +1,4 @@
-import { Check, ExternalLink, FlaskConical, KeyRound, Send, Volume2, X } from "lucide-react";
+import { Check, ExternalLink, FlaskConical, KeyRound, MessageCircle, ScrollText, Send, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -7,9 +7,12 @@ import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { celebrate, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
-import { FallingIntro, hasToured, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
+import { celebrate, CheshireAppearing, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
+import { FallingIntro, hasToured, heartsBurst, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
 import { play } from "@/lib/sfx";
+import { AnswerDoor, type DoorState } from "@/components/doors";
+import { DrinkMeBottles } from "@/components/potions";
+import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +29,10 @@ const TOUR: TourStep[] = [
   { target: "answer", title: "Try the door", body: "When you're sure, enter your final answer. Wrong turns shrink the tart a little." },
   { target: "map", title: "Your dream map", body: "Follow each step the math engine confirms. Solve it, testify at the trial, and wake up with tarts." },
 ];
+
+function reducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
 
 const ASKS_FOR_ANSWER = /\b(answer|tell me|give me|just say|solution|solve it for me|what is it)\b/i;
 
@@ -66,6 +73,7 @@ export function Workspace() {
   const { sessionId = "" } = useParams();
   const navigate = useNavigate();
   const [s, setS] = useState<SessionView | null>(null);
+  const [loadError, setLoadError] = useState<"missing" | "failed" | null>(null);
   const [features, setFeatures] = useState<Features | null>(null);
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
@@ -86,6 +94,25 @@ export function Workspace() {
   const [tourOpen, setTourOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [reaction, setReaction] = useState<CatMood | null>(null);
+  // Phones show one panel at a time: the problem or the chat.
+  const [mobileTab, setMobileTab] = useState<"problem" | "chat">("problem");
+  const [unread, setUnread] = useState(false);
+  const tabRef = useRef(mobileTab);
+  tabRef.current = mobileTab;
+  const showTab = useCallback((t: "problem" | "chat") => {
+    setMobileTab(t);
+    if (t === "chat") setUnread(false);
+  }, []);
+  const tutorCount = useRef<number | null>(null);
+  // Messages already on screen don't animate; a new one keeps its fade-in class for its
+  // first 700ms, so an unrelated re-render can't cut the animation short.
+  const firstSeen = useRef<Map<string, number>>(new Map());
+  const seenSession = useRef("");
+  const [doorState, setDoorState] = useState<DoorState>("idle");
+  const doorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (doorTimer.current) clearTimeout(doorTimer.current);
+  }, []);
   const endIntro = useCallback(() => setIntro(false), []);
 
   // Play the falling intro once per fresh door, then clear the flag so a reload doesn't replay it.
@@ -100,8 +127,11 @@ export function Workspace() {
     try {
       const v = await api<SessionView>(`/api/sessions/${sessionId}`);
       setS(v);
+      setLoadError(null);
       return v;
     } catch (e) {
+      // First load failing: show a clear message instead of placeholders forever.
+      setLoadError((prev) => prev ?? ((e as ApiError).status === 404 ? "missing" : "failed"));
       toast.error((e as Error).message);
       return null;
     }
@@ -109,6 +139,7 @@ export function Workspace() {
 
   useEffect(() => {
     setS(null);
+    setLoadError(null);
     setLinks([]);
     setReaction(null);
     void load();
@@ -117,7 +148,22 @@ export function Workspace() {
 
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [s?.messages.length]);
+  }, [s?.messages.length, mobileTab]);
+
+  // A new Cat reply while the phone is showing the problem lights up the Chat tab.
+  const tutorMsgs = s?.messages.filter((m) => m.role === "tutor").length ?? null;
+  useEffect(() => {
+    if (tutorMsgs === null) return;
+    const phone = window.matchMedia?.("(max-width: 1023px)").matches ?? false;
+    if (phone && tutorCount.current !== null && tutorMsgs > tutorCount.current && tabRef.current === "problem") setUnread(true);
+    tutorCount.current = tutorMsgs;
+  }, [tutorMsgs]);
+  useEffect(() => {
+    tutorCount.current = null;
+    setDoorState("idle");
+    setMobileTab("problem");
+    setUnread(false);
+  }, [sessionId]);
 
   // Anti-cheat telemetry (bank problems only, while active).
   const tracking = s?.source === "bank" && s.status === "active";
@@ -147,10 +193,12 @@ export function Workspace() {
       const k = e.key.toLowerCase();
       if (k === "/" || k === "c") {
         e.preventDefault();
-        chatInput.current?.focus();
+        showTab("chat");
+        setTimeout(() => chatInput.current?.focus(), 0);
       } else if (k === "a") {
         e.preventDefault();
-        answerInput.current?.focus();
+        showTab("problem");
+        setTimeout(() => answerInput.current?.focus(), 0);
       } else if (k === "h") {
         document.querySelector<HTMLButtonElement>('[data-tour="hint"]')?.click();
       } else if (k === "t") {
@@ -161,7 +209,7 @@ export function Workspace() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tourOpen]);
+  }, [tourOpen, showTab]);
 
   // Go deeper links after a solve.
   useEffect(() => {
@@ -175,11 +223,33 @@ export function Workspace() {
     return (
       <>
         <Header />
-        <p className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><CheshireGrin className="size-6" fading /> Falling down the rabbit hole…</p>
+        {loadError ? (
+          <LostInWonderland
+            title={loadError === "missing" ? "This dream has vanished" : "The rabbit hole is blocked"}
+            body={loadError === "missing" ? "We couldn't find this problem. It may belong to someone else, or the link is wrong." : "We couldn't reach the server. Check your connection and try again."}
+            action={
+              <>
+                {loadError === "failed" && <Button onClick={() => { setLoadError(null); void load(); }}>Try again</Button>}
+                <Button variant="outline" onClick={() => navigate("/learn")}>Back to the Hall of Doors</Button>
+              </>
+            }
+          />
+        ) : (
+          <WorkspaceSkeleton />
+        )}
       </>
     );
   }
 
+  if (seenSession.current !== s.id) {
+    seenSession.current = s.id;
+    firstSeen.current = new Map(s.messages.map((m) => [m.id, 0]));
+  }
+  const now = Date.now();
+  const isFresh = (id: string) => {
+    if (!firstSeen.current.has(id)) firstSeen.current.set(id, now);
+    return now - (firstSeen.current.get(id) ?? 0) < 700;
+  };
   const isBank = s.source === "bank";
   const flavor = flavorFor(s.templateId);
   // The Cheshire Cat appears a little more with every step the math engine confirms.
@@ -214,6 +284,7 @@ export function Workspace() {
     setS({ ...s, messages: [...s.messages, { id: tempId, role: "user", content: text, verdicts: [], pending: true }] });
     try {
       const r = await api<{ reply: string; messageId: string; userMessageId: string; verdicts: ChatMessage["verdicts"] }>(`/api/sessions/${sessionId}/chat`, { message: text });
+      firstSeen.current.set(r.userMessageId, 0); // the student's bubble is already showing; only the reply should fade in
       if (r.verdicts.some((v) => v.status === "incorrect")) play("boing");
       else if (r.verdicts.some((v) => v.status === "correct")) play("clink");
       setS((prev) =>
@@ -256,15 +327,23 @@ export function Workspace() {
       if (r.correct) {
         play("clink");
         setReaction("delighted");
+        setDoorState("open");
         if (isBank) {
           setFlagged(Boolean(r.flagged));
+          // Let the little door swing open before the trial begins.
+          await new Promise((res) => setTimeout(res, reducedMotion() ? 0 : 850));
           setExplainOpen(true);
         } else {
           toast.success("That matches the AI reference solution.", { description: "It could be wrong. Check your reasoning with the tutor." });
+          if (doorTimer.current) clearTimeout(doorTimer.current);
+          doorTimer.current = setTimeout(() => setDoorState("idle"), 1600);
         }
       } else {
         play("boing");
         setReaction("puzzled");
+        setDoorState("rattle");
+        if (doorTimer.current) clearTimeout(doorTimer.current);
+        doorTimer.current = setTimeout(() => setDoorState("idle"), 600);
         toast("Curiouser and curiouser… not quite. The Cat has a question for you.");
       }
       setAnswer("");
@@ -284,7 +363,10 @@ export function Workspace() {
       const r = await api<{ pass: boolean; feedback: string; reward: RewardView }>(`/api/sessions/${sessionId}/explain`, { text: retry ? "" : explainText });
       setExplainOpen(false);
       if (!retry) {
-        if (r.pass) toast.success("The court is convinced", { description: r.feedback });
+        if (r.pass) {
+          heartsBurst();
+          toast.success("The court is convinced", { description: r.feedback });
+        }
         else toast("The jury is unconvinced", { description: r.feedback });
       }
       showRewardToast(r.reward);
@@ -311,6 +393,29 @@ export function Workspace() {
   return (
     <>
       <Header />
+      <div className="sticky top-[66px] z-30 grid grid-cols-2 gap-1 border-b border-[var(--border)] bg-[var(--card)]/95 p-1.5 backdrop-blur lg:hidden" role="tablist" aria-label="Workspace">
+        {(
+          [
+            ["problem", "Problem", ScrollText],
+            ["chat", "Chat", MessageCircle],
+          ] as const
+        ).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === key}
+            onClick={() => showTab(key)}
+            className={`relative flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition ${
+              mobileTab === key ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <Icon className="size-4" />
+            {label}
+            {key === "chat" && unread && <span className="absolute right-[30%] top-1.5 size-2 rounded-full bg-[var(--heart)]" aria-label="new message" />}
+          </button>
+        ))}
+      </div>
       <main className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:grid-cols-[15rem_minmax(0,5fr)_minmax(0,6fr)]">
         <aside className="hidden xl:block">
           <div className="sticky top-24" data-tour="map">
@@ -318,7 +423,7 @@ export function Workspace() {
           </div>
         </aside>
         {/* Left: problem */}
-        <div className="space-y-4">
+        <div className={`space-y-4 lg:block ${mobileTab === "problem" ? "" : "hidden"}`} role="tabpanel">
           <Card className="parchment" data-tour="problem">
             <CardHeader>
               {flavor && <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">{flavor.character} · {flavor.concept}</p>}
@@ -348,12 +453,15 @@ export function Workspace() {
                       )}
                     </div>
                   ))}
-                  {s.status === "active" && s.hintsUsed < 3 && (
-                    <Button variant="outline" size="sm" onClick={takeHint} disabled={hinting} data-tour="hint">
-                      <FlaskConical className="text-[var(--potion)]" />
-                      {hinting ? "Uncorking…" : `Drink Me: hint (${HINT_COST[s.hintsUsed]} tarts)`}
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap items-end gap-3">
+                    <DrinkMeBottles drunk={s.hintsUsed} />
+                    {s.status === "active" && s.hintsUsed < 3 && (
+                      <Button variant="outline" size="sm" onClick={takeHint} disabled={hinting} data-tour="hint">
+                        <FlaskConical className="text-[var(--potion)]" />
+                        {hinting ? "Uncorking…" : `Drink Me: hint (${HINT_COST[s.hintsUsed]} tarts)`}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -363,7 +471,8 @@ export function Workspace() {
             <Card className="parchment" data-tour="answer">
               <CardContent className="space-y-3 pt-0">
                 {!isBank && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
-                <form onSubmit={submitAnswer} className="flex gap-2">
+                <form onSubmit={submitAnswer} className="flex items-center gap-2.5">
+                  <AnswerDoor state={doorState} locked={s.locked} />
                   <Input
                     ref={answerInput}
                     value={answer}
@@ -499,7 +608,11 @@ export function Workspace() {
         </div>
 
         {/* Right: chat */}
-        <Card className="parchment flex h-[calc(100vh-8rem)] min-h-[420px] flex-col gap-0 py-0" data-tour="chat">
+        <Card
+          className={`parchment h-[calc(100dvh-10.5rem)] min-h-[380px] flex-col gap-0 py-0 lg:flex lg:h-[calc(100vh-8rem)] lg:min-h-[420px] ${mobileTab === "chat" ? "flex" : "hidden"}`}
+          data-tour="chat"
+          role="tabpanel"
+        >
           <div className="flex items-center gap-3 border-b px-4 py-3">
             <span key={shownSteps} className={shownSteps > 0 ? "grin-appear" : undefined}>
               <CheshireGrin className="grin-mirror grin-progress size-10" mood={mood} fading={sending} style={sending ? undefined : { opacity: catOpacity }} />
@@ -526,7 +639,7 @@ export function Workspace() {
           </div>
           <CardContent className="flex-1 space-y-3 overflow-y-auto py-4">
             {s.messages.map((m) => (
-              <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+              <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"} ${!isFresh(m.id) ? "" : m.role === "tutor" ? "msg-in-cat" : "msg-in"}`}>
                 <div className={`flex max-w-[88%] items-end gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                   {m.role === "tutor" && <CheshireGrin className="size-6 shrink-0" mood={m.id === lastTutorId ? mood : "neutral"} />}
                   <div
@@ -557,7 +670,7 @@ export function Workspace() {
             ))}
             {sending && (
               <div className="flex items-center gap-2 text-sm italic text-muted-foreground">
-                <CheshireGrin className="size-6" fading /> The Cat is fading in and out of view…
+                <CheshireAppearing className="size-7" /> The Cat is fading in and out of view…
               </div>
             )}
             <div ref={chatEnd} />

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CheshireGrin, flavorFor, suitColor, Tart } from "@/components/wonder";
 import { api, type JournalEntry, type Problem } from "@/lib/api";
 import { DeckPanel, ShareDreamButton } from "@/components/extras";
+import { DealtCards, LostInWonderland } from "@/components/skeletons";
 
 function duration(a: string, b: string | null) {
   if (!b) return null;
@@ -28,11 +29,19 @@ function outcome(e: JournalEntry) {
 export function Journal() {
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
   const [problems, setProblems] = useState<Problem[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    api<JournalEntry[]>("/api/journal").then(setEntries).catch((e) => toast.error(e.message));
+    setLoadFailed(false);
+    api<JournalEntry[]>("/api/journal")
+      .then(setEntries)
+      .catch((e) => {
+        setLoadFailed(true);
+        toast.error(e.message);
+      });
     api<Problem[]>("/api/problems").then(setProblems).catch(() => {});
-  }, []);
+  }, [attempt]);
 
   const total = entries?.reduce((sum, e) => sum + (e.reward?.status === "paid" ? e.reward.amount : 0), 0) ?? 0;
 
@@ -58,7 +67,14 @@ export function Journal() {
 
         {problems && problems.length > 0 && <DeckPanel problems={problems} />}
 
-        {!entries && <p className="text-center text-sm text-muted-foreground">Turning the pages…</p>}
+        {!entries && loadFailed && (
+          <LostInWonderland title="The pages are stuck together" body="We couldn't load your journal. Check your connection and try again." action={<Button onClick={() => setAttempt((n) => n + 1)}>Try again</Button>} />
+        )}
+        {!entries && !loadFailed && (
+          <div className="space-y-6">
+            <DealtCards count={2} className="h-44" label="Turning the pages" />
+          </div>
+        )}
 
         {entries?.length === 0 && (
           <div className="parchment mx-auto max-w-md space-y-3 rounded-2xl p-8 text-center">

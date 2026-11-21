@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { flavorFor, suitColor, Tart } from "@/components/wonder";
+import { DoorArt } from "@/components/doors";
+import { DealtCards, LostInWonderland } from "@/components/skeletons";
 import { api, type Problem } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {
@@ -23,8 +25,9 @@ function Difficulty({ n }: { n: number }) {
   );
 }
 
-function DoorCard({ p, starting, onStart }: { p: Problem; starting: string | null; onStart: () => void }) {
+function DoorCard({ p, starting, busy, opening, onOpen }: { p: Problem; starting: string | null; busy: boolean; opening: boolean; onOpen: () => void }) {
   const [flipped, setFlipped] = useState(false);
+  const openDoor = onOpen;
   const f = flavorFor(p.id);
   const Icon = f?.icon;
   const suit = f?.suit ?? "♠";
@@ -35,9 +38,14 @@ function DoorCard({ p, starting, onStart }: { p: Problem; starting: string | nul
         <div className="flip-face parchment relative flex flex-col gap-3 rounded-2xl p-5 pt-9" aria-hidden={flipped}>
           <span className={`pip pip-tl ${suitColor(suit)}`}>{suit}</span>
           <span className={`pip pip-br ${suitColor(suit)}`}>{suit}</span>
+          {f && (
+            <button type="button" onClick={openDoor} disabled={busy} className="-mt-3 block rounded-xl focus-visible:outline-2" tabIndex={flipped ? -1 : 0} aria-label={`Open the door: ${p.title}`}>
+              <DoorArt emblem={f.emblem} open={opening} />
+            </button>
+          )}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5">
-              {Icon && (
+              {Icon && !f && (
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-[var(--tan)]">
                   <Icon className="size-5" />
                 </span>
@@ -64,7 +72,7 @@ function DoorCard({ p, starting, onStart }: { p: Problem; starting: string | nul
                 )}
               </span>
             </div>
-            <Button disabled={starting !== null || flipped} onClick={onStart}>
+            <Button disabled={busy || flipped} onClick={openDoor}>
               {starting === p.id ? "Opening…" : "Open the door"}
             </Button>
           </div>
@@ -108,14 +116,31 @@ function DoorCard({ p, starting, onStart }: { p: Problem; starting: string | nul
 
 export function Learn() {
   const [problems, setProblems] = useState<Problem[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [kind, setKind] = useState<"problem" | "topic">("problem");
   const [text, setText] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // One door at a time: swing it open, then go through.
+  function openDoor(id: string) {
+    if (starting !== null || openingId !== null) return;
+    setOpeningId(id);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    setTimeout(() => void start({ templateId: id }, id), reduce ? 0 : 650);
+  }
+
   useEffect(() => {
-    api<Problem[]>("/api/problems").then(setProblems).catch((e) => toast.error(e.message));
-  }, []);
+    setLoadFailed(false);
+    api<Problem[]>("/api/problems")
+      .then(setProblems)
+      .catch((e) => {
+        setLoadFailed(true);
+        toast.error(e.message);
+      });
+  }, [attempt]);
 
   async function start(body: unknown, key: string) {
     setStarting(key);
@@ -125,6 +150,7 @@ export function Learn() {
     } catch (e) {
       toast.error((e as Error).message);
       setStarting(null);
+      setOpeningId(null);
     }
   }
 
@@ -147,9 +173,21 @@ export function Learn() {
         </section>
 
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 min-[1780px]:grid-cols-3">
-          {!problems && <p className="text-sm text-muted-foreground">Unlocking the doors…</p>}
+          {!problems && !loadFailed && <DealtCards count={5} label="Unlocking the doors" />}
+          {!problems && loadFailed && (
+            <div className="sm:col-span-2 lg:col-span-3 xl:col-span-2 min-[1780px]:col-span-3">
+              <LostInWonderland title="The doors are stuck" body="We couldn't reach the server. Check your connection and try again." action={<Button onClick={() => setAttempt((n) => n + 1)}>Try again</Button>} />
+            </div>
+          )}
           {problems?.map((p) => (
-            <DoorCard key={p.id} p={p} starting={starting} onStart={() => start({ templateId: p.id }, p.id)} />
+            <DoorCard
+              key={p.id}
+              p={p}
+              starting={starting}
+              busy={starting !== null || openingId !== null}
+              opening={openingId === p.id}
+              onOpen={() => openDoor(p.id)}
+            />
           ))}
         </section>
         <p className="-mt-6 text-center text-xs text-muted-foreground">
@@ -186,7 +224,7 @@ export function Learn() {
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does.</span>
-            <Button disabled={!text.trim() || starting !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
+            <Button disabled={!text.trim() || starting !== null || openingId !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
               {starting === "custom" ? "The Caterpillar is reading…" : "Ask the Cat"}
             </Button>
           </div>

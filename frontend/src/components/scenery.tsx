@@ -133,46 +133,82 @@ export function PocketWatch({ startedAt, stoppedAt }: { startedAt: string; stopp
 /* ---------------- Through the Looking-Glass (dark mode) ---------------- */
 
 const KEY = "socra:looking-glass";
+const THEME_EVENT = "socra:theme";
 
-export function initLookingGlass() {
+function storedPref(): "dark" | "light" | null {
   try {
-    if (localStorage.getItem(KEY) === "1") document.documentElement.classList.add("dark");
+    const v = localStorage.getItem(KEY);
+    return v === "1" ? "dark" : v === "0" ? "light" : null;
   } catch {
-    /* storage unavailable: stay on this side of the glass */
+    return null;
   }
 }
 
+function systemDark() {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
+function applyDark(dark: boolean) {
+  document.documentElement.classList.toggle("dark", dark);
+  window.dispatchEvent(new Event(THEME_EVENT));
+}
+
+export function isDark() {
+  return document.documentElement.classList.contains("dark");
+}
+
+/** Before first paint: the saved choice, or the device's setting until the student chooses. */
+export function initLookingGlass() {
+  const pref = storedPref();
+  document.documentElement.classList.toggle("dark", pref ? pref === "dark" : systemDark());
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", (e) => {
+    if (!storedPref()) applyDark(e.matches);
+  });
+}
+
+/** Shared dark-mode state: every toggle (and the toaster) stays in sync. */
 export function useLookingGlass() {
-  const [on, setOn] = useState(() => document.documentElement.classList.contains("dark"));
+  const [on, setOn] = useState(isDark);
+  useEffect(() => {
+    const sync = () => setOn(isDark());
+    window.addEventListener(THEME_EVENT, sync);
+    return () => window.removeEventListener(THEME_EVENT, sync);
+  }, []);
   function toggle() {
-    const next = !on;
     const root = document.documentElement;
-    root.classList.remove("through-glass");
-    void root.offsetWidth; // restart the animation
-    root.classList.add("through-glass");
-    setTimeout(() => root.classList.toggle("dark", next), 280);
-    setTimeout(() => root.classList.remove("through-glass"), 700);
+    if (root.classList.contains("through-glass")) return; // mid-flip: ignore double clicks
+    const next = !isDark();
     try {
       localStorage.setItem(KEY, next ? "1" : "0");
     } catch {
       /* ignore */
     }
-    setOn(next);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (reduce) {
+      applyDark(next);
+      return;
+    }
+    root.classList.add("through-glass");
+    setTimeout(() => applyDark(next), 280);
+    setTimeout(() => root.classList.remove("through-glass"), 700);
   }
   return { on, toggle };
 }
 
-export function LookingGlassToggle({ className = "" }: { className?: string }) {
+export function LookingGlassToggle({ className = "", labelClassName = "hidden md:inline" }: { className?: string; labelClassName?: string }) {
   const { on, toggle } = useLookingGlass();
   return (
     <button
       type="button"
       onClick={toggle}
-      className={`flex size-8 items-center justify-center rounded-full transition hover:bg-white/10 ${className}`}
-      aria-label={on ? "Step back through the looking-glass (light mode)" : "Step through the looking-glass (dark mode)"}
-      title={on ? "Back through the looking-glass" : "Through the looking-glass"}
+      role="switch"
+      aria-checked={on}
+      className={`flex h-8 items-center gap-1.5 rounded-full px-2 text-sm font-medium transition hover:bg-white/10 ${className}`}
+      aria-label="Dark mode"
+      title={on ? "Back through the looking-glass (light mode)" : "Through the looking-glass (dark mode)"}
     >
       {on ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      <span className={labelClassName}>{on ? "Light" : "Dark"}</span>
     </button>
   );
 }
@@ -245,9 +281,79 @@ export function DreamClouds() {
 
 /* ---------------- Footer ---------------- */
 
+/** Rolling hills, the Queen's castle, painted roses and two card-soldier guards. */
+function FooterScene() {
+  const guard = (x: number, suit: "♥" | "♠", flip: boolean) => (
+    <g transform={`translate(${x} 0)${flip ? " scale(-1 1)" : ""}`}>
+      <path d="M14 46V2" stroke="#8d7350" strokeWidth="2" strokeLinecap="round" />
+      <path d="M14 -6l4 9h-8z" fill="#c9962b" />
+      <circle cx="0" cy="8" r="6" fill="#f3e3cf" stroke="#334356" strokeWidth="1.2" />
+      <rect x="-10" y="14" width="20" height="28" rx="2.5" fill="#faf8f1" stroke="#334356" strokeWidth="1.4" />
+      <text x="0" y="33" fontSize="13" textAnchor="middle" fill={suit === "♥" ? "#c8314a" : "#334356"} fontFamily="serif">{suit}</text>
+      <path d="M-5 42v8M5 42v8" stroke="#334356" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 22l4 -4" stroke="#334356" strokeWidth="2" strokeLinecap="round" />
+    </g>
+  );
+  const bush = (x: number, painted: boolean) => (
+    <g transform={`translate(${x} 0)`}>
+      <circle cx="-12" cy="6" r="13" fill="#5f9a5a" />
+      <circle cx="8" cy="2" r="16" fill="#6aa864" />
+      <circle cx="26" cy="8" r="11" fill="#5f9a5a" />
+      {[
+        [-14, 0],
+        [2, -6],
+        [14, 4],
+        [24, 2],
+        [-4, 10],
+      ].map(([cx, cy], i) => (
+        <circle key={i} cx={cx} cy={cy} r="3.2" fill={painted || i % 2 ? "#c8314a" : "#faf8f1"} />
+      ))}
+    </g>
+  );
+  return (
+    <svg className="footer-scene" viewBox="0 0 1440 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <path d="M0 110C180 60 330 70 470 95S760 60 930 82s320 10 510-20V150H0z" fill="#b9d7a8" />
+      {/* castle */}
+      <g transform="translate(640 22)" fill="#334356" opacity=".88">
+        <rect x="20" y="40" width="120" height="70" />
+        <rect x="0" y="20" width="30" height="90" />
+        <rect x="130" y="20" width="30" height="90" />
+        <rect x="62" y="8" width="36" height="102" />
+        <path d="M-4 22L15 -6l19 28zM126 22l19-28 19 28zM58 10L80 -22l22 32z" />
+        <path d="M15 -6v-14M145 -6v-14M80 -22v-16" stroke="#334356" strokeWidth="2" />
+        <path d="M15 -20l12 4-12 4zM145 -20l12 4-12 4zM80 -38l12 4-12 4z" fill="#c8314a" />
+        {[
+          [8, 40],
+          [138, 40],
+          [74, 30],
+          [74, 58],
+        ].map(([x, y], i) => (
+          <path key={i} d={`M${x} ${y + 12}v-6a6 6 0 0 1 12 0v6z`} fill="#e0b775" />
+        ))}
+        <path d="M66 110V88a14 14 0 0 1 28 0v22z" fill="#1d2633" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <rect key={i} x={22 + i * 20} y="32" width="10" height="9" />
+        ))}
+      </g>
+      <path d="M0 128c160-30 300-26 470-8s300 8 470-12 330-6 500 6V150H0z" fill="#8fbf87" />
+      <g transform="translate(0 92)">
+        {guard(590, "♥", false)}
+        {guard(850, "♠", true)}
+      </g>
+      <g transform="translate(0 118)">
+        {bush(120, true)}
+        {bush(330, false)}
+        {bush(1100, true)}
+        {bush(1320, false)}
+      </g>
+    </svg>
+  );
+}
+
 export function DreamFooter() {
   return (
     <footer className="relative z-[1] mt-16">
+      <FooterScene />
       <div className="checker" />
       <div className="bg-[var(--night)] px-4 py-5 text-center text-xs text-[#d6ecf7]">
         <p className="font-display text-base text-[#faf8f1]">Dream to Wonderland ✦ Cutie Hack 2026</p>

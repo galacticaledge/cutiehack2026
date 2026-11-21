@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
+import { SparkleTrail } from "@/components/extras";
 import { api } from "@/lib/api";
 
 const FLOATERS = [
@@ -77,7 +78,8 @@ export function Landing() {
         />
       ))}
 
-      <LookingGlassToggle className="absolute right-4 top-4 z-10 text-[var(--primary)] hover:bg-secondary" />
+      <SparkleTrail />
+      <LookingGlassToggle className="absolute right-4 top-4 z-10 border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-2xl flex-col justify-center gap-9 px-4 py-16">
         <div className="space-y-4 text-center">
           <button

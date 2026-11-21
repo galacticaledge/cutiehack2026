@@ -4,10 +4,12 @@ import { Landing } from "@/pages/Landing";
 import { Learn } from "@/pages/Learn";
 import { Workspace } from "@/pages/Workspace";
 import { FallingCards } from "@/components/wonder";
-import { DreamClouds, WonderSides } from "@/components/scenery";
+import { DreamClouds, useLookingGlass, WonderSides } from "@/components/scenery";
+import { HeartsBurst } from "@/components/extras";
 import { Journal } from "@/pages/Journal";
 
 export default function App() {
+  const { on: dark } = useLookingGlass();
   return (
     <BrowserRouter>
       <DreamClouds />
@@ -19,8 +21,9 @@ export default function App() {
         <Route path="/journal" element={<Journal />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <Toaster position="top-right" theme="light" richColors closeButton />
+      <Toaster position="top-right" theme={dark ? "dark" : "light"} richColors closeButton mobileOffset={{ top: 124 }} />
       <FallingCards />
+      <HeartsBurst />
     </BrowserRouter>
   );
 }
