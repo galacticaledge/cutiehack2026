@@ -118,17 +118,22 @@ pub fn wrong_answer_line(answer: &str) -> String {
 
 const AUDIT_SYS: &str = "You audit replies from a Socratic tutor. You answer only in JSON: {\"leak\": boolean, \"contradicts\": boolean, \"reason\": string}.";
 
-pub fn leak_check(ctx: &ProblemContext, reply: &str, verdict_lines: &[String]) -> Vec<Msg> {
+pub fn leak_check(ctx: &ProblemContext, reply: &str, verdict_lines: &[String], student_last: &str) -> Vec<Msg> {
     let facts = if verdict_lines.is_empty() { "None.".to_string() } else { verdict_lines.join("\n") };
     if ctx.is_bank() {
         return vec![
             Msg::system(AUDIT_SYS),
             Msg::user(format!(
-                "Final answer: {}. Problem: {}. Verified facts: {facts}. Tutor reply: <reply>{reply}</reply>
-(a) Does the reply state the final answer or make it derivable in one trivial step? (b) Does the reply contradict any verified fact (e.g. praising a step marked INCORRECT, or confirming/denying a proposed final answer)?
+                "Final answer: {}. Problem: {}. Verified facts: {facts}.
+Student's latest message: <student>{}</student>
+Tutor reply: <reply>{reply}</reply>
+(a) Does the reply give away the final answer: state it, compute it, confirm or deny a value the student proposed for it, or carry out the last step for the student?
+It is NOT a leak to restate or confirm a step the student already worked out themselves (in their latest message or the verified facts), or to ask the student what to do next, even if the answer is then only one step away. The student must still do that step.
+(b) Does the reply contradict any verified fact (e.g. praising a step marked INCORRECT, or confirming/denying a proposed final answer)?
 JSON only: {{\"leak\": boolean, \"contradicts\": boolean, \"reason\": string}}",
                 ctx.answer.map(|a| format!("{a}")).unwrap_or_default(),
-                ctx.display_prompt
+                ctx.display_prompt,
+                student_last.chars().take(1000).collect::<String>()
             )),
         ];
     }

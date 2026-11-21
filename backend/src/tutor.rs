@@ -12,13 +12,13 @@ struct Guard {
     reason: String,
 }
 
-async fn guard(state: &AppState, ctx: &ProblemContext, reply: &str, verdict_lines: &[String]) -> Guard {
+async fn guard(state: &AppState, ctx: &ProblemContext, reply: &str, verdict_lines: &[String], student_last: &str) -> Guard {
     if let Some(ans) = ctx.answer {
         if deterministic_leak(reply, ans, ctx.tolerance, &ctx.display_prompt) {
             return Guard { leak: true, contradicts: false, reason: "reply contains the final answer".into() };
         }
     }
-    match complete_json(state, Kind::Check, &prompts::leak_check(ctx, reply, verdict_lines), None).await {
+    match complete_json(state, Kind::Check, &prompts::leak_check(ctx, reply, verdict_lines, student_last), None).await {
         Ok(Some(v)) => Guard {
             leak: v["leak"].as_bool().unwrap_or(false),
             contradicts: v["contradicts"].as_bool().unwrap_or(false),
@@ -55,9 +55,10 @@ pub async fn tutor_reply(
         messages.push(Msg::system(extra));
     }
 
+    let student_last = history.iter().rev().find(|m| m.role == "user").map(|m| m.content.as_str()).unwrap_or_default();
     let (first, provider) = complete(state, Kind::Tutor, &messages, false, None).await?;
     let draft = first.trim().to_string();
-    let g = guard(state, ctx, &draft, verdict_lines).await;
+    let g = guard(state, ctx, &draft, verdict_lines, student_last).await;
     if !g.leak && !g.contradicts && !draft.is_empty() {
         return Ok(TutorReply { reply: draft, provider, blocked: false });
     }
@@ -71,7 +72,7 @@ pub async fn tutor_reply(
     messages.push(Msg::system(note));
     let (second, provider) = complete(state, Kind::Tutor, &messages, false, None).await?;
     let draft = second.trim().to_string();
-    let g = guard(state, ctx, &draft, verdict_lines).await;
+    let g = guard(state, ctx, &draft, verdict_lines, student_last).await;
     if !g.leak && !g.contradicts && !draft.is_empty() {
         return Ok(TutorReply { reply: draft, provider, blocked: false });
     }

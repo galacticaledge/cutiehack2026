@@ -242,6 +242,9 @@ async fn similar(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id):
     Ok(Json(json!({ "sessionId": bank.id })))
 }
 
+/// Used when a student proposes a final answer in chat and the guard blocks the drafts.
+const FINAL_IN_CHAT: &str = "Sounds like you have a final answer in mind! I can't tell you whether it's right here, so put it in the answer box and see if the little door opens.";
+
 #[derive(Deserialize)]
 struct ChatBody {
     message: Option<String>,
@@ -279,7 +282,10 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
         verdicts: None,
         created_at: Utc::now(),
     });
-    let r = tutor_reply(&st, &ctx, s.hints_used, &hist, &verdict_lines(&verdicts), None).await?;
+    let mut r = tutor_reply(&st, &ctx, s.hints_used, &hist, &verdict_lines(&verdicts), None).await?;
+    if r.blocked && verdicts.iter().any(|v| v.status == crate::verify::Status::Final) {
+        r.reply = FINAL_IN_CHAT.into();
+    }
     let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
     let tutor_msg = insert_message(&st.pool, &s.id, "tutor", &r.reply, None).await?;
     Ok(Json(json!({
