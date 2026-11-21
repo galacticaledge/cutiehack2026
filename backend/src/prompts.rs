@@ -19,9 +19,10 @@ PACING (keep it slow, for every student)
 9. Before moving on, have the student state the result of the current step in their
    own words or numbers.
 10. Even if the student seems advanced and is moving fast, still have them do each step
-    themselves. Don't skip ahead to save time.
+    themselves. Don't skip ahead to save time.";
 
-ANSWER STATED IN CHAT (overrides 8-10)
+/// Sessions with an answer box (bank, generated topic problems, pasted problems with a reference answer).
+const ANSWER_BOX_RULES: &str = "ANSWER STATED IN CHAT (overrides 8-10)
 11. If the student states a final answer, don't say or hint whether it's right. Ask for the
     gist in ONE light question, e.g. \"Nice. In a sentence, how did you get that? Just the
     general idea, not every step.\" Don't walk them back through the steps.
@@ -30,6 +31,21 @@ ANSWER STATED IN CHAT (overrides 8-10)
     the answer box; if it doesn't hold up, they don't understand it yet, so go back to the first
     step and guide them one step at a time. Judge only the approach, never whether their number
     matches, and react the same way whether the number is right or wrong.";
+
+/// Open-ended practice chat (topics, pasted problems with no reference answer): there is no
+/// answer box and no hint bottles, so the student hears it from the tutor when they've got it.
+const OPEN_CHAT_RULES: &str = "WHEN THE STUDENT GETS THERE (this chat has no answer box and no Drink Me bottles)
+11. When the student reaches an answer or a correct conclusion through their own reasoning and it
+    agrees with the outline, tell them clearly that they got it right, and say in one sentence
+    why it works. This overrides rule 1 only for what they reached themselves.
+12. Then invite them to keep going: ask if they have questions, want more detail on any step,
+    or want to try a related idea or a harder variation.
+13. If they only state a value with no reasoning, first ask in one light question how they got
+    it (just the general idea), then confirm once their reasoning holds up.
+14. If their answer or reasoning doesn't hold up, don't confirm it: point to where to look again (rule 5).
+15. Never tell them to submit or enter an answer anywhere, and never mention hint bottles (rule 4
+    doesn't apply here): if they ask for a hint, give a small nudge as a question.
+16. Still never give an answer or a step they haven't reached themselves.";
 
 const VERIFIED_RULES: &str =
     "- If a fact says a step is INCORRECT, do not call it right. Point to where to re-check.
@@ -102,6 +118,8 @@ VOICE
 
 {RULES}
 
+{ANSWER_BOX_RULES}
+
 PROBLEM
 {}
 
@@ -138,6 +156,12 @@ ground truth and never contradict them)
     } else {
         ""
     };
+    // An answer box exists only when there's a reference answer to check against.
+    let (answer_rules, never_n) = if ctx.answer.is_some() {
+        (ANSWER_BOX_RULES, 13)
+    } else {
+        (OPEN_CHAT_RULES, 17)
+    };
     let academic = if ctx.academic {
         ""
     } else {
@@ -156,7 +180,9 @@ VOICE
 - Call hints \"Drink Me bottles\".
 
 {RULES}
-13. Never write the solution, the final code, or the essay for the student. Never do their work for them.
+
+{answer_rules}
+{never_n}. Never write the solution, the final code, or the essay for the student. Never do their work for them.
 {topic_rules}{academic}
 
 {block}
@@ -218,10 +244,15 @@ JSON only: {{\"leak\": boolean, \"contradicts\": boolean, \"reason\": string}}",
         Msg::system(AUDIT_SYS),
         Msg::user(format!(
             "{reference}Student's problem or topic (untrusted): <student_problem>{}</student_problem>
+Student's latest message: <student>{}</student>
 Tutor reply: <reply>{reply}</reply>
-Does this reply do the student's work for them (state the final answer, write the solution, or write the code/essay)? Set \"leak\" to that. Set \"contradicts\" to false.
+Does this reply do the student's work for them: state an answer or a step the student has NOT reached themselves,
+write the solution, or write the code/essay? Confirming or praising an answer or conclusion the student already
+reached themselves (for example in their latest message) is NOT doing their work for them.
+Set \"leak\" to that. Set \"contradicts\" to false.
 JSON only: {{\"leak\": boolean, \"contradicts\": boolean, \"reason\": string}}",
-            ctx.custom_text
+            ctx.custom_text,
+            student_last.chars().take(1000).collect::<String>()
         )),
     ]
 }
@@ -418,5 +449,74 @@ pub fn opening_message(ctx: &ProblemContext) -> &'static str {
         "*A grin appears in the branches.* Curiouser and curiouser! Before we wander anywhere: what do you already know about this, and where do you get stuck?"
     } else {
         "*A grin appears, then the Cat.* I won't solve this for you (where's the fun in that?), but I'll guide you one step at a time. What is the problem asking for, and what have you tried so far?"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::problem_context;
+    use crate::models::ProblemSession;
+    use chrono::Utc;
+    use serde_json::json;
+
+    fn session(
+        source: &str,
+        template_id: Option<&str>,
+        custom_ref: serde_json::Value,
+    ) -> ProblemSession {
+        ProblemSession {
+            id: "s".into(),
+            user_id: "u".into(),
+            source: source.into(),
+            template_id: template_id.map(String::from),
+            seed: 1,
+            custom_text: Some("the chain rule".into()),
+            custom_ref: Some(custom_ref),
+            from_session_id: None,
+            condition: "socratic".into(),
+            hints_used: 0,
+            wrong_attempts: 0,
+            status: "active".into(),
+            explain_passed: None,
+            explanation: None,
+            explain_feedback: None,
+            started_at: Utc::now(),
+            solved_at: None,
+        }
+    }
+
+    fn prompt(s: &ProblemSession) -> String {
+        tutor_system_prompt(&problem_context(s).unwrap(), 0, &[])
+    }
+
+    #[test]
+    fn open_chat_never_mentions_an_answer_box() {
+        let topic = prompt(&session("custom_topic", None, json!({ "academic": true })));
+        assert!(topic.contains("no answer box"));
+        assert!(topic.contains("got it right"));
+        assert!(!topic.contains("enter their answer in"));
+        assert!(topic.contains("17. Never write the solution"));
+        let pasted = prompt(&session(
+            "custom_problem",
+            None,
+            json!({ "academic": true, "solvable": false }),
+        ));
+        assert!(pasted.contains("no answer box") && !pasted.contains("enter their answer in"));
+    }
+
+    #[test]
+    fn answer_box_sessions_keep_the_sketch_flow() {
+        let bank = prompt(&session("bank", Some("alg-linear-1"), json!(null)));
+        assert!(bank.contains("enter their answer in") && !bank.contains("no answer box"));
+        let pasted_with_ref = prompt(&session(
+            "custom_problem",
+            None,
+            json!({ "academic": true, "numericAnswer": 7.0 }),
+        ));
+        assert!(
+            pasted_with_ref.contains("enter their answer in")
+                && pasted_with_ref.contains("13. Never write the solution")
+        );
     }
 }
