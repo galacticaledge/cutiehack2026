@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { DreamFooter } from "@/components/scenery";
@@ -223,7 +223,19 @@ export function Learn() {
             placeholder={kind === "problem" ? "Paste your homework problem here…" : "e.g. recursion, the chain rule, free fall"}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does.</span>
+            <span className="text-xs text-muted-foreground">
+              {kind === "problem" ? (
+                "Practice only: your own problems don't pay tarts, but we'll point you to a verified door that does."
+              ) : (
+                <>
+                  Topics on the{" "}
+                  <Link to="/map" className="underline">
+                    knowledge map
+                  </Link>{" "}
+                  get a fresh, engine-checked problem that can earn tarts.
+                </>
+              )}
+            </span>
             <Button disabled={!text.trim() || starting !== null || openingId !== null} onClick={() => start({ custom: { kind, text } }, "custom")}>
               {starting === "custom" ? "The Caterpillar is reading…" : "Ask the Cat"}
             </Button>

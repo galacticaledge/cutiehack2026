@@ -5,12 +5,14 @@ use crate::llm::{Kind, complete_json};
 use crate::problems::Checkpoint;
 use crate::prompts;
 use crate::state::AppState;
-use crate::verify::{Claim, Verdict, looks_mathy, verify_claims};
+use crate::verify::{Claim, Verdict, claim_in_message, looks_mathy, verify_claims};
 
 /// Never fails: on any error returns no verdicts so the tutor still replies.
+/// `tutor_question` is the tutor's previous message, so the extractor knows what the student is answering.
 pub async fn verify_message(
     state: &AppState,
     message: &str,
+    tutor_question: Option<&str>,
     checkpoints: &[Checkpoint],
 ) -> Vec<Verdict> {
     if checkpoints.is_empty() || !looks_mathy(message) {
@@ -19,7 +21,7 @@ pub async fn verify_message(
     match complete_json(
         state,
         Kind::Check,
-        &prompts::claim_extraction(message, checkpoints),
+        &prompts::claim_extraction(message, tutor_question, checkpoints),
         None,
     )
     .await
@@ -36,7 +38,8 @@ pub async fn verify_message(
                                 serde_json::Value::Null => return None,
                                 other => other.to_string(),
                             };
-                            Some(Claim {
+                            // Drop anything the student didn't actually write.
+                            claim_in_message(&claimed, message).then(|| Claim {
                                 checkpoint_id: id.to_string(),
                                 claimed,
                             })

@@ -1,4 +1,4 @@
-import { BookHeart, LogOut, Wallet } from "lucide-react";
+import { BookHeart, LogOut, Map as MapIcon, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,10 @@ export function Header() {
         </Link>
         {me && (
           <div className="flex items-center gap-1.5 text-sm sm:gap-2">
+            <Link to="/map" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="Knowledge map: earn tarts on new topics">
+              <MapIcon className="size-4" />
+              <span className="hidden md:inline">Knowledge map</span>
+            </Link>
             <Link to="/journal" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="Your dream journal">
               <BookHeart className="size-4" />
               <span className="hidden md:inline">Dream journal</span>

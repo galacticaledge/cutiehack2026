@@ -182,7 +182,7 @@ export function Workspace() {
   }, [sessionId]);
 
   // Anti-cheat telemetry (bank problems only, while active).
-  const tracking = s?.source === "bank" && s.status === "active";
+  const tracking = (s?.source === "bank" || s?.source === "quest") && s.status === "active";
   useEffect(() => {
     if (!tracking) return;
     const onVis = () => postEvent(sessionId, document.visibilityState === "hidden" ? "hidden" : "visible");
@@ -267,6 +267,9 @@ export function Workspace() {
     return now - (firstSeen.current.get(id) ?? 0) < 700;
   };
   const isBank = s.source === "bank";
+  const isQuest = s.source === "quest";
+  // Verified answer + explain-back + possible payout (bank problems and generated topic problems).
+  const earns = isBank || isQuest;
   const flavor = flavorFor(s.templateId);
   // The Cheshire Cat appears a little more with every step the math engine confirms.
   const correctSteps = new Set(s.messages.flatMap((m) => m.verdicts.filter((v) => v.status === "correct").map((v) => v.label)));
@@ -344,7 +347,7 @@ export function Workspace() {
         play("clink");
         setReaction("delighted");
         setDoorState("open");
-        if (isBank) {
+        if (earns) {
           setFlagged(Boolean(r.flagged));
           // Let the little door swing open before the trial begins.
           await new Promise((res) => setTimeout(res, reducedMotion() ? 0 : 850));
@@ -446,13 +449,15 @@ export function Workspace() {
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="font-display text-2xl font-normal">{s.title}</CardTitle>
                 {isBank && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
-                {!isBank && <Badge variant="secondary">Practice dream</Badge>}
-                {isBank && s.practice && <Badge variant="secondary">Unbirthday: already earned</Badge>}
-                {s.status !== "active" && isBank && <Badge className="bg-[var(--gold)] text-white">Solved</Badge>}
+                {!earns && <Badge variant="secondary">Practice dream</Badge>}
+                {isQuest && <Badge variant="outline">New topic</Badge>}
+                {earns && s.practice && <Badge variant="secondary">{isQuest ? "Practice dream" : "Unbirthday: already earned"}</Badge>}
+                {s.status !== "active" && earns && <Badge className="bg-[var(--gold)] text-white">Solved</Badge>}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isBank ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
+              {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
+              {isQuest && s.practiceReason && <p className="text-sm text-muted-foreground">{s.practiceReason}</p>}
 
               {isBank && (
                 <div className="space-y-2">
@@ -486,14 +491,14 @@ export function Workspace() {
           {s.hasAnswerCheck && s.status === "active" && (
             <Card className="parchment" data-tour="answer">
               <CardContent className="space-y-3 pt-0">
-                {!isBank && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
+                {!earns && <p className="text-xs text-muted-foreground">Check against an AI reference solution (may be wrong)</p>}
                 <form onSubmit={submitAnswer} className="flex items-center gap-2.5">
                   <AnswerDoor state={doorState} locked={s.locked} />
                   <Input
                     ref={answerInput}
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
-                    onPaste={(e) => isBank && postEvent(sessionId, "paste", { length: e.clipboardData.getData("text").length, target: "answer" })}
+                    onPaste={(e) => earns && postEvent(sessionId, "paste", { length: e.clipboardData.getData("text").length, target: "answer" })}
                     placeholder="Your final answer, e.g. 7, -3/4, sqrt(2)"
                     maxLength={40}
                     disabled={s.locked || submitting}
@@ -503,12 +508,12 @@ export function Workspace() {
                     {submitting ? "Checking…" : "Try the door"}
                   </Button>
                 </form>
-                {isBank && (
+                {earns && (
                   <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       {s.locked && <KeyRound className="size-4 text-[var(--gold)]" />}
                       {s.locked
-                        ? s.hintsUsed < 3
+                        ? isBank && s.hintsUsed < 3
                           ? "The little door is locked. Drink the next bottle to find the key."
                           : "Out of attempts. Keep talking it through with the Cat."
                         : `Attempts left: ${s.attemptsLeft}`}
@@ -522,7 +527,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {isBank && s.status === "solved" && (
+          {earns && s.status === "solved" && (
             <Card className="parchment">
               <CardContent className="flex items-center justify-between gap-3 pt-0">
                 <span className="text-sm">You found the way out! Testify at the trial to {s.practice ? "finish" : "wake up with your tarts"}.</span>
@@ -531,7 +536,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {isBank && s.status === "done" && (
+          {earns && s.status === "done" && (
             <Card className="parchment flip-in">
               <CardHeader>
                 <CardTitle className="font-display text-2xl font-normal">You woke up!</CardTitle>
@@ -602,7 +607,7 @@ export function Workspace() {
             </Card>
           )}
 
-          {!isBank &&
+          {!earns &&
             (s.matchedTemplate ? (
               <Card className="parchment">
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-0">
@@ -615,10 +620,10 @@ export function Workspace() {
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-sm text-muted-foreground">Practice dream: no tarts for this one.</p>
+              <p className="text-sm text-muted-foreground">{s.practiceReason ?? "Practice dream: no tarts for this one."}</p>
             ))}
 
-          {isBank && s.status === "active" && (
+          {earns && s.status === "active" && (
             <p className="text-xs text-muted-foreground">♥ The Queen's guards note tab switches and pastes to keep rewards fair. We never see other tabs or sites.</p>
           )}
         </div>
@@ -661,8 +666,8 @@ export function Workspace() {
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
-                    {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
-                    <Markdown>{m.role === "user" ? m.content.replace(/\n/g, "  \n") : m.content}</Markdown>
+                    {/* Student text is shown exactly as typed ("4*2, 4*3" must not turn into Markdown italics), line breaks kept. */}
+                    {m.role === "user" ? <p className="whitespace-pre-wrap break-words">{m.content}</p> : <Markdown>{m.content}</Markdown>}
                   </div>
                 </div>
                 {m.role === "user" && m.verdicts.length > 0 && (
@@ -719,7 +724,15 @@ export function Workspace() {
             </form>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <p id="chat-hint" className="sr-only">Enter to send, Shift+Enter for a new line.</p>
-              <p>{isBank ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right." : "Practice dream: steps aren't machine-checked here."}</p>
+              <p>
+                {isBank
+                  ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right."
+                  : isQuest
+                    ? s.checkedBy === "sandbox"
+                      ? "The answer comes from running this exact program in an isolated Solari sandbox, not from AI."
+                      : "Your final answer is checked by a math engine. Steps in chat aren't."
+                    : "Practice dream: steps aren't machine-checked here."}
+              </p>
               <div className="flex shrink-0 gap-3">
                 <button type="button" className="hover:underline" onClick={() => setTourOpen(true)}>
                   Tour
@@ -743,10 +756,12 @@ export function Workspace() {
             <DialogTitle className="font-display text-2xl font-normal">{flagged ? "Who stole the tarts? ♥" : "The trial: why does it work?"}</DialogTitle>
             <DialogDescription>
               {flagged
-                ? "This solve looked suspicious (very fast, pasted, or after wandering off). Convincing testimony keeps your tarts; weak testimony and it's off with their heads (this reward is forfeited)."
+                ? "This solve looked suspicious (very fast, pasted, after wandering off, or your approach in chat didn't hold up). Convincing testimony keeps your tarts; weak testimony and it's off with their heads (this reward is forfeited)."
                 : s.practice
-                  ? "Unbirthday practice: you've already earned on this one."
-                  : "You found the answer. Now, in 1–2 sentences, testify why your method works. Real understanding doubles your tarts."}
+                  ? "Practice dream: no tarts on this one, but your testimony still counts toward mastering the topic."
+                  : isQuest
+                    ? "You found the answer. Now, in 1–2 sentences, testify why your method works. New topics pay only when your testimony holds up."
+                    : "You found the answer. Now, in 1–2 sentences, testify why your method works. Real understanding doubles your tarts."}
             </DialogDescription>
           </DialogHeader>
           <Textarea value={explainText} onChange={(e) => setExplainText(e.target.value)} rows={4} maxLength={1500} placeholder="Your Majesty, my method works because…" />

@@ -42,29 +42,47 @@ fn rhs(raw: &str) -> String {
     }
 }
 
+/// A list of values, each of which may be arithmetic ("4, 4*2, 4*3" → [4, 8, 12]).
+/// Items split on commas/semicolons/"and", or on whitespace when there are no commas.
+/// Any item that doesn't evaluate makes the whole list unverifiable (never a false ✗).
 pub fn parse_list(raw: &str) -> Option<Vec<f64>> {
-    let s = normalize_math(raw).to_lowercase().replace("and", " ");
-    if s.is_empty() || s.len() > 500 || s.chars().any(|c| c.is_alphabetic()) {
+    let lower = normalize_math(raw).to_lowercase();
+    let s = lower
+        .trim()
+        .trim_start_matches(['[', '(', '{'])
+        .trim_end_matches([']', ')', '}', '.']);
+    if s.is_empty() || s.len() > 500 {
         return None;
     }
+    let s = s.replace(" and ", ",").replace(';', ",");
+    let items: Vec<&str> = if s.contains(',') {
+        s.split(',').collect()
+    } else {
+        s.split_whitespace().collect()
+    };
     let mut out = Vec::new();
-    let chars: Vec<char> = s.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        let neg = chars[i] == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit();
-        if chars[i].is_ascii_digit() || neg {
-            let start = i;
-            i += 1;
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                i += 1;
-            }
-            let t: String = chars[start..i].iter().collect();
-            out.push(t.parse().ok()?);
-        } else {
-            i += 1;
+    for item in items {
+        let item = item.trim();
+        let item = item.strip_prefix("and ").unwrap_or(item).trim();
+        if !item.is_empty() {
+            out.push(eval_number(item)?);
         }
     }
     (!out.is_empty()).then_some(out)
+}
+
+fn squash(s: &str) -> String {
+    normalize_math(s)
+        .to_lowercase()
+        .chars()
+        .filter(|c| !c.is_whitespace() && !"[](){}".contains(*c))
+        .collect()
+}
+
+/// The extractor must quote the student: a claim whose text isn't in the message is dropped.
+pub fn claim_in_message(claimed: &str, message: &str) -> bool {
+    let c = squash(claimed);
+    !c.is_empty() && squash(message).contains(&c)
 }
 
 const SAMPLE_POINTS: [f64; 5] = [0.37, 1.3, -0.8, 2.1, -1.7];
@@ -147,7 +165,7 @@ pub fn verdict_lines(verdicts: &[Verdict]) -> Vec<String> {
     for v in verdicts {
         match v.status {
             Status::Final if !final_added => {
-                lines.push("The student proposed a final answer. Do not say whether it is right; ask them to submit it in the answer box.".into());
+                lines.push("The student stated a final answer. Do not say or hint whether it is right. Ask in one light question for the general idea of how they got it (rules 11-12), then have them enter it in the answer box.".into());
                 final_added = true;
             }
             Status::Final => {}
@@ -177,6 +195,22 @@ pub fn verdict_chips(verdicts: &[Verdict]) -> Vec<Chip> {
             status: v.status,
         })
         .collect()
+}
+
+/// Did this stored user message state a final answer? (Its verdicts include a "final" claim.)
+pub fn stated_final(verdicts: Option<&serde_json::Value>) -> bool {
+    verdicts
+        .and_then(|v| v.as_array())
+        .is_some_and(|a| a.iter().any(|v| v["status"] == "final"))
+}
+
+/// Tutor-prompt fact after the student's sketch of how they got a stated answer was graded.
+pub fn sketch_line(sound: bool) -> String {
+    if sound {
+        "The student's general approach for the answer they stated is SOUND. Say so briefly and have them enter their answer in the answer box. Do not say whether the number itself is right.".into()
+    } else {
+        "The student's sketch of how they got their stated answer does NOT hold up: treat this as them not understanding the problem yet. Do not send them to the answer box and do not say whether the number is right. Go back to the first step and guide them one step at a time (rules 8-10), starting with one question about that first step.".into()
+    }
 }
 
 /// Gate: skip the extractor for messages with no digits, operators or code-like tokens.
@@ -274,6 +308,39 @@ mod tests {
     }
 
     #[test]
+    fn list_items_can_be_arithmetic() {
+        assert_eq!(
+            parse_list("4, 4*2, 4*3, 4*4"),
+            Some(vec![4.0, 8.0, 12.0, 16.0])
+        );
+        assert_eq!(parse_list("3 6 9"), Some(vec![3.0, 6.0, 9.0]));
+        assert_eq!(parse_list("[3, 6, 9]."), Some(vec![3.0, 6.0, 9.0]));
+        assert_eq!(v("kept_values", "3, 3*2, 3*3"), Status::Correct);
+        // Can't read an item → unverifiable, never a false ✗.
+        assert_eq!(v("kept_values", "3, 6, then 9"), Status::Unverifiable);
+        assert_eq!(v("kept_values", "multiples of 3"), Status::Unverifiable);
+    }
+    #[test]
+    fn detects_a_stated_final_answer() {
+        let finals = serde_json::json!([{ "checkpointId": "final", "label": "x", "claimed": "7", "status": "final" }]);
+        let other = serde_json::json!([{ "checkpointId": "rhs", "label": "x", "claimed": "7", "status": "correct" }]);
+        assert!(stated_final(Some(&finals)));
+        assert!(!stated_final(Some(&other)));
+        assert!(!stated_final(None));
+        assert!(sketch_line(false).contains("first step"));
+        assert!(!sketch_line(false).contains("answer box.")); // never sends a failed sketch to submit
+    }
+    #[test]
+    fn claims_must_quote_the_student() {
+        assert!(claim_in_message("[4, 8, 12, 16]", "4, 8, 12, 16"));
+        assert!(claim_in_message("4, 4*2", "Multiples of 4. 4, 4*2, 4*3"));
+        assert!(!claim_in_message(
+            "[4, 8, 12, 16]",
+            "Multiples of 4. 4, 4*2, 4*3, 4*4"
+        ));
+        assert!(!claim_in_message("", "anything"));
+    }
+    #[test]
     fn garbage_is_unverifiable() {
         assert_eq!(v("rhs", "banana"), Status::Unverifiable);
         assert_eq!(v("derivative", "import os"), Status::Unverifiable);
@@ -309,7 +376,8 @@ mod tests {
         let lines = verdict_lines(&verdicts).join("\n");
         assert!(lines.contains("student said 20 → INCORRECT"));
         assert!(!lines.contains("21"));
-        assert!(lines.contains("Do not say whether it is right"));
+        assert!(lines.contains("Do not say or hint whether it is right"));
+        assert!(lines.contains("general idea"));
         assert_eq!(
             verdict_chips(&verdicts),
             vec![
