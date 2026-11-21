@@ -80,7 +80,9 @@ export function Landing() {
       ))}
 
       <SparkleTrail />
-      <LookingGlassToggle className="absolute right-4 top-4 z-10 border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
+      <nav aria-label="Display" className="absolute right-4 top-4 z-10">
+        <LookingGlassToggle className=" border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
+      </nav>
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-2xl flex-col justify-center gap-9 px-4 py-16">
         <div className="space-y-4 text-center">
           <p className="inline-flex items-center gap-2 rounded-full border border-[var(--tan)]/40 bg-[#faf8f1]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tan)] dark:bg-white/5">
@@ -154,10 +156,10 @@ export function Landing() {
           Built with AIsa · ElevenLabs · Keenable · Solana devnet
         </p>
       </main>
-      <aside className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+      <aside aria-label="Meet the cast" className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
         <CastPanel />
       </aside>
-      <aside className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+      <aside aria-label="Why it works" className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
         <WhyPanel />
       </aside>
       <DreamFooter />

@@ -162,7 +162,7 @@ export function Learn() {
     <>
       <Header />
       <main className="mx-auto grid max-w-[90rem] gap-8 px-4 py-10 xl:grid-cols-[16rem_minmax(0,1fr)_17rem]">
-        <aside className="hidden xl:block">
+        <aside aria-label="Your progress" className="hidden xl:block">
           <div className="sticky top-24">
             <YourDreamPanel problems={problems} />
           </div>
@@ -246,7 +246,7 @@ export function Learn() {
           </div>
         </section>
         </div>
-        <aside className="hidden xl:block">
+        <aside aria-label="How rewards work" className="hidden xl:block">
           <div className="sticky top-24">
             <TartRecipePanel />
           </div>

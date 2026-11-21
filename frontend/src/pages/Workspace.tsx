@@ -469,7 +469,7 @@ export function Workspace() {
         ))}
       </div>
       <main className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:grid-cols-[15rem_minmax(0,5fr)_minmax(0,6fr)]">
-        <aside className="hidden xl:block">
+        <aside aria-label="Dream map" className="hidden xl:block">
           <div className="sticky top-24" data-tour="map">
             <DreamMap s={s} correctLabels={[...correctSteps]} />
           </div>
@@ -480,7 +480,9 @@ export function Workspace() {
             <CardHeader>
               {flavor && <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">{flavor.character} · {flavor.concept}</p>}
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="font-display text-2xl font-normal">{s.title}</CardTitle>
+                <CardTitle className="font-display text-2xl font-normal">
+                  <h1>{s.title}</h1>
+                </CardTitle>
                 {earns && s.startedAt && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
                 {!earns && <Badge variant="secondary">Practice dream</Badge>}
                 {isQuest && <Badge variant="outline" className="border-[var(--tan)]/50 text-[var(--tan)]"><Sparkles /> New topic</Badge>}
