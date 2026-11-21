@@ -166,6 +166,19 @@ export function initLookingGlass() {
   });
 }
 
+// Easter egg: 10 clicks on the toggle within 4 seconds sets off the Cheshire flashbang.
+const SPAM_CLICKS = 10;
+const SPAM_WINDOW_MS = 4000;
+let recentClicks: number[] = [];
+function countClick() {
+  const now = Date.now();
+  recentClicks = [...recentClicks.filter((t) => now - t < SPAM_WINDOW_MS), now];
+  if (recentClicks.length >= SPAM_CLICKS) {
+    recentClicks = [];
+    window.dispatchEvent(new Event("socra:flashbang"));
+  }
+}
+
 /** Shared dark-mode state: every toggle (and the toaster) stays in sync. */
 export function useLookingGlass() {
   const [on, setOn] = useState(isDark);
@@ -175,6 +188,7 @@ export function useLookingGlass() {
     return () => window.removeEventListener(THEME_EVENT, sync);
   }, []);
   function toggle() {
+    countClick(); // every click counts toward the Easter egg, even mid-flip
     const root = document.documentElement;
     if (root.classList.contains("through-glass")) return; // mid-flip: ignore double clicks
     const next = !isDark();

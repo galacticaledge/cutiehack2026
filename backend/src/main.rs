@@ -2,6 +2,8 @@ use socra::config::Config;
 use socra::routes::api_router;
 use socra::state::AppState;
 use std::path::Path;
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -29,7 +31,16 @@ async fn main() -> anyhow::Result<()> {
         state.cfg.code_runner_enabled()
     );
 
-    let mut app = api_router();
+    // Unknown /api paths get a JSON 404, never the SPA's index.html (which would look like a 200).
+    let mut app = api_router().route(
+        "/api/{*rest}",
+        axum::routing::any(|| async {
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                axum::Json(serde_json::json!({ "error": "Not found." })),
+            )
+        }),
+    );
     let index = Path::new(&static_dir).join("index.html");
     if index.exists() {
         // Serve the React SPA; unknown paths fall back to index.html for client-side routing.
@@ -38,7 +49,18 @@ async fn main() -> anyhow::Result<()> {
     } else {
         tracing::info!("no frontend build at {static_dir} (dev mode: run the Vite dev server)");
     }
-    let app = app.layer(TraceLayer::new_for_http()).with_state(state);
+    // Compress responses (brotli/gzip): the JS bundle and JSON shrink to about a third.
+    let app = app
+        .layer(
+            // Media is already compressed; leave it alone (and keep byte ranges simple for video).
+            CompressionLayer::new().compress_when(
+                DefaultPredicate::new()
+                    .and(NotForContentType::const_new("video/"))
+                    .and(NotForContentType::const_new("audio/")),
+            ),
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     tracing::info!("Socra listening on http://localhost:{port}");

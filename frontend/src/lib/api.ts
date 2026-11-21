@@ -116,12 +116,21 @@ export interface SessionView {
   practice: boolean;
   potentialReward: number;
   hasAnswerCheck: boolean;
+  testimonyTriesLeft?: number;
   explainPassed: boolean | null;
   explainFeedback: string | null;
   explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
   messages: ChatMessage[];
+}
+
+export interface Features {
+  tts: boolean;
+  learnMore: boolean;
+  llmProvider: string;
+  solana: boolean;
+  codeRunner?: boolean;
 }
 
 export interface ConceptNode {
@@ -144,14 +153,6 @@ export interface ConceptMap {
   questBase: number;
 }
 
-export interface Features {
-  tts: boolean;
-  learnMore: boolean;
-  llmProvider: string;
-  solana: boolean;
-  codeRunner: boolean;
-}
-
 export interface JournalEntry {
   sessionId: string;
   templateId: string;
@@ -166,3 +167,26 @@ export interface JournalEntry {
   explainFeedback: string | null;
   reward: RewardView | null;
 }
+
+/** Whether this server has the Map of Wonderland (/api/concepts). Checked once per page load. */
+let mapProbe: Promise<boolean> | null = null;
+export function mapAvailable(): Promise<boolean> {
+  mapProbe ??= fetch("/api/concepts", { credentials: "same-origin" })
+    // Only a real JSON answer counts (an HTML page or a 404 means this server has no map).
+    .then((r) => r.status !== 404 && (r.headers.get("content-type") ?? "").includes("json"))
+    .catch(() => false);
+  return mapProbe;
+}
+
+/** Server features, fetched once per page load. */
+let featuresProbe: Promise<Features | null> | null = null;
+export function getFeatures(): Promise<Features | null> {
+  featuresProbe ??= api<Features>("/api/features").catch(() => null);
+  return featuresProbe;
+}
+
+/** Throwaway demo accounts (guest pass, judge mode) never hold real tokens. */
+export function isGuestName(username: string) {
+  return /^(guest|copycat)-/.test(username);
+}
+

@@ -522,3 +522,107 @@ main { position: relative; z-index: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(1.1); }
 }
+
+/* ---------- Solari sandbox badge ---------- */
+.solari-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; padding: 0.25rem 0.7rem;
+  font-size: 0.78rem; font-weight: 600; color: #1f5f5a; background: #e3f4f1; border: 1px solid #b9ddd7;
+}
+.dark .solari-badge { color: #9fe3da; background: #143130; border-color: #2c6461; }
+
+/* ---------- Map of Wonderland ---------- */
+.map-path { display: flex; flex-wrap: wrap; align-items: center; row-gap: 0.65rem; }
+.map-path > li { display: flex; align-items: center; }
+.map-path > li:not(:last-child)::after {
+  content: ""; width: 1.1rem; height: 0; margin: 0 0.15rem;
+  border-top: 2px dashed color-mix(in oklab, var(--tan) 55%, transparent);
+}
+.map-node {
+  display: inline-flex; align-items: center; gap: 0.45rem; max-width: 15rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.2rem; border-radius: 999px;
+  border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 85%, transparent);
+  font-size: 0.85rem; text-align: left; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.map-node:hover { transform: translateY(-1px); border-color: var(--tan); }
+.map-node.is-selected { border-color: var(--tan); box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-soft) 45%, transparent); }
+.map-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-stone { display: inline-flex; width: 1.9rem; height: 1.9rem; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 999px; border: 2px solid; }
+.map-stone-sm { width: 1.3rem; height: 1.3rem; border-width: 1.5px; }
+.map-stone.is-mastered { background: var(--potion); border-color: var(--potion); color: #fff; }
+.map-stone.is-available { background: #fff8e6; border-color: var(--gold-soft); color: #8d6a20; box-shadow: 0 0 10px 1px color-mix(in oklab, var(--gold-soft) 55%, transparent); }
+.map-stone.is-locked { background: var(--muted); border-color: var(--border); color: var(--muted-foreground); }
+.dark .map-stone.is-available { background: #3a2e1a; color: #f1d79a; }
+
+/* ---------- Judge mode ---------- */
+.presenter { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; width: 19rem; border-radius: 1rem; padding: 0.8rem 0.9rem; }
+.presenter-tab { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.75rem; font-weight: 600; background: var(--night); color: #faf8f1; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
+.presenter-btn { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600; background: var(--card); }
+.presenter-btn:hover:not(:disabled) { border-color: var(--tan); }
+.presenter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.presenter-step { width: 1.8rem; height: 1.8rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; }
+.presenter-step.is-active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+@media (max-width: 640px) { .presenter { left: 0.5rem; right: 0.5rem; width: auto; } }
+
+/* ---------- Math keys + answer preview ---------- */
+.math-key {
+  min-width: 2.1rem; height: 1.9rem; padding: 0 0.5rem; border-radius: 0.5rem;
+  border: 1px solid var(--border); background: var(--card); font-size: 0.9rem; font-weight: 600;
+  box-shadow: 0 1px 0 var(--border); transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.math-key:hover:not(:disabled) { border-color: var(--tan); }
+.math-key:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.math-key:disabled { opacity: 0.5; }
+.answer-preview { font-size: 0.85rem; min-height: 1.4rem; }
+.answer-preview .katex { font-size: 1.1em; }
+
+/* ---------- Socra logo ---------- */
+.socra-logo { overflow: visible; }
+.socra-logo .logo-branch { stroke-dasharray: 100; stroke-dashoffset: 100; animation: logo-draw 0.9s ease-out forwards; }
+.socra-logo path.logo-branch[stroke-dasharray="2 5"] { stroke-dasharray: 2 5; stroke-dashoffset: 0; animation: none; }
+.socra-logo .logo-node { transform: scale(0); animation: logo-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) forwards; }
+.socra-logo .logo-glow { opacity: 0; animation: logo-glow 4.2s ease-in-out infinite; }
+@keyframes logo-draw { to { stroke-dashoffset: 0; } }
+@keyframes logo-pop { to { transform: scale(1); } }
+@keyframes logo-glow { 0%, 100% { opacity: 0; } 12% { opacity: 0.55; } 30% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .socra-logo .logo-branch { animation: none; stroke-dashoffset: 0; }
+  .socra-logo .logo-node { animation: none; transform: none; }
+  .socra-logo .logo-glow { animation: none; opacity: 0; }
+}
+
+/* ---------- The Cat typing ---------- */
+.type-caret { display: inline-block; width: 0.45rem; height: 0.95rem; margin-left: 1px; vertical-align: -2px; border-radius: 2px; background: var(--cheshire); animation: caret-blink 0.8s steps(2) infinite; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+
+/* ---------- Jury's note on a weak testimony ---------- */
+.jury-note { border-radius: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid color-mix(in oklab, var(--heart) 35%, transparent); background: color-mix(in oklab, var(--heart) 8%, var(--card)); }
+
+/* ---------- Waking up (sunrise) ---------- */
+.wakeup { position: fixed; inset: 0; z-index: 85; overflow: hidden; cursor: pointer; animation: wake-sky 2.4s ease-in-out forwards; background: #141b33; }
+@keyframes wake-sky {
+  0% { background: #141b33; opacity: 0; }
+  10% { opacity: 1; }
+  55% { background: #f2b8a0; }
+  80% { background: #fde7c4; opacity: 1; }
+  100% { background: #fde7c4; opacity: 0; }
+}
+.wakeup-stars { position: absolute; inset: 0; background-image: radial-gradient(1.5px 1.5px at 12% 20%, #fff, transparent), radial-gradient(1px 1px at 30% 60%, #fff, transparent), radial-gradient(1.5px 1.5px at 55% 25%, #fff, transparent), radial-gradient(1px 1px at 75% 45%, #fff, transparent), radial-gradient(1.5px 1.5px at 88% 15%, #fff, transparent), radial-gradient(1px 1px at 45% 80%, #fff, transparent); animation: wake-stars 1.4s ease-in forwards; }
+@keyframes wake-stars { to { opacity: 0; } }
+.wakeup-sun { position: absolute; left: 50%; bottom: -18vmin; width: 36vmin; height: 36vmin; margin-left: -18vmin; border-radius: 50%; background: radial-gradient(circle, #fff6d8 0%, #ffd27a 45%, #f4a259 100%); box-shadow: 0 0 80px 40px rgba(255, 210, 122, 0.5); animation: wake-sun 2.1s cubic-bezier(0.3, 0.6, 0.3, 1) forwards; }
+@keyframes wake-sun { to { transform: translateY(-42vh); } }
+.wakeup-hills { position: absolute; inset: auto 0 0 0; height: 22vh; background: radial-gradient(120% 100% at 30% 100%, #6f9c66 60%, transparent 61%), radial-gradient(120% 100% at 80% 100%, #8fbf87 60%, transparent 61%); }
+.wakeup-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: #334356; text-align: center; animation: wake-text 2.4s ease forwards; }
+.wakeup-text p:first-child { font-size: clamp(2.4rem, 7vw, 4.5rem); }
+.wakeup-tarts { font-weight: 700; font-size: 1.3rem; color: #c8314a; }
+@keyframes wake-text { 0%, 30% { opacity: 0; transform: translateY(14px); } 50%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* ---------- Easter egg: Cheshire flashbang ---------- */
+.flashbang { position: fixed; inset: 0; z-index: 95; display: flex; align-items: center; justify-content: center; background: #4a1a78; cursor: pointer; animation: flashbang-in 0.15s ease-out; }
+.flashbang video, .flashbang img { width: 100%; height: 100%; object-fit: cover; }
+.flashbang-still { animation: flashbang-soft 0.6s ease-out both; }
+@keyframes flashbang-soft { from { opacity: 0; } to { opacity: 1; } }
+@keyframes flashbang-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Proficiency level (from backend/src/proficiency.rs) ---------- */
+.level-badge { display: inline-flex; align-items: center; gap: 0.35rem; border: 1.5px solid; border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600; font-size: 0.72rem; background: var(--card); }
+.level-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; }

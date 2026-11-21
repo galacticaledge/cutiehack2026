@@ -2,7 +2,8 @@ import { BookHeart, Check, Clock, Crown, FlaskConical, Gavel, KeyRound, Rabbit, 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheshireGrin, flavorFor, Tart } from "@/components/wonder";
-import { api, type Me, type Problem, type SessionView } from "@/lib/api";
+import { api, type ConceptMap, type Me, type Problem, type SessionView } from "@/lib/api";
+import { conceptForTemplate, LEVELS } from "@/components/proficiency";
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -15,7 +16,7 @@ function Panel({ title, children, className = "" }: { title: string; children: R
 
 /* ---------------- Hall of Doors: left column ---------------- */
 
-export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
+export function YourDreamPanel({ problems, concepts }: { problems: Problem[] | null; concepts?: ConceptMap | null }) {
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
     const load = () => api<Me>("/api/me").then(setMe).catch(() => {});
@@ -23,7 +24,10 @@ export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
     window.addEventListener("socra:balance", load);
     return () => window.removeEventListener("socra:balance", load);
   }, []);
-  const eaten = problems?.filter((p) => p.rewardStatus === "paid").length ?? 0;
+  // A door counts as opened once you've finished its trial (paid, pending delivery or forfeited).
+  const eaten = problems?.filter((p) => p.rewardStatus !== null || (conceptForTemplate(concepts ?? null, p.id)?.proficiency ?? "new") !== "new").length ?? 0;
+  const proficientCount = concepts?.concepts.filter((c) => c.proficiency === "proficient").length ?? 0;
+  const demonstratedCount = concepts?.concepts.filter((c) => c.proficiency === "demonstrated").length ?? 0;
   const total = problems?.length ?? 0;
   const capPct = me && me.dailyCap > 0 ? Math.min(100, (me.earnedToday / me.dailyCap) * 100) : 0;
 
@@ -60,17 +64,32 @@ export function YourDreamPanel({ problems }: { problems: Problem[] | null }) {
             const f = flavorFor(p.id);
             const Icon = f?.icon ?? KeyRound;
             const status = p.rewardStatus;
+            const topic = conceptForTemplate(concepts ?? null, p.id);
             return (
               <li key={p.id} className="flex items-center gap-2">
                 <Icon className="size-4 shrink-0 text-[var(--tan)]" />
                 <span className="min-w-0 flex-1 truncate">{f?.character ?? p.title}</span>
                 {status === "paid" && <Check className="size-4 text-[var(--potion)]" aria-label="earned" />}
                 {status === "forfeited" && <X className="size-4 text-[var(--heart)]" aria-label="forfeited" />}
-                {!status && <span className="text-xs tabular-nums text-muted-foreground">{p.maxReward}</span>}
+                {topic && topic.proficiency !== "new" ? (
+                  <span className="text-xs text-muted-foreground" title={LEVELS[topic.proficiency].hint}>
+                    {LEVELS[topic.proficiency].label}
+                  </span>
+                ) : (
+                  !status && <span className="text-xs tabular-nums text-muted-foreground">{p.maxReward}</span>
+                )}
               </li>
             );
           })}
         </ul>
+        {concepts && proficientCount + demonstratedCount > 0 && (
+          <p className="mt-3 flex items-center justify-between text-xs" title="Across every topic on the Map of Wonderland">
+            <span className="text-muted-foreground">Across the map</span>
+            <span className="font-semibold tabular-nums">
+              {proficientCount} proficient · {demonstratedCount} demonstrated
+            </span>
+          </p>
+        )}
         <Link to="/journal" className="mt-3 flex items-center gap-1 text-xs font-medium text-[var(--tan)] hover:underline">
           <BookHeart className="size-3.5" /> Read your dream journal
         </Link>
@@ -85,7 +104,7 @@ const RECIPE: { icon: typeof Tart | typeof FlaskConical; label: string; value: s
   { icon: Sparkles, label: "Base", value: "100 × ♥", note: "per heart of difficulty" },
   { icon: FlaskConical, label: "Drink Me", value: "×1 · .75 · .5 · .3", note: "for 0–3 hints" },
   { icon: X, label: "Wrong turns", value: "−10% each", note: "never below ×0.6" },
-  { icon: Gavel, label: "Testimony", value: "×1 or ×0.5", note: "convincing, or not" },
+  { icon: Gavel, label: "Testimony", value: "×1 or ×0.5", note: "convincing within 3 tries, or not" },
 ];
 
 export function TartRecipePanel() {
@@ -133,7 +152,7 @@ export function TartRecipePanel() {
           </li>
           <li className="flex gap-2">
             <Crown className="mt-0.5 size-4 shrink-0 text-[var(--heart)]" />
-            <span>Suspiciously fast or pasted solves go to trial. Weak testimony: off with the tarts.</span>
+            <span>Suspiciously fast or pasted solves go to trial. Three tries to convince the court, or it's off with the tarts.</span>
           </li>
         </ul>
       </Panel>
@@ -146,7 +165,7 @@ export function TartRecipePanel() {
 type Stop = { label: string; done: boolean; current?: boolean; icon: typeof Rabbit; detail?: string };
 
 export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: string[] }) {
-  const isBank = s.source === "bank";
+  const isBank = s.source === "bank" || s.source === "quest"; // both have a verified answer and a trial
   const solved = s.status !== "active";
   const done = s.status === "done";
   const stops: Stop[] = [{ label: "Fell down the rabbit hole", done: true, icon: Rabbit }];
@@ -211,10 +230,12 @@ export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: 
       {isBank && (
         <Panel title="Pockets">
           <dl className="grid grid-cols-2 gap-2 text-center text-xs">
-            <div className="rounded-lg bg-secondary/70 p-2">
+            {s.source === "bank" && (
+              <div className="rounded-lg bg-secondary/70 p-2">
               <dt className="text-muted-foreground">Bottles drunk</dt>
               <dd className="text-lg font-semibold tabular-nums">{s.hintsUsed}/3</dd>
             </div>
+            )}
             <div className="rounded-lg bg-secondary/70 p-2">
               <dt className="text-muted-foreground">Wrong turns</dt>
               <dd className="text-lg font-semibold tabular-nums">{s.wrongAttempts}</dd>

@@ -1,5 +1,6 @@
-import { Check, ExternalLink, FlaskConical, KeyRound, MessageCircle, ScrollText, Send, Volume2, X } from "lucide-react";
+import { BoxSelect, Check, ExternalLink, FlaskConical, KeyRound, MessageCircle, ScrollText, Send, Sparkles, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
@@ -8,10 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { celebrate, CheshireAppearing, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
+import { wakeUp } from "@/components/celebrations";
 import { FallingIntro, hasToured, heartsBurst, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
 import { play } from "@/lib/sfx";
 import { AnswerDoor, type DoorState } from "@/components/doors";
 import { DrinkMeBottles } from "@/components/potions";
+import { AnswerPreview, MathKeys } from "@/components/mathpad";
+import { TypedMarkdown } from "@/components/typed";
+import { conceptForTemplate, LevelBadge, LevelSteps, suggestFrom, useConceptMap } from "@/components/proficiency";
 import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
@@ -84,6 +89,10 @@ export function Workspace() {
   const [flagged, setFlagged] = useState(false);
   const [explainText, setExplainText] = useState("");
   const [explaining, setExplaining] = useState(false);
+  // A weak testimony gets the jury's note and another try (the server counts tries).
+  const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
+  // After the trial: how this topic's proficiency stands now, and where to go next.
+  const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -114,6 +123,21 @@ export function Workspace() {
     if (doorTimer.current) clearTimeout(doorTimer.current);
   }, []);
   const endIntro = useCallback(() => setIntro(false), []);
+  // Keep the newest words in view while the Cat is "typing".
+  const followChat = useCallback(() => chatEnd.current?.scrollIntoView({ block: "end" }), []);
+
+  // Judge mode can put a line in the chat box for the presenter (it isn't sent automatically).
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text !== "string") return;
+      setMsg(text);
+      showTab("chat");
+      setTimeout(() => chatInput.current?.focus(), 0);
+    };
+    window.addEventListener("socra:prefill-chat", onPrefill);
+    return () => window.removeEventListener("socra:prefill-chat", onPrefill);
+  }, [showTab]);
 
   // The chat box grows with the message (up to ~6 lines, then scrolls) and shrinks back after sending.
   const CHAT_MAX_PX = 160;
@@ -155,6 +179,7 @@ export function Workspace() {
 
   useEffect(() => {
     setS(null);
+    setJury(null);
     setLoadError(null);
     setLinks([]);
     setReaction(null);
@@ -267,14 +292,15 @@ export function Workspace() {
     return now - (firstSeen.current.get(id) ?? 0) < 700;
   };
   const isBank = s.source === "bank";
+  // Quest: a fresh, verified problem generated for a knowledge-map topic (earns like a bank problem, no hints).
   const isQuest = s.source === "quest";
-  // Verified answer + explain-back + possible payout (bank problems and generated topic problems).
   const earns = isBank || isQuest;
+  const sandboxChecked = isQuest && s.checkedBy === "sandbox";
   const flavor = flavorFor(s.templateId);
   // The Cheshire Cat appears a little more with every step the math engine confirms.
   const correctSteps = new Set(s.messages.flatMap((m) => m.verdicts.filter((v) => v.status === "correct").map((v) => v.label)));
-  const totalSteps = s.checkpointCount + 1; // + the final answer
-  const shownSteps = s.status === "active" ? Math.min(correctSteps.size, s.checkpointCount) : totalSteps;
+  const totalSteps = (s.checkpointCount ?? 0) + 1; // + the final answer
+  const shownSteps = s.status === "active" ? Math.min(correctSteps.size, s.checkpointCount ?? 0) : totalSteps;
   const catOpacity = isBank && totalSteps > 1 ? 0.3 + 0.7 * (shownSteps / totalSteps) : 1;
   const maxReward = 100 * s.difficulty;
   // The Cat's expression reacts to the last thing that happened.
@@ -337,6 +363,20 @@ export function Workspace() {
     }
   }
 
+  /** Math keys insert at the cursor (keeping the 40-character limit) and put the cursor where it's useful. */
+  function insertIntoAnswer(text: string, caret = text.length) {
+    const el = answerInput.current;
+    const start = el?.selectionStart ?? answer.length;
+    const end = el?.selectionEnd ?? answer.length;
+    const next = answer.slice(0, start) + text + answer.slice(end);
+    if (next.length > 40) return;
+    // Commit the new value and place the cursor in the same tick, so a key typed
+    // right after tapping a math key lands at the cursor, not at the end.
+    flushSync(() => setAnswer(next));
+    el?.focus();
+    el?.setSelectionRange(start + caret, start + caret);
+  }
+
   async function submitAnswer(e: React.FormEvent) {
     e.preventDefault();
     if (!answer.trim()) return;
@@ -379,8 +419,21 @@ export function Workspace() {
     setExplaining(true);
     if (!retry) play("gavel");
     try {
-      const r = await api<{ pass: boolean; feedback: string; reward: RewardView }>(`/api/sessions/${sessionId}/explain`, { text: retry ? "" : explainText });
+      const r = await api<{ pass: boolean; feedback: string; reward?: RewardView; retry?: boolean; triesLeft?: number }>(`/api/sessions/${sessionId}/explain`, {
+        text: retry ? "" : explainText,
+      });
+      if (r.retry) {
+        // Not convinced yet: keep the trial open with the jury's note and the student's words.
+        setJury({ feedback: r.feedback, triesLeft: r.triesLeft ?? 0 });
+        setReaction("puzzled");
+        play("boing");
+        await load();
+        return;
+      }
+      setJury(null);
       setExplainOpen(false);
+      // The dream ends: a short sunrise, then the celebrations and the result.
+      if (!retry) await wakeUp(r.reward?.status === "paid" && r.reward.amount > 0 ? r.reward.amount : null);
       if (!retry) {
         if (r.pass) {
           heartsBurst();
@@ -388,7 +441,7 @@ export function Workspace() {
         }
         else toast("The jury is unconvinced", { description: r.feedback });
       }
-      showRewardToast(r.reward);
+      if (r.reward) showRewardToast(r.reward);
       refreshBalance();
       await load();
     } catch (e) {
@@ -436,7 +489,7 @@ export function Workspace() {
         ))}
       </div>
       <main className="mx-auto grid max-w-[90rem] gap-6 px-4 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:grid-cols-[15rem_minmax(0,5fr)_minmax(0,6fr)]">
-        <aside className="hidden xl:block">
+        <aside aria-label="Dream map" className="hidden xl:block">
           <div className="sticky top-24" data-tour="map">
             <DreamMap s={s} correctLabels={[...correctSteps]} />
           </div>
@@ -447,18 +500,29 @@ export function Workspace() {
             <CardHeader>
               {flavor && <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">{flavor.character} · {flavor.concept}</p>}
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="font-display text-2xl font-normal">{s.title}</CardTitle>
-                {isBank && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
+                <CardTitle className="font-display text-2xl font-normal">
+                  <h1>{s.title}</h1>
+                </CardTitle>
+                {earns && s.startedAt && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
                 {!earns && <Badge variant="secondary">Practice dream</Badge>}
-                {isQuest && <Badge variant="outline">New topic</Badge>}
+                {isQuest && <Badge variant="outline" className="border-[var(--tan)]/50 text-[var(--tan)]"><Sparkles /> New topic</Badge>}
                 {earns && s.practice && <Badge variant="secondary">{isQuest ? "Practice dream" : "Unbirthday: already earned"}</Badge>}
                 {s.status !== "active" && earns && <Badge className="bg-[var(--gold)] text-white">Solved</Badge>}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
+              {sandboxChecked && (
+                <p className="solari-badge" title="The answer was found by running this exact program in an isolated, network-less Solari sandbox, not by AI.">
+                  <BoxSelect className="size-4" /> Verified by running the code in a Solari sandbox
+                </p>
+              )}
               {isQuest && s.practiceReason && <p className="text-sm text-muted-foreground">{s.practiceReason}</p>}
-              {earns && <p className="text-sm text-muted-foreground">Attempts on this problem on {s.attemptsDateUtc} (UTC): {s.attemptsToday}</p>}
+              {earns && s.attemptsDateUtc && (
+                <p className="text-sm text-muted-foreground">
+                  Attempts on this problem on {s.attemptsDateUtc} (UTC): {s.attemptsToday}
+                </p>
+              )}
+              {earns ? <Markdown>{s.prompt}</Markdown> : <pre className="whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-sm">{s.prompt}</pre>}
 
               {isBank && (
                 <div className="space-y-2">
@@ -509,6 +573,12 @@ export function Workspace() {
                     {submitting ? "Checking…" : "Try the door"}
                   </Button>
                 </form>
+                {s.status === "active" && !s.locked && (
+                  <div className="space-y-1.5 pl-[46px]">
+                    <MathKeys onInsert={insertIntoAnswer} disabled={submitting} />
+                    <AnswerPreview value={answer} />
+                  </div>
+                )}
                 {earns && (
                   <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
@@ -520,7 +590,7 @@ export function Workspace() {
                         : `Attempts left: ${s.attemptsLeft}`}
                     </span>
                     <span className="flex items-center gap-1 font-semibold text-foreground">
-                      {s.practice ? "Unbirthday practice: no tarts" : <ShrinkingTart value={s.potentialReward} max={maxReward} />}
+                      {s.practice ? (isQuest ? "Practice dream: no tarts" : "Unbirthday practice: no tarts") : <ShrinkingTart value={s.potentialReward} max={maxReward} />}
                     </span>
                   </div>
                 )}
@@ -577,6 +647,28 @@ export function Workspace() {
                 ) : (
                   <p className="text-muted-foreground">No tarts for this one (unbirthday practice or the daily cap).</p>
                 )}
+                {(() => {
+                  const topic = isQuest ? concepts?.concepts.find((c) => c.id === s.conceptId) : conceptForTemplate(concepts, s.templateId);
+                  const next = suggestFrom(concepts, 5).find((sg) => sg.concept.id !== topic?.id);
+                  if (!topic) return null;
+                  return (
+                    <div className="space-y-2 rounded-xl border border-[var(--border)] bg-secondary/50 p-3" aria-label="Proficiency">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tan)]">Your proficiency in {topic.title}</p>
+                      <LevelBadge level={topic.proficiency} attemptsToday={topic.attemptsToday} />
+                      <LevelSteps level={topic.proficiency} />
+                      {topic.proficiency === "demonstrated" && (
+                        <p className="text-xs text-muted-foreground">Solve a different problem on this topic and convince the court again to become Proficient. Repeating the same question counts once.</p>
+                      )}
+                      {next && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Next: </span>
+                          <span className="font-semibold">{next.concept.title}</span>
+                          <span className="text-muted-foreground">. {next.reason}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-2 pt-1">
                   {s.reward?.status === "paid" && (
                     <ShareDreamButton
@@ -667,8 +759,13 @@ export function Workspace() {
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
-                    {/* Student text is shown exactly as typed ("4*2, 4*3" must not turn into Markdown italics), line breaks kept. */}
-                    {m.role === "user" ? <p className="whitespace-pre-wrap break-words">{m.content}</p> : <Markdown>{m.content}</Markdown>}
+                    {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
+                    {m.role === "user" ? (
+                      // Shown exactly as typed: "4*2, 4*3" must not turn into Markdown italics; line breaks kept.
+                      <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                    ) : (
+                      <TypedMarkdown text={m.content} animate={isFresh(m.id)} onProgress={followChat} />
+                    )}
                   </div>
                 </div>
                 {m.role === "user" && m.verdicts.length > 0 && (
@@ -729,7 +826,7 @@ export function Workspace() {
                 {isBank
                   ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right."
                   : isQuest
-                    ? s.checkedBy === "sandbox"
+                    ? sandboxChecked
                       ? "The answer comes from running this exact program in an isolated Solari sandbox, not from AI."
                       : "Your final answer is checked by a math engine. Steps in chat aren't."
                     : "Practice dream: steps aren't machine-checked here."}
@@ -757,18 +854,39 @@ export function Workspace() {
             <DialogTitle className="font-display text-2xl font-normal">{flagged ? "Who stole the tarts? ♥" : "The trial: why does it work?"}</DialogTitle>
             <DialogDescription>
               {flagged
-                ? "This solve looked suspicious (very fast, pasted, after wandering off, or your approach in chat didn't hold up). Convincing testimony keeps your tarts; weak testimony and it's off with their heads (this reward is forfeited)."
+                ? "This solve looked suspicious (very fast, pasted, after wandering off, or your approach in chat didn't hold up). Convince the court and you keep your tarts. You get 3 tries; if none convinces, it's off with their heads (this reward is forfeited)."
                 : s.practice
-                  ? "Practice dream: no tarts on this one, but your testimony still counts toward mastering the topic."
+                  ? isQuest
+                    ? "Practice dream: no tarts on this one, but your testimony still counts toward mastering the topic."
+                    : "Unbirthday practice: you've already earned on this one."
                   : isQuest
-                    ? "You found the answer. Now, in 1–2 sentences, testify why your method works. New topics pay only when your testimony holds up."
+                    ? "You found the answer. Now, in 1–2 sentences, testify why your method works. New topics pay only when the court is convinced."
                     : "You found the answer. Now, in 1–2 sentences, testify why your method works. Real understanding doubles your tarts."}
             </DialogDescription>
           </DialogHeader>
-          <Textarea value={explainText} onChange={(e) => setExplainText(e.target.value)} rows={4} maxLength={1500} placeholder="Your Majesty, my method works because…" />
-          <DialogFooter>
+          {jury && (
+            <div className="jury-note flip-in" role="status">
+              <p className="font-display text-lg leading-tight">The jury isn't convinced yet</p>
+              <p className="mt-1 text-sm">{jury.feedback}</p>
+              <p className="mt-1.5 text-xs font-semibold text-[var(--tan)]">
+                {jury.triesLeft === 1 ? "1 try left. Make it count!" : `${jury.triesLeft} tries left.`} Add to your testimony below and present it again.
+              </p>
+            </div>
+          )}
+          <Textarea
+            value={explainText}
+            onChange={(e) => setExplainText(e.target.value)}
+            rows={4}
+            maxLength={1500}
+            placeholder="Your Majesty, my method works because…"
+            aria-label="Your testimony"
+          />
+          <DialogFooter className="items-center sm:justify-between">
+            <span className="text-xs text-muted-foreground">
+              {(jury?.triesLeft ?? s.testimonyTriesLeft ?? 3) < 3 ? `${jury?.triesLeft ?? s.testimonyTriesLeft} of 3 tries left` : "You get 3 tries to convince the court"}
+            </span>
             <Button onClick={() => submitExplain(false)} disabled={explaining || explainText.trim().length < 10}>
-              {explaining ? "The jury is deliberating…" : "Present testimony"}
+              {explaining ? "The jury is deliberating…" : jury ? "Present it again" : "Present testimony"}
             </Button>
           </DialogFooter>
         </DialogContent>

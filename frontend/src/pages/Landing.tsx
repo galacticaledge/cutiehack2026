@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheshireGrin, Tart } from "@/components/wonder";
+import { SocraLogo } from "@/components/logo";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
-import { SparkleTrail } from "@/components/extras";
+import { SparkleTrail } from "@/components/celebrations";
 import { api } from "@/lib/api";
 
 const FLOATERS = [
@@ -79,28 +80,34 @@ export function Landing() {
       ))}
 
       <SparkleTrail />
-      <LookingGlassToggle className="absolute right-4 top-4 z-10 border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
+      <nav aria-label="Display" className="absolute right-4 top-4 z-10">
+        <LookingGlassToggle className=" border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
+      </nav>
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-2xl flex-col justify-center gap-9 px-4 py-16">
         <div className="space-y-4 text-center">
-          <button
-            type="button"
-            onClick={poke}
-            className="mx-auto block rounded-full focus-visible:outline-2"
-            aria-label="Poke the Cheshire Cat"
-            title="Go on, poke the Cat"
-          >
-            <CheshireGrin className={`grin-mirror float size-24 drop-shadow-lg transition-opacity duration-500 ${hidden ? "opacity-0" : "opacity-100"}`} />
-          </button>
-          <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
-            {vanishes > 0 && `The Cat has vanished ${vanishes} ${vanishes === 1 ? "time" : "times"}${vanishes >= 6 ? ". Six impossible things before breakfast!" : ""}`}
-          </p>
           <p className="inline-flex items-center gap-2 rounded-full border border-[var(--tan)]/40 bg-[#faf8f1]/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tan)] dark:bg-white/5">
             ✦ Dream to Wonderland · Cutie Hack 2026 ✦
           </p>
-          <h1 className="font-display text-6xl leading-none text-[var(--night)] dark:text-foreground sm:text-7xl">
-            Socra
-            <span className="mt-2 block text-2xl italic text-[var(--tan)] sm:text-3xl">a Socratic dream in Wonderland</span>
-          </h1>
+          <div className="relative mx-auto w-[min(100%,23rem)]">
+            <h1>
+              <SocraLogo className="h-auto w-full" />
+            </h1>
+            {/* The Cheshire Cat perches on the sign (and still vanishes when poked). */}
+            <button
+              type="button"
+              onClick={poke}
+              className="absolute rounded-full focus-visible:outline-2"
+              style={{ left: "77%", top: "-5%" }}
+              aria-label="Poke the Cheshire Cat"
+              title="Go on, poke the Cat"
+            >
+              <CheshireGrin className={`grin-mirror float size-14 drop-shadow-md transition-opacity duration-500 ${hidden ? "opacity-0" : "opacity-100"}`} />
+            </button>
+          </div>
+          <p className="font-display text-2xl italic text-[var(--tan)] sm:text-3xl">a Socratic dream in Wonderland</p>
+          <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
+            {vanishes > 0 && `The Cat has vanished ${vanishes} ${vanishes === 1 ? "time" : "times"}${vanishes >= 6 ? ". Six impossible things before breakfast!" : ""}`}
+          </p>
           <p className="mx-auto max-w-lg text-lg text-muted-foreground">
             A tutor that, like the Cheshire Cat, answers your questions with questions. Find your own way out of the dream and wake up with{" "}
             <span className="inline-flex items-center gap-1 font-semibold text-[var(--heart)]">
@@ -149,10 +156,10 @@ export function Landing() {
           Built with AIsa · ElevenLabs · Keenable · Solana devnet
         </p>
       </main>
-      <aside className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+      <aside aria-label="Meet the cast" className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
         <CastPanel />
       </aside>
-      <aside className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
+      <aside aria-label="Why it works" className="absolute right-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">
         <WhyPanel />
       </aside>
       <DreamFooter />
