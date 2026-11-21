@@ -14,6 +14,7 @@ import { play } from "@/lib/sfx";
 import { AnswerDoor, type DoorState } from "@/components/doors";
 import { DrinkMeBottles } from "@/components/potions";
 import { AnswerPreview, MathKeys } from "@/components/mathpad";
+import { TypedMarkdown } from "@/components/typed";
 import { LostInWonderland, WorkspaceSkeleton } from "@/components/skeletons";
 import { PocketWatch, ShrinkingTart } from "@/components/scenery";
 import { DreamMap } from "@/components/guides";
@@ -116,6 +117,8 @@ export function Workspace() {
     if (doorTimer.current) clearTimeout(doorTimer.current);
   }, []);
   const endIntro = useCallback(() => setIntro(false), []);
+  // Keep the newest words in view while the Cat is "typing".
+  const followChat = useCallback(() => chatEnd.current?.scrollIntoView({ block: "end" }), []);
 
   // Judge mode can put a line in the chat box for the presenter (it isn't sent automatically).
   useEffect(() => {
@@ -708,7 +711,11 @@ export function Workspace() {
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
                     {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
-                    <Markdown>{m.role === "user" ? m.content.replace(/\n/g, "  \n") : m.content}</Markdown>
+                    {m.role === "user" ? (
+                      <Markdown>{m.content.replace(/\n/g, "  \n")}</Markdown>
+                    ) : (
+                      <TypedMarkdown text={m.content} animate={isFresh(m.id)} onProgress={followChat} />
+                    )}
                   </div>
                 </div>
                 {m.role === "user" && m.verdicts.length > 0 && (
