@@ -1,5 +1,5 @@
 import { Check, ExternalLink, FlaskConical, KeyRound, MessageCircle, ScrollText, Send, Volume2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
@@ -87,7 +87,7 @@ export function Workspace() {
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
-  const chatInput = useRef<HTMLInputElement>(null);
+  const chatInput = useRef<HTMLTextAreaElement>(null);
   const answerInput = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const [intro, setIntro] = useState(() => Boolean((location.state as { fresh?: boolean } | null)?.fresh));
@@ -114,6 +114,22 @@ export function Workspace() {
     if (doorTimer.current) clearTimeout(doorTimer.current);
   }, []);
   const endIntro = useCallback(() => setIntro(false), []);
+
+  // The chat box grows with the message (up to ~6 lines, then scrolls) and shrinks back after sending.
+  const CHAT_MAX_PX = 160;
+  const fitChat = useCallback(() => {
+    const el = chatInput.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const h = Math.min(el.scrollHeight + 2, CHAT_MAX_PX);
+    el.style.height = `${h}px`;
+    el.style.overflowY = el.scrollHeight + 2 > CHAT_MAX_PX ? "auto" : "hidden";
+  }, []);
+  useLayoutEffect(fitChat, [msg, mobileTab, fitChat]);
+  useEffect(() => {
+    window.addEventListener("resize", fitChat);
+    return () => window.removeEventListener("resize", fitChat);
+  }, [fitChat]);
 
   // Play the falling intro once per fresh door, then clear the flag so a reload doesn't replay it.
   useEffect(() => {
@@ -645,7 +661,8 @@ export function Workspace() {
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
-                    <Markdown>{m.content}</Markdown>
+                    {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
+                    <Markdown>{m.role === "user" ? m.content.replace(/\n/g, "  \n") : m.content}</Markdown>
                   </div>
                 </div>
                 {m.role === "user" && m.verdicts.length > 0 && (
@@ -676,13 +693,32 @@ export function Workspace() {
             <div ref={chatEnd} />
           </CardContent>
           <div className="border-t p-3">
-            <form onSubmit={sendChat} className="flex gap-2">
-              <Input ref={chatInput} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Tell the Cat what you're thinking…" maxLength={2000} disabled={sending} aria-label="Message" />
-              <Button type="submit" size="icon" disabled={sending || !msg.trim()} aria-label="Send">
+            <form onSubmit={sendChat} className="flex items-end gap-2">
+              <textarea
+                ref={chatInput}
+                rows={1}
+                value={msg}
+                onChange={(e) => setMsg(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter sends; Shift+Enter makes a new line (and never while an IME is composing).
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder="Tell the Cat what you're thinking…"
+                maxLength={2000}
+                disabled={sending}
+                aria-label="Message"
+                aria-describedby="chat-hint"
+                className="block min-h-9 w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-[7px] text-base leading-5 outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
+              />
+              <Button type="submit" size="icon" className="size-9 shrink-0" disabled={sending || !msg.trim()} aria-label="Send">
                 <Send />
               </Button>
             </form>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <p id="chat-hint" className="sr-only">Enter to send, Shift+Enter for a new line.</p>
               <p>{isBank ? "Every step is checked by a math engine, not by AI, so the Cat can't pretend you're right." : "Practice dream: steps aren't machine-checked here."}</p>
               <div className="flex shrink-0 gap-3">
                 <button type="button" className="hover:underline" onClick={() => setTourOpen(true)}>
