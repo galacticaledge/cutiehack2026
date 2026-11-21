@@ -156,7 +156,7 @@ JSON only: {{\"pass\": boolean, \"feedback\": \"one encouraging sentence\"}}",
     ]
 }
 
-pub fn claim_extraction(message: &str, checkpoints: &[Checkpoint]) -> Vec<Msg> {
+pub fn claim_extraction(message: &str, tutor_question: Option<&str>, checkpoints: &[Checkpoint]) -> Vec<Msg> {
     let list = checkpoints
         .iter()
         .map(|c| {
@@ -169,16 +169,26 @@ pub fn claim_extraction(message: &str, checkpoints: &[Checkpoint]) -> Vec<Msg> {
         })
         .collect::<Vec<_>>()
         .join("\n");
+    let question: String = tutor_question.unwrap_or("(none: this is the student's first message)").chars().take(800).collect();
     vec![
-        Msg::system("You extract claims from a student's chat message. A claim is a specific value the student states for one of the quantities listed. Do not judge correctness. Answer only in JSON: {\"claims\": [{\"checkpointId\": string, \"claimed\": string}]}"),
+        Msg::system("You extract claims from a student's chat message. A claim is a specific value the student puts forward as the value of one of the quantities listed. Do not judge correctness. Answer only in JSON: {\"claims\": [{\"checkpointId\": string, \"claimed\": string}]}"),
         Msg::user(format!(
             "Quantities (id: description):
 {list}
-- unknown: any other mathematical claim
+
+The tutor's previous message (what the student is replying to):
+<tutor>{question}</tutor>
 
 Student message: <message>{message}</message>
 
-Return each value exactly as the student wrote it (e.g. \"21\", \"21x^2 + 8x - 3\", \"[3, 6, 9]\"). Only include values the student actually asserts, not questions they ask. Use \"final\" only when the student states their final answer. If there are no claims, return {{\"claims\": []}}."
+Rules:
+- Use the tutor's message to decide WHICH quantity the student is answering. A bare value like \"4, 8, 12, 16\" answers whatever the tutor just asked for.
+- Only extract a value the student states as their result for a listed quantity.
+- Do NOT extract numbers the student uses to explain how or why (e.g. \"multiples of 4: 4, 4*2...\" when asked how they decided),
+  examples, restatements of the problem or code, questions, or anything about a quantity the tutor didn't ask about and the student didn't name.
+- When unsure, return no claims. A missed check is harmless; a wrong one confuses the student.
+- Copy each value exactly as the student wrote it (e.g. \"21\", \"21x^2 + 8x - 3\", \"3, 6, 9\"). Use \"final\" only when the student states their final answer.
+If there are no claims, return {{\"claims\": []}}."
         )),
     ]
 }

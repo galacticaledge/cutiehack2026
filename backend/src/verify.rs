@@ -43,29 +43,36 @@ fn rhs(raw: &str) -> String {
     }
 }
 
+/// A list of values, each of which may be arithmetic ("4, 4*2, 4*3" → [4, 8, 12]).
+/// Items split on commas/semicolons/"and", or on whitespace when there are no commas.
+/// Any item that doesn't evaluate makes the whole list unverifiable (never a false ✗).
 pub fn parse_list(raw: &str) -> Option<Vec<f64>> {
-    let s = normalize_math(raw).to_lowercase().replace("and", " ");
-    if s.is_empty() || s.len() > 500 || s.chars().any(|c| c.is_alphabetic()) {
+    let lower = normalize_math(raw).to_lowercase();
+    let s = lower.trim().trim_start_matches(['[', '(', '{']).trim_end_matches([']', ')', '}', '.']);
+    if s.is_empty() || s.len() > 500 {
         return None;
     }
+    let s = s.replace(" and ", ",").replace(';', ",");
+    let items: Vec<&str> = if s.contains(',') { s.split(',').collect() } else { s.split_whitespace().collect() };
     let mut out = Vec::new();
-    let chars: Vec<char> = s.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        let neg = chars[i] == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit();
-        if chars[i].is_ascii_digit() || neg {
-            let start = i;
-            i += 1;
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                i += 1;
-            }
-            let t: String = chars[start..i].iter().collect();
-            out.push(t.parse().ok()?);
-        } else {
-            i += 1;
+    for item in items {
+        let item = item.trim();
+        let item = item.strip_prefix("and ").unwrap_or(item).trim();
+        if !item.is_empty() {
+            out.push(eval_number(item)?);
         }
     }
     (!out.is_empty()).then_some(out)
+}
+
+fn squash(s: &str) -> String {
+    normalize_math(s).to_lowercase().chars().filter(|c| !c.is_whitespace() && !"[](){}".contains(*c)).collect()
+}
+
+/// The extractor must quote the student: a claim whose text isn't in the message is dropped.
+pub fn claim_in_message(claimed: &str, message: &str) -> bool {
+    let c = squash(claimed);
+    !c.is_empty() && squash(message).contains(&c)
 }
 
 const SAMPLE_POINTS: [f64; 5] = [0.37, 1.3, -0.8, 2.1, -1.7];
@@ -196,6 +203,23 @@ mod tests {
         assert_eq!(v("kept_values", "3, 6 and 9"), Status::Correct);
         assert_eq!(v("kept_values", "[9, 6, 3]"), Status::Incorrect);
         assert_eq!(v("kept_values", "[3, 6]"), Status::Incorrect);
+    }
+    #[test]
+    fn list_items_can_be_arithmetic() {
+        assert_eq!(parse_list("4, 4*2, 4*3, 4*4"), Some(vec![4.0, 8.0, 12.0, 16.0]));
+        assert_eq!(parse_list("3 6 9"), Some(vec![3.0, 6.0, 9.0]));
+        assert_eq!(parse_list("[3, 6, 9]."), Some(vec![3.0, 6.0, 9.0]));
+        assert_eq!(v("kept_values", "3, 3*2, 3*3"), Status::Correct);
+        // Can't read an item → unverifiable, never a false ✗.
+        assert_eq!(v("kept_values", "3, 6, then 9"), Status::Unverifiable);
+        assert_eq!(v("kept_values", "multiples of 3"), Status::Unverifiable);
+    }
+    #[test]
+    fn claims_must_quote_the_student() {
+        assert!(claim_in_message("[4, 8, 12, 16]", "4, 8, 12, 16"));
+        assert!(claim_in_message("4, 4*2", "Multiples of 4. 4, 4*2, 4*3"));
+        assert!(!claim_in_message("[4, 8, 12, 16]", "Multiples of 4. 4, 4*2, 4*3, 4*4"));
+        assert!(!claim_in_message("", "anything"));
     }
     #[test]
     fn garbage_is_unverifiable() {

@@ -328,7 +328,13 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
     }
     let ctx = problem_context(&s)?;
     // Neuro-symbolic verification (bank sessions only; custom sessions have no ground truth).
-    let verdicts = if ctx.is_bank() { verify_message(&st, &message, &ctx.checkpoints).await } else { vec![] };
+    let verdicts = if ctx.is_bank() {
+        let prior = history(&st.pool, &s.id).await?;
+        let tutor_question = prior.iter().rev().find(|m| m.role == "tutor").map(|m| m.content.as_str());
+        verify_message(&st, &message, tutor_question, &ctx.checkpoints).await
+    } else {
+        vec![]
+    };
     let verdict_json = (!verdicts.is_empty()).then(|| serde_json::to_value(&verdicts).unwrap_or(Value::Null));
     let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
     let hist = history(&st.pool, &s.id).await?;

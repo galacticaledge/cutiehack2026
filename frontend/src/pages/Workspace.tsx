@@ -384,7 +384,8 @@ export function Workspace() {
             {s.messages.map((m) => (
               <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"} ${m.pending ? "opacity-70" : ""}`}>
-                  <Markdown>{m.content}</Markdown>
+                  {/* Student text is shown as typed: "4*2, 4*3" must not turn into Markdown italics. */}
+                  {m.role === "user" ? <p className="whitespace-pre-wrap break-words">{m.content}</p> : <Markdown>{m.content}</Markdown>}
                 </div>
                 {m.role === "user" && m.verdicts.length > 0 && (
                   <div className="mt-1 flex flex-wrap justify-end gap-1">
