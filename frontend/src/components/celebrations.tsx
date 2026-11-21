@@ -139,7 +139,7 @@ export function WakeUp() {
 
 /* ---------------- Easter egg: the Cheshire flashbang ---------------- */
 
-/** Spam the light/dark toggle (10 clicks in 4 s) and the Cat goes off like a flashbang.
+/** Spam the light/dark toggle (10 clicks in 6.5 s) and the Cat goes off like a flashbang.
  *  With reduced motion (or if the browser won't play the clip) a still of the glowing
  *  purple cat fades in gently instead: no flashing. */
 export function Flashbang() {

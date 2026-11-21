@@ -166,9 +166,9 @@ export function initLookingGlass() {
   });
 }
 
-// Easter egg: 10 clicks on the toggle within 4 seconds sets off the Cheshire flashbang.
+// Easter egg: 10 clicks on the toggle within 6.5 seconds sets off the Cheshire flashbang.
 const SPAM_CLICKS = 10;
-const SPAM_WINDOW_MS = 4000;
+const SPAM_WINDOW_MS = 6500;
 let recentClicks: number[] = [];
 function countClick() {
   const now = Date.now();
