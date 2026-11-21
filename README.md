@@ -79,6 +79,16 @@ Topics earn LEARN through a closed concept graph (`backend/src/concepts.rs`, ~40
 - Nodes that already have a bank template earn only through the verified bank problem.
 - **Code-tracing topics run the code (Solari).** With `SOLARI_API_KEY` set, computer-science nodes get a Python program instead of a math template. The server fills in the numbers and runs that exact program in a network-less [Solari](https://www.getsolari.com/) sandbox (`backend/src/solari.rs`). What it prints is the answer. Without a key, these nodes fall back to the math path.
 
+## Learning progress
+
+The map and checked Workspace count accepted final-answer checks (right or wrong, including practice) since midnight UTC. The map counts across a concept; the Workspace counts only the current problem session. Invalid or rejected submissions, chat, and custom sessions do not count. Historical session counters and solves can show progress but are not backfilled as daily attempts.
+
+- **New:** no checked attempt. **Learning:** at least one checked attempt or solve.
+- **Demonstrated:** a verified solve and an explain-back pass, including legacy and fallback passes.
+- **Proficient:** verified solves with actual grader passes on at least two distinct rendered prompts. The same question counts once even if it was generated with different seeds.
+
+The attempt log stores correctness and the number of revealed hints, not the submitted answer. Existing problem identity, solve timing and flags remain available as evidence. Explain-backs record when they were accepted and whether the pass/fail came from the grader or a fallback. None of this changes reward eligibility, amounts, or existing limits.
+
 ## Guarantees
 
 - The final answer never reaches the client: answers and checkpoints live only in `backend/src/problems.rs`; the session view omits them; every tutor reply passes the deterministic + LLM leak guard.

@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type ConceptMap, type ConceptNode, type Features } from "@/lib/api";
 
+const proficiencyLabel: Record<ConceptNode["proficiency"], string> = {
+  new: "New",
+  learning: "Learning",
+  demonstrated: "Demonstrated",
+  proficient: "Proficient",
+};
+
 export function KnowledgeMap() {
   const [map, setMap] = useState<ConceptMap | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
@@ -54,9 +61,12 @@ export function KnowledgeMap() {
             Asking for the same topic in different words lands on the same spot on the map.
           </p>
           {map && (
-            <p className="text-sm">
-              New-topic rewards today: <span className="font-medium">{map.topicRewardsToday} / {map.dailyTopicCap}</span>
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">Attempt counts for {map.attemptsDateUtc} (UTC). Proficiency and attempts are tracked separately from rewards.</p>
+              <p className="text-sm">
+                New-topic rewards today: <span className="font-medium">{map.topicRewardsToday} / {map.dailyTopicCap}</span>
+              </p>
+            </>
           )}
         </div>
 
@@ -90,6 +100,10 @@ export function KnowledgeMap() {
                         )}
                       </div>
                       {c.prereqs.length > 0 && <CardDescription>Builds on {c.prereqs.map(title).join(", ")}</CardDescription>}
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <Badge variant="outline">{proficiencyLabel[c.proficiency]}</Badge>
+                        <span>Attempts: {c.attemptsToday}</span>
+                      </div>
                     </CardHeader>
                     <CardContent className="flex items-center justify-between gap-2">
                       <span className="text-sm text-muted-foreground">{earnLabel(c)}</span>

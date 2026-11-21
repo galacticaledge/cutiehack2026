@@ -21,6 +21,7 @@ pub mod custom;
 pub mod error;
 pub mod llm;
 pub mod models;
+mod proficiency;
 pub mod prompts;
 pub mod resources;
 pub mod routes;
