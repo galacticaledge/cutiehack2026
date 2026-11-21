@@ -1,7 +1,7 @@
 //! SERVER ONLY view of a session's problem (includes the answer).
 use crate::models::ProblemSession;
 use crate::concepts::get_concept;
-use crate::problems::{get_template, Checkpoint, GeneratedProblem, Template};
+use crate::problems::{get_template, Checkpoint, CheckpointKind, GeneratedProblem, Template};
 use crate::quest::{Quest, QUEST_MIN_SOLVE_SECONDS};
 use serde::{Deserialize, Serialize};
 
@@ -94,7 +94,12 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             hints: vec![],
             answer: Some(q.answer),
             tolerance: q.tolerance,
-            checkpoints: vec![],
+            // Only "final": lets chat notice an answer stated outright (never judged in chat).
+            checkpoints: vec![Checkpoint {
+                id: "final",
+                label: "the final answer to the problem".into(),
+                kind: CheckpointKind::Number { value: q.answer, tolerance: q.tolerance },
+            }],
             difficulty: 1,
             min_solve_seconds: QUEST_MIN_SOLVE_SECONDS,
             template: None,

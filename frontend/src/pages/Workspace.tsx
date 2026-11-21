@@ -436,7 +436,7 @@ export function Workspace() {
             <DialogTitle>{flagged ? "Nice! Explain your reasoning to claim this reward." : "Correct! Now explain why it works."}</DialogTitle>
             <DialogDescription>
               {flagged
-                ? "This solve was flagged (very fast, pasted, or after leaving the tab). A solid explanation pays out normally; a weak one forfeits this reward."
+                ? "This solve was flagged (very fast, pasted, after leaving the tab, or your approach in chat didn't hold up). A solid explanation pays out normally; a weak one forfeits this reward."
                 : s.practice
                   ? "Practice mode: no reward on this one, but explaining still counts toward mastering the topic."
                   : isQuest

@@ -1,5 +1,5 @@
 //! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
-use crate::anticheat::{compute_flags, TelemetryEvent};
+use crate::anticheat::{compute_flags, TelemetryEvent, SKETCH_FAILED};
 use crate::answers::{is_correct, is_locked, parse_answer};
 use crate::auth::{session_cookie, AuthUser, COOKIE};
 use crate::claims::verify_message;
@@ -20,7 +20,7 @@ use crate::solana::{explorer_address_url, explorer_tx_url, generate_user_wallet}
 use crate::state::AppState;
 use crate::tts::synthesize;
 use crate::tutor::tutor_reply;
-use crate::verify::{verdict_chips, verdict_lines};
+use crate::verify::{sketch_line, stated_final, verdict_chips, verdict_lines};
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{header, StatusCode};
@@ -327,10 +327,17 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
         rate.insert(user.id.clone(), now);
     }
     let ctx = problem_context(&s)?;
-    // Neuro-symbolic verification (bank sessions only; custom sessions have no ground truth).
-    let verdicts = if ctx.is_bank() {
+    // Neuro-symbolic verification (bank: every checkpoint; generated topic problems: final-answer
+    // detection only; custom sessions have no ground truth).
+    let mut sketch_fact = None;
+    let verdicts = if ctx.earns() {
         let prior = history(&st.pool, &s.id).await?;
         let tutor_question = prior.iter().rev().find(|m| m.role == "tutor").map(|m| m.content.as_str());
+        // Previous message stated the answer outright → this one is the "how did you get it?" sketch.
+        let last_user = prior.iter().rev().find(|m| m.role == "user");
+        if s.status == "active" && last_user.is_some_and(|m| stated_final(m.verdicts.as_ref())) {
+            sketch_fact = grade_sketch(&st, &ctx, &s.id, &message).await?;
+        }
         verify_message(&st, &message, tutor_question, &ctx.checkpoints).await
     } else {
         vec![]
@@ -338,7 +345,9 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
     let verdict_json = (!verdicts.is_empty()).then(|| serde_json::to_value(&verdicts).unwrap_or(Value::Null));
     let user_msg = insert_message(&st.pool, &s.id, "user", &message, verdict_json).await?;
     let hist = history(&st.pool, &s.id).await?;
-    let r = tutor_reply(&st, &ctx, s.hints_used, &hist, &verdict_lines(&verdicts), None).await?;
+    let mut facts = verdict_lines(&verdicts);
+    facts.extend(sketch_fact);
+    let r = tutor_reply(&st, &ctx, s.hints_used, &hist, &facts, None).await?;
     let tutor_msg = insert_message(&st.pool, &s.id, "tutor", &r.reply, None).await?;
     Ok(Json(json!({
         "reply": r.reply,
@@ -347,6 +356,27 @@ async fn chat(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Pa
         "provider": r.provider,
         "verdicts": verdict_chips(&verdicts),
     })))
+}
+
+/// Grades the sketch and records it (the latest sketch counts at solve time). Returns the tutor fact.
+/// On grader failure: no record, no fact; the tutor falls back to its own rule 12.
+async fn grade_sketch(st: &AppState, ctx: &crate::context::ProblemContext, session_id: &str, sketch: &str) -> ApiResult<Option<String>> {
+    let sound = match complete_json(st, Kind::Check, &prompts::sketch_grader(ctx, sketch), None).await {
+        Ok(Some(v)) => v["sound"].as_bool(),
+        Ok(None) => None,
+        Err(e) => {
+            tracing::warn!("[sketch] grader failed: {e}");
+            None
+        }
+    };
+    let Some(sound) = sound else { return Ok(None) };
+    sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'sketch', $3)")
+        .bind(new_id())
+        .bind(session_id)
+        .bind(json!({ "sound": sound }))
+        .execute(&st.pool)
+        .await?;
+    Ok(Some(sketch_line(sound)))
 }
 
 async fn hint(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): Path<String>) -> ApiResult<J> {
@@ -428,7 +458,14 @@ async fn answer(State(st): State<AppState>, AuthUser(user): AuthUser, Path(id): 
             .iter()
             .map(|e| TelemetryEvent { kind: e.kind.clone(), target: e.data["target"].as_str().map(String::from), at: e.created_at })
             .collect();
-        let flags = compute_flags(s.started_at, now, ctx.min_solve_seconds, &telemetry);
+        let mut flags = compute_flags(s.started_at, now, ctx.min_solve_seconds, &telemetry);
+        let last_sketch: Option<Value> = sqlx::query_scalar("SELECT data FROM events WHERE session_id = $1 AND type = 'sketch' ORDER BY created_at DESC LIMIT 1")
+            .bind(&s.id)
+            .fetch_optional(&st.pool)
+            .await?;
+        if last_sketch.is_some_and(|d| d["sound"] == false) {
+            flags.push(SKETCH_FAILED);
+        }
         sqlx::query("INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'solve', $3)")
             .bind(new_id())
             .bind(&s.id)
