@@ -2,11 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, signUpThrowaway } from "@/lib/api";
 
-/**
- * Judge mode: a presenter panel for the 3-minute pitch. Hidden unless opened with
- * `?judge` in the URL or Shift+J. It never shows answers (they stay on the server);
- * it only sets up the demo moments and keeps time.
- */
 const KEY = "socra:judge";
 const PITCH_SECONDS = 180;
 
@@ -44,7 +39,6 @@ function writeEnabled(on: boolean) {
   }
 }
 
-/** Ask the problem page to put text in the chat box (it isn't sent; the presenter presses Enter). */
 function prefillChat(text: string) {
   window.dispatchEvent(new CustomEvent("socra:prefill-chat", { detail: text }));
 }
@@ -60,7 +54,6 @@ export function PresenterPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ?judge in the URL turns it on (and ?judge=0 off) for this browser tab.
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     if (q.has("judge")) {
@@ -70,7 +63,6 @@ export function PresenterPanel() {
     }
   }, [location.search]);
 
-  // Shift+J toggles it (not while typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -105,7 +97,7 @@ export function PresenterPanel() {
     try {
       await signUpThrowaway(prefix as "guest" | "copycat");
       try {
-        localStorage.setItem("socra:toured", "1"); // no tour popping up mid-pitch
+        localStorage.setItem("socra:toured", "1");
       } catch {
         /* ignore */
       }

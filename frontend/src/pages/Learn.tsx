@@ -51,7 +51,6 @@ function DoorCard({
   return (
     <article className={`flip-card playing-card ${flipped ? "is-flipped" : ""}`}>
       <div className="flip-inner">
-        {/* Front */}
         <div className="flip-face parchment relative flex flex-col gap-3 rounded-2xl p-5 pt-9" aria-hidden={flipped}>
           <span className={`pip pip-tl ${suitColor(suit)}`}>{suit}</span>
           <span className={`pip pip-br ${suitColor(suit)}`}>{suit}</span>
@@ -110,7 +109,6 @@ function DoorCard({
           )}
         </div>
 
-        {/* Back */}
         {f && (
           <div className="flip-face flip-back card-back-pattern relative flex flex-col gap-3 rounded-2xl p-5 text-[#faf8f1]" aria-hidden={!flipped}>
             <p className="font-display text-xl">{f.character}</p>
@@ -157,7 +155,6 @@ export function Learn() {
   }, []);
   const navigate = useNavigate();
 
-  // One door at a time: swing it open, then go through.
   function openDoor(id: string) {
     if (starting !== null || openingId !== null) return;
     setOpeningId(id);
@@ -205,7 +202,6 @@ export function Learn() {
           </p>
         </section>
 
-        {/* Top row: compact suggestions on the left, the Caterpillar's "ask anything" box beside them. */}
         <div className={suggestions.length ? "grid items-start gap-5 lg:grid-cols-2" : ""}>
           {suggestions.length > 0 && (
             <SuggestionCards

@@ -3,10 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { api } from "@/lib/api";
 
-/**
- * "Why Socra?": the same question asked of an answer machine and of the Cheshire Cat,
- * so the difference is obvious in three seconds.
- */
 export function WhySocra() {
   return (
     <section aria-labelledby="why-socra" className="space-y-3">
@@ -51,7 +47,6 @@ interface Stats {
   onChain: boolean;
 }
 
-/** Counts up once when it scrolls into view (instantly with reduced motion). */
 function CountUp({ value }: { value: number }) {
   const [shown, setShown] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
@@ -87,7 +82,6 @@ function CountUp({ value }: { value: number }) {
   );
 }
 
-/** Live numbers from the server: proof that the learn-it-yourself path is the one people take. Hidden if unavailable. */
 export function LiveStats() {
   const [stats, setStats] = useState<Stats | null>(null);
   useEffect(() => {

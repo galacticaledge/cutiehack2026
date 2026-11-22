@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ConceptMap, type ConceptNode } from "@/lib/api";
 
-/*
- * Learning progress comes from the backend's concept proficiency (backend/src/proficiency.rs).
- * These helpers read it and suggest where to go next; the badges live in components/proficiency.tsx.
- */
-
 export type Level = ConceptNode["proficiency"];
 
 export const LEVELS: Record<Level, { label: string; hint: string; color: string }> = {
@@ -15,7 +10,6 @@ export const LEVELS: Record<Level, { label: string; hint: string; color: string 
   proficient: { label: "Proficient", hint: "Verified solves with convincing testimonies on two different problems.", color: "var(--potion)" },
 };
 
-/** The concept map (with each concept's proficiency), or null if this server has none. Pass null to skip. */
 export function useConceptMap(refreshKey: unknown = 0) {
   const [map, setMap] = useState<ConceptMap | null>(null);
   useEffect(() => {
@@ -41,10 +35,6 @@ export interface Suggestion {
   reason: string;
 }
 
-/**
- * Up to three suggestions from the map: concepts one different problem away from Proficient,
- * ones already started, then open concepts not tried yet (easiest foundations first).
- */
 export function suggestFrom(map: ConceptMap | null, limit = 3): Suggestion[] {
   if (!map) return [];
   const byId = new Map(map.concepts.map((c) => [c.id, c]));

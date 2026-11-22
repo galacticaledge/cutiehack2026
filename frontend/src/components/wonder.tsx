@@ -3,11 +3,6 @@ import { suitColor } from "@/lib/flavor";
 
 export type CatMood = "neutral" | "delighted" | "puzzled" | "secretive";
 
-/**
- * The Cheshire Cat's grin (and eyes). `fading` makes it vanish and return, like the Cat.
- * `mood` changes the expression: delighted (step confirmed), puzzled (a wrong step),
- * secretive (asked for the answer).
- */
 export function CheshireGrin({
   className = "size-10",
   fading = false,
@@ -76,7 +71,6 @@ export function CheshireGrin({
   );
 }
 
-/** The Cat materialising while it thinks: eyes first, then the grin draws itself, then it fades and repeats. */
 export function CheshireAppearing({ className = "size-7" }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={`cat-appearing ${className}`} aria-hidden="true">
@@ -93,7 +87,6 @@ export function CheshireAppearing({ className = "size-7" }: { className?: string
   );
 }
 
-/** A jam tart, the Queen of Hearts' (and our) currency. */
 export function Tart({ className = "size-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
@@ -104,7 +97,6 @@ export function Tart({ className = "size-4" }: { className?: string }) {
   );
 }
 
-/** A short shower of falling playing-card suits. Fire with `window.dispatchEvent(new Event("wonder:celebrate"))`. */
 export function FallingCards() {
   const [burst, setBurst] = useState(0);
   useEffect(() => {

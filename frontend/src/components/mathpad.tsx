@@ -1,7 +1,6 @@
 import katex from "katex";
 import { useMemo } from "react";
 
-/** Keys for the answer box. `insert` is what goes in; `caret` is where the cursor lands inside it. */
 const MATH_KEYS: { label: string; insert: string; caret?: number; title: string }[] = [
   { label: "√", insert: "sqrt()", caret: 5, title: "Square root: sqrt(…)" },
   { label: "π", insert: "pi", title: "Pi" },
@@ -12,7 +11,6 @@ const MATH_KEYS: { label: string; insert: string; caret?: number; title: string 
   { label: ".", insert: ".", title: "Decimal point" },
 ];
 
-/** Find the index of the ")" matching the "(" at `open`, or -1. */
 function matching(s: string, open: number) {
   let depth = 0;
   for (let i = open; i < s.length; i++) {
@@ -24,11 +22,8 @@ function matching(s: string, open: number) {
 
 const ATOM = String.raw`(?:\d+(?:\.\d+)?|\\pi|\\sqrt\{[^{}]*\}|\([^()]*\))`;
 
-/** Turn a typed answer like `-3/4`, `sqrt(2)/2` or `2*pi` into LaTeX for the preview. */
 function answerToLatex(raw: string): string {
-  // Like the server's checker: "sqrt 5" / "sqrt5" mean sqrt(5).
   let s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/sqrt\s*(\d+(?:\.\d+)?)/g, "sqrt($1)").replace(/\s+/g, "");
-  // sqrt(...) → \sqrt{...}, innermost first via recursion
   const sqrt = (str: string): string => {
     let out = "";
     for (let i = 0; i < str.length; ) {
@@ -44,7 +39,6 @@ function answerToLatex(raw: string): string {
     return out;
   };
   s = sqrt(s).replace(/pi/g, "\\pi ");
-  // simple a/b → \frac{a}{b}
   const frac = new RegExp(`(${ATOM})/(${ATOM})`);
   for (let guard = 0; guard < 8 && frac.test(s); guard++) {
     s = s.replace(frac, (_, a: string, b: string) => `\\frac{${a.replace(/^\((.*)\)$/, "$1")}}{${b.replace(/^\((.*)\)$/, "$1")}}`);
@@ -52,7 +46,6 @@ function answerToLatex(raw: string): string {
   return s.replace(/\*/g, " \\cdot ").replace(/\^(\d+|\([^()]*\))/g, (_, e: string) => `^{${e.replace(/^\((.*)\)$/, "$1")}}`);
 }
 
-/** Answers the checker can't read, with a hint instead of a garbled preview. */
 function answerHint(raw: string): string | null {
   const s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/\s+/g, "");
   if (/sqrt\(?-/.test(s)) return "A square root of a negative number isn't a real number. Check your sign.";
@@ -60,7 +53,6 @@ function answerHint(raw: string): string | null {
   return null;
 }
 
-/** Live "reads as" preview of the answer, rendered with KaTeX. Renders nothing for empty or unreadable input. */
 export function AnswerPreview({ value }: { value: string }) {
   const hint = useMemo(() => answerHint(value), [value]);
   const html = useMemo(() => {
@@ -98,7 +90,6 @@ export function MathKeys({ onInsert, disabled }: { onInsert: (insert: string, ca
           title={k.title}
           aria-label={k.title}
           disabled={disabled}
-          // keep focus (and the caret) in the answer box
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onInsert(k.insert, k.caret)}
         >

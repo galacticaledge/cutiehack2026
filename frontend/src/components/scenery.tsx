@@ -2,8 +2,6 @@ import { BookOpen, Clock, Coffee, Crown, Feather, FlaskConical, Heart, KeyRound,
 import { useEffect, useRef, useState } from "react";
 import { useLookingGlass } from "@/lib/theme";
 
-/* ---------------- Side rails: the wide-screen margins become Wonderland ---------------- */
-
 const FALLING = [Clock, KeyRound, Coffee, BookOpen, FlaskConical, Spade, Crown, Heart, Feather, Rabbit];
 
 const QUOTES = [
@@ -16,7 +14,6 @@ const QUOTES = [
   { q: "I can't explain myself, I'm afraid, sir, because I'm not myself, you see.", who: "Alice" },
 ];
 
-/** Left rail: things tumbling down the rabbit hole, forever. */
 function RabbitHoleRail() {
   return (
     <div className="rail rail-left" aria-hidden="true">
@@ -42,7 +39,6 @@ function RabbitHoleRail() {
   );
 }
 
-/** Right rail: a swinging pocket watch above a slowly turning book of quotes. */
 function QuoteRail() {
   const [i, setI] = useState(() => Math.floor(Math.random() * QUOTES.length));
   useEffect(() => {
@@ -74,11 +70,9 @@ export function WonderSides() {
   );
 }
 
-/* ---------------- The White Rabbit's pocket watch ---------------- */
-
 export function WatchFace({ className = "size-8", seconds }: { className?: string; seconds?: number }) {
   const sec = seconds ?? 0;
-  const secAngle = sec * 6; // cumulative, so the hand never sweeps backwards past 12
+  const secAngle = sec * 6;
   const minAngle = ((sec / 60) % 60) * 6;
   return (
     <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
@@ -105,7 +99,6 @@ export function WatchFace({ className = "size-8", seconds }: { className?: strin
   );
 }
 
-/** Ticks from `startedAt` until `stoppedAt` (if solved). */
 export function PocketWatch({ startedAt, stoppedAt }: { startedAt: string; stoppedAt?: string | null }) {
   const start = new Date(startedAt).getTime();
   const end = stoppedAt ? new Date(stoppedAt).getTime() : null;
@@ -131,8 +124,6 @@ export function PocketWatch({ startedAt, stoppedAt }: { startedAt: string; stopp
   );
 }
 
-/* ---------------- Through the Looking-Glass (dark mode) ---------------- */
-
 export function LookingGlassToggle({ className = "", labelClassName = "hidden md:inline" }: { className?: string; labelClassName?: string }) {
   const { on, toggle } = useLookingGlass();
   return (
@@ -150,8 +141,6 @@ export function LookingGlassToggle({ className = "", labelClassName = "hidden md
     </button>
   );
 }
-
-/* ---------------- Shrinking tart: hints and wrong tries make it smaller ---------------- */
 
 export function ShrinkingTart({ value, max }: { value: number; max: number }) {
   const ratio = max > 0 ? Math.max(0.2, Math.min(1, value / max)) : 1;
@@ -181,8 +170,6 @@ export function ShrinkingTart({ value, max }: { value: number; max: number }) {
     </span>
   );
 }
-
-/* ---------------- Dream clouds (echoing Cutie Hack 2026's sky) ---------------- */
 
 function Cloud({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
   return (
@@ -217,9 +204,6 @@ export function DreamClouds() {
   );
 }
 
-/* ---------------- Footer ---------------- */
-
-/** Rolling hills, the Queen's castle, painted roses and two card-soldier guards. */
 function FooterScene() {
   const guard = (x: number, suit: "♥" | "♠", flip: boolean) => (
     <g transform={`translate(${x} 0)${flip ? " scale(-1 1)" : ""}`}>
@@ -251,7 +235,6 @@ function FooterScene() {
   return (
     <svg className="footer-scene" viewBox="0 0 1440 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <path d="M0 110C180 60 330 70 470 95S760 60 930 82s320 10 510-20V150H0z" fill="#b9d7a8" />
-      {/* castle */}
       <g transform="translate(640 22)" fill="#334356" opacity=".88">
         <rect x="20" y="40" width="120" height="70" />
         <rect x="0" y="20" width="30" height="90" />

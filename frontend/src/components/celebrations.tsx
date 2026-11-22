@@ -5,8 +5,6 @@ function reducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
-/* ---------------- Hearts burst (the court is convinced) ---------------- */
-
 export function HeartsBurst() {
   const [burst, setBurst] = useState(0);
   useEffect(() => {
@@ -48,8 +46,6 @@ export function HeartsBurst() {
   );
 }
 
-/* ---------------- Sparkle trail (landing page, mouse only) ---------------- */
-
 const SPARKLE_COLORS = ["#e0b775", "#f2b8c6", "#b9deff", "#c79bf5"];
 
 export function SparkleTrail() {
@@ -87,9 +83,6 @@ export function SparkleTrail() {
   return null;
 }
 
-
-/* ---------------- Waking up: a short sunrise when the trial ends ---------------- */
-
 export function WakeUp() {
   const [wake, setWake] = useState<WakeDetail | null>(null);
   useEffect(() => {
@@ -123,11 +116,6 @@ export function WakeUp() {
   );
 }
 
-/* ---------------- Easter egg: the Cheshire flashbang ---------------- */
-
-/** Spam the light/dark toggle (10 clicks in 6.5 s) and the Cat goes off like a flashbang.
- *  With reduced motion (or if the browser won't play the clip) a still of the glowing
- *  purple cat fades in gently instead: no flashing. */
 export function Flashbang() {
   const [mode, setMode] = useState<"off" | "video" | "still">("off");
   const [shownAt, setShownAt] = useState(0);
@@ -143,7 +131,6 @@ export function Flashbang() {
     if (mode === "off") return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMode("off");
     window.addEventListener("keydown", onKey);
-    // the still stays for a moment; the video closes itself, with a safety net
     const t = setTimeout(() => setMode("off"), mode === "still" ? 2600 : 6000);
     return () => {
       window.removeEventListener("keydown", onKey);
@@ -154,7 +141,6 @@ export function Flashbang() {
   return (
     <div
       className={`flashbang ${mode === "still" ? "flashbang-still" : ""}`}
-      // People reach the Easter egg by spam-clicking, so ignore clicks for a moment or the next one would close it instantly.
       onClick={() => Date.now() - shownAt > 1200 && setMode("off")}
       role="presentation"
       aria-hidden="true"
@@ -167,7 +153,6 @@ export function Flashbang() {
           muted
           playsInline
           ref={(v) => {
-            // React doesn't always reflect `muted` before autoplay; make sure, then fall back to the still if playback is refused.
             if (v) {
               v.muted = true;
               void v.play().catch(() => setMode("still"));
