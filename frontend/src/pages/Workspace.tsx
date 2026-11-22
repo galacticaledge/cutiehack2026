@@ -98,6 +98,9 @@ export function Workspace() {
   const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [chatTestimony, setChatTestimony] = useState("");
+  const [testifying, setTestifying] = useState(false);
+  const [chatVerdict, setChatVerdict] = useState<{ pass: boolean; feedback: string } | null>(null);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
   const chatInput = useRef<HTMLTextAreaElement>(null);
@@ -466,6 +469,26 @@ export function Workspace() {
     }
   }
 
+  async function testifyInChat() {
+    setTestifying(true);
+    try {
+      const r = await api<{ pass: boolean; feedback: string; reward?: RewardView }>(`/api/sessions/${sessionId}/testify`, { text: chatTestimony });
+      setChatVerdict({ pass: r.pass, feedback: r.feedback });
+      if (r.pass && r.reward?.status === "paid") {
+        toast.success(`+${r.reward.amount} tarts for explaining it in your own words!`);
+        celebrate();
+        refreshBalance();
+      } else if (r.pass && r.reward?.breakdown) {
+        toast(r.reward.breakdown);
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setTestifying(false);
+    }
+  }
+
   async function claimTopic() {
     setClaiming(true);
     try {
@@ -749,15 +772,52 @@ export function Workspace() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {s.claim.existingSessionId
-                      ? `You already have a checked problem on ${s.claim.title}. Pick it up where you left off.`
-                      : s.claim.reason
-                        ? `${s.claim.reason.replace(/ This one is practice\.$/, "")} You can still try a checked problem for practice.`
+                    {s.claim.reason
+                      ? `${s.claim.reason.replace(/ This one is practice\.$/, "")} ${s.claim.existingSessionId ? "Your checked problem here is practice for now." : "You can still try a checked problem for practice."}`
+                      : s.claim.existingSessionId
+                        ? `You already have a checked problem on ${s.claim.title} worth up to ${s.claim.reward} tarts. Pick it up where you left off.`
                         : `Chat as much as you like here (it's free practice). When you're ready, answer one checked problem on ${s.claim.title} and explain your method to earn up to ${s.claim.reward} tarts.`}
                   </p>
-                  <Button onClick={claimTopic} disabled={claiming}>
-                    {claiming ? "Building your problem…" : s.claim.existingSessionId ? "Continue my problem" : s.claim.reason ? "Try a checked problem" : "Claim tarts"}
+                  <Button variant={s.claim.reason ? "outline" : "default"} onClick={claimTopic} disabled={claiming}>
+                    {claiming ? "Building your problem…" : s.claim.existingSessionId ? (s.claim.reason ? "Continue practicing" : "Continue my problem") : s.claim.reason ? "Try a checked problem" : "Claim tarts"}
                   </Button>
+
+                  {s.claim.earnedHere ? (
+                    <p className="flex items-center gap-1.5 border-t pt-3 text-sm font-semibold text-[var(--gold)]">
+                      <Tart /> You earned {s.claim.earnedHere.amount} tarts in this chat by explaining {s.claim.title}.
+                    </p>
+                  ) : (
+                    !s.claim.reason &&
+                    s.claim.chatReward > 0 && (
+                      <div className="space-y-2 border-t pt-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold">Or earn right here: explain {s.claim.title} in your own words</p>
+                          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 text-sm font-bold text-white">
+                            <Tart /> +{s.claim.chatReward} TARTS
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          After a few messages with the Cat, tell the court how or why it works. Once per topic; {s.claim.testimonyTriesLeft} {s.claim.testimonyTriesLeft === 1 ? "try" : "tries"} left in this chat.
+                        </p>
+                        <Textarea
+                          value={chatTestimony}
+                          onChange={(e) => setChatTestimony(e.target.value)}
+                          onPaste={(e) => {
+                            e.preventDefault();
+                            toast("Write it in your own words: pasting is turned off here.");
+                          }}
+                          rows={3}
+                          maxLength={1500}
+                          placeholder={`In your own words: how does ${s.claim.title.toLowerCase()} work?`}
+                          aria-label={`Explain ${s.claim.title} in your own words`}
+                        />
+                        {chatVerdict && <p className={`text-sm ${chatVerdict.pass ? "text-[var(--gold)]" : "text-[var(--heart)]"}`}>{chatVerdict.feedback}</p>}
+                        <Button onClick={testifyInChat} disabled={testifying || chatTestimony.trim().length < 40 || s.claim.testimonyTriesLeft <= 0}>
+                          {testifying ? "The court is listening…" : "Testify"}
+                        </Button>
+                      </div>
+                    )
+                  )}
                 </CardContent>
               </Card>
             ) : (

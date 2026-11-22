@@ -10,7 +10,7 @@ use crate::personalized::PRIVATE_PRACTICE_REASON;
 use crate::problems::get_template;
 use crate::proficiency::utc_day;
 use crate::prompts::opening_message;
-use crate::rewards::{QUEST_BASE, bank_base, potential_reward};
+use crate::rewards::{CHAT_BASE, QUEST_BASE, bank_base, potential_reward};
 use crate::rng::{hash_seed, random_seed};
 use crate::solana::explorer_tx_url;
 use crate::state::AppState;
@@ -154,6 +154,31 @@ pub async fn topic_block_reason(
         )));
     }
     Ok(None)
+}
+
+/// A quest built while its node couldn't pay (prerequisites, daily cap, already earned...).
+pub fn is_practice_quest(s: &ProblemSession) -> bool {
+    s.custom_ref
+        .as_ref()
+        .and_then(|r| r.get("practiceReason"))
+        .is_some_and(|v| !v.is_null())
+}
+
+/// The quest to reopen for `c`. A practice quest isn't reopened once the node can pay:
+/// the student gets a fresh problem that earns (earning quests still never reroll).
+pub async fn reusable_quest(
+    state: &AppState,
+    user_id: &str,
+    c: &Concept,
+) -> anyhow::Result<Option<ProblemSession>> {
+    let q = active_quest(&state.pool, user_id, c).await?;
+    if let Some(s) = &q
+        && is_practice_quest(s)
+        && topic_block_reason(state, user_id, c).await?.is_none()
+    {
+        return Ok(None);
+    }
+    Ok(q)
 }
 
 /// Public quests never reroll. A private quest can be replaced once it has no attempts left;
@@ -469,7 +494,19 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
                 "reason": reason,
                 // What a clean claim pays (the quest base); 0 while the node can't pay.
                 "reward": if reason.is_none() { QUEST_BASE as i64 } else { 0 },
-                "existingSessionId": active_quest(&state.pool, user_id, c).await?.map(|q| q.id),
+                // Earn right here: explain it in your own words (see routes::testify).
+                "chatReward": if reason.is_none() { CHAT_BASE as i64 } else { 0 },
+                "testimonyTriesLeft": crate::routes::CHAT_TESTIMONY_TRIES
+                    - crate::routes::chat_testimony_tries(&state.pool, &s.id).await?,
+                "earnedHere": sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+                    .bind(&s.id)
+                    .fetch_optional(&state.pool)
+                    .await?
+                    .map(|r| reward_json(&state.cfg, &r)),
+                "existingSessionId": active_quest(&state.pool, user_id, c)
+                    .await?
+                    .filter(|q| !(reason.is_none() && is_practice_quest(q)))
+                    .map(|q| q.id),
             }))
         }
         _ => None,

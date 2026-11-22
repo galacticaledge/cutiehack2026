@@ -79,6 +79,9 @@ Only the 42 public concepts can earn LEARN. Migration `backend/migrations/0004_p
 - **No public rerolling:** asking again for a public node with an unfinished problem reopens it, even when its attempts are exhausted.
 - **Explain-back required** (no half reward), the usual anti-cheat flags (60 s minimum), base 50 instead of 100, and `DAILY_TOPIC_CAP` (default 3) new-topic rewards per day.
 - Nodes that already have a bank template earn only through the verified bank problem.
+- **Open chat earns through the map.** Typed topics and pasted problems always open a chat tagged with their node. A banner shows the payout and a **Claim tarts** button that opens the node's checked problem (`POST /api/sessions/{id}/claim`).
+- **Or earn in the chat itself.** After talking it through (3+ messages, 1+ minute), the student explains the node in their own words (`POST /api/sessions/{id}/testify`, 3 tries per chat). An LLM grader checks it against the chat (fails on copied tutor sentences); a pass pays `CHAT_BASE` (25) once per node, under the same graph rules.
+- **The map grows.** An academic topic that isn't on the map yet (e.g. "hash tables") becomes a new public node the first time anyone asks (`backend/src/grow.rs`, shown with a 🌱 on `/map`). The LLM must judge it new (not a duplicate or a narrower case of a node) and checkable with one numeric answer; the server validates the title, subject and aliases. Each user can add `DAILY_NEW_NODE_CAP` (default 3) nodes per day, and the node pays each student once like any other.
 - **Code-tracing topics run the code (Solari).** With `SOLARI_API_KEY` set, computer-science nodes get a Python program instead of a math template. The server fills in the numbers and runs that exact program in a network-less [Solari](https://www.getsolari.com/) sandbox (`backend/src/solari.rs`). What it prints is the answer. Without a key, these nodes fall back to the math path.
 
 ### Personalized graph API

@@ -1,6 +1,6 @@
 //! Bring-your-own problem/topic intake (SPEC §8.6) and generated topic problems. Results are SERVER ONLY.
 use crate::answers::parse_answer;
-use crate::concepts::{Concept, match_alias};
+use crate::concepts::{Concept, match_name};
 use crate::context::CustomRef;
 use crate::llm::{BoundedJson, Kind, Msg, complete_bounded, complete_json};
 use crate::problems::get_template;
@@ -96,7 +96,7 @@ pub async fn classify_topic<'a>(
     public: &'a [Concept],
 ) -> TopicClass<'a> {
     if text.chars().count() <= 80
-        && let Some(c) = match_alias(public, text)
+        && let Some(c) = match_name(public, text)
     {
         return TopicClass {
             academic: true,

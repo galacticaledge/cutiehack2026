@@ -119,6 +119,59 @@ pub(crate) fn match_alias<'a>(concepts: &'a [Concept], text: &str) -> Option<&'a
     top.next().is_none().then_some(*c)
 }
 
+/// Fast-path alias match for free text: only when the matched name is most of what was typed
+/// ("the chain rule", "momentum and collisions"). A single shared word inside a longer question
+/// ("how do hash tables handle collisions?") is left to the classifier.
+pub(crate) fn match_name<'a>(concepts: &'a [Concept], text: &str) -> Option<&'a Concept> {
+    let c = match_alias(concepts, text)?;
+    let t = normalize(text);
+    let words = t.split_whitespace().count().max(1);
+    let covered = names(c)
+        .map(normalize)
+        .filter(|p| contains_phrase(&t, p))
+        .map(|p| p.split_whitespace().count())
+        .max()?;
+    (covered * 2 >= words).then_some(c)
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    fn node(id: &str, title: &str, aliases: &[&str]) -> Concept {
+        Concept {
+            id: id.into(),
+            title: title.into(),
+            subject: "Physics".into(),
+            aliases: aliases.iter().map(|a| a.to_string()).collect(),
+            prereqs: vec![],
+            bank_template_id: None,
+            objective: None,
+        }
+    }
+
+    #[test]
+    fn a_shared_word_in_a_longer_question_is_not_a_match() {
+        let g = vec![
+            node(
+                "momentum",
+                "Momentum and collisions",
+                &["momentum", "collisions"],
+            ),
+            node("chain-rule", "Chain rule", &["chain rule"]),
+        ];
+        assert!(match_name(&g, "how do chained hash lists solve hash collisions?").is_none());
+        assert!(match_name(&g, "how do hash tables handle collisions").is_none());
+        assert_eq!(
+            match_name(&g, "momentum and collisions").unwrap().id,
+            "momentum"
+        );
+        assert_eq!(match_name(&g, "collisions").unwrap().id, "momentum");
+        assert_eq!(match_name(&g, "the chain rule").unwrap().id, "chain-rule");
+        assert_eq!(match_name(&g, "chain rule help").unwrap().id, "chain-rule");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
