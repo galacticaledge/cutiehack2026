@@ -269,6 +269,7 @@ async fn features(State(st): State<AppState>) -> J {
         "llmProvider": st.cfg.active_llm_provider(),
         "solana": st.solana.is_some(),
         "codeRunner": st.cfg.code_runner_enabled(),
+        "personalizedConcepts": st.cfg.personalized_concepts_enabled,
     }))
 }
 

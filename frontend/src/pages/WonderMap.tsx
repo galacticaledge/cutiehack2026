@@ -85,6 +85,15 @@ export function WonderMap() {
   const [graphOff, setGraphOff] = useState(false);
   const navigate = useNavigate();
   const loaded = useRef(false);
+  const detailRef = useRef<HTMLElement>(null);
+
+  // On narrow screens the details sit below the tunnel: bring them into view when a topic is picked.
+  useEffect(() => {
+    if (!selected || view !== "graph" || !window.matchMedia?.("(max-width: 1023px)").matches) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = setTimeout(() => detailRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" }), 60);
+    return () => clearTimeout(t);
+  }, [selected, view]);
 
   useEffect(() => {
     // Refreshes after accepting a topic keep the map on screen instead of flashing a skeleton.
@@ -258,7 +267,7 @@ export function WonderMap() {
       )}
 
       <div className="mt-3 flex flex-wrap justify-end gap-2">
-        {!graphOff && next?.kind !== "proposal" && (
+        {!graphOff && features?.personalizedConcepts !== false && next?.kind !== "proposal" && (
           <Button size="sm" variant="outline" disabled={next?.kind === "loading"} onClick={() => askNext(sel)} title="Ask for the next topic after this one">
             <Wand2 /> {next?.anchor === sel.id && next.kind === "loading" ? "Asking the Caterpillar…" : "What's next?"}
           </Button>
@@ -351,7 +360,7 @@ export function WonderMap() {
                   <GraphView concepts={map.concepts} selected={selected} onSelect={(id) => select(id === selected ? null : id)} />
                   <p className="text-center text-xs text-muted-foreground">Lines run from a topic to the ones it unlocks. Pick a topic to light up its path; the colored ring is your level.</p>
                 </div>
-                <aside aria-label="Selected topic" className="lg:sticky lg:top-24 lg:self-start">
+                <aside ref={detailRef} aria-label="Selected topic" className="scroll-mt-24 lg:sticky lg:top-24 lg:self-start">
                   {detail ?? (
                     <div className="parchment rounded-2xl p-5 text-sm text-muted-foreground">
                       <p className="font-display text-xl text-foreground">Pick a place</p>

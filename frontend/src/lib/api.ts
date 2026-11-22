@@ -131,6 +131,8 @@ export interface Features {
   llmProvider: string;
   solana: boolean;
   codeRunner?: boolean;
+  /** Personal topics and "What's next?" (absent on older servers: find out on first use). */
+  personalizedConcepts?: boolean;
 }
 
 export interface ConceptNode {
