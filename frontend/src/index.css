@@ -676,3 +676,19 @@ main { position: relative; z-index: 1; }
   content: ""; position: absolute; left: 50%; bottom: -7px; width: 18px; height: 3px; border-radius: 999px;
   transform: translateX(-50%); background: var(--gold-soft); box-shadow: 0 0 8px var(--gold-soft);
 }
+
+.dream-art { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 12px 18px rgb(40 30 70 / 0.18)); }
+.dark .dream-art { filter: drop-shadow(0 0 14px rgb(200 160 255 / 0.18)) brightness(0.92); }
+.dream-bob { animation: dream-bob 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes dream-bob { 50% { transform: translateY(-6px) rotate(-1.5deg); } }
+.dream-rings ellipse { animation: dream-ring 6s ease-out infinite; opacity: 0; transform-box: fill-box; transform-origin: center; }
+@keyframes dream-ring { 0% { opacity: 0; transform: translateY(14px) scale(0.6); } 25% { opacity: 0.9; } 100% { opacity: 0; transform: translateY(-26px) scale(1.3); } }
+.dream-twinkle > * { animation: dream-twinkle 3.2s ease-in-out infinite; }
+@keyframes dream-twinkle { 50% { opacity: 0.25; } }
+.dream-pulse { animation: dream-twinkle 5s ease-in-out infinite; }
+.dream-fade { animation: dream-fade 9s ease-in-out infinite; }
+@keyframes dream-fade { 50% { opacity: 0.55; } }
+.dream-blink { animation: dream-blink 5s infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes dream-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+.dream-steam { animation: dream-twinkle 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .dream-bob, .dream-rings ellipse, .dream-twinkle > *, .dream-pulse, .dream-fade, .dream-blink, .dream-steam { animation: none; } .dream-rings ellipse { opacity: 0.6; } }
