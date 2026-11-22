@@ -60,6 +60,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/tarts", get(crate::treasury::treasury))
         .route("/api/tarts/estimate", get(crate::treasury::estimate_route))
         .route("/api/features", get(features))
+        .route("/api/stats", get(stats))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
         .route("/api/sessions/{id}", get(get_session))
@@ -268,7 +269,36 @@ async fn features(State(st): State<AppState>) -> J {
         "llmProvider": st.cfg.active_llm_provider(),
         "solana": st.solana.is_some(),
         "codeRunner": st.cfg.code_runner_enabled(),
+        "personalizedConcepts": st.cfg.personalized_concepts_enabled,
     }))
+}
+
+/// Public, aggregate-only numbers for the landing page: proof the learn-it-yourself path is used.
+/// Counts only; no user, session or problem details leave the server.
+async fn stats(State(st): State<AppState>) -> ApiResult<Json<Value>> {
+    let (solves, testimonies): (i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*) FILTER (WHERE status IN ('solved', 'done')),
+                COUNT(*) FILTER (WHERE explain_passed)
+         FROM problem_sessions",
+    )
+    .fetch_one(&st.pool)
+    .await?;
+    let pastes_caught: i64 =
+        sqlx::query_scalar("SELECT COUNT(DISTINCT session_id) FROM events WHERE type = 'paste'")
+            .fetch_one(&st.pool)
+            .await?;
+    let paid: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM rewards WHERE status = 'paid'",
+    )
+    .fetch_one(&st.pool)
+    .await?;
+    Ok(Json(json!({
+        "verifiedSolves": solves,
+        "convincingTestimonies": testimonies,
+        "pastesCaught": pastes_caught,
+        "tartsPaid": st.cfg.from_base_units(paid),
+        "onChain": st.solana.is_some(),
+    })))
 }
 
 // ---------- sessions ----------

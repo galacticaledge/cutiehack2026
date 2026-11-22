@@ -14,7 +14,7 @@ import { DoorArt } from "@/components/doors";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
 import { LevelBadge, LevelSteps, SuggestionCards } from "@/components/proficiency";
 import { conceptForTemplate, suggestFrom, useConceptMap } from "@/lib/proficiency";
-import { api, mapAvailable, type ConceptNode, type Problem } from "@/lib/api";
+import { api, mapAvailable, startConcept, type ConceptNode, type Problem } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {
   return (
@@ -178,7 +178,7 @@ export function Learn() {
   async function start(body: unknown, key: string) {
     setStarting(key);
     try {
-      const { sessionId } = await api<{ sessionId: string }>("/api/sessions", body);
+      const { sessionId } = typeof body === "function" ? await (body as () => Promise<{ sessionId: string }>)() : await api<{ sessionId: string }>("/api/sessions", body);
       navigate(`/learn/${sessionId}`, { state: { fresh: true } });
     } catch (e) {
       toast.error((e as Error).message);
@@ -212,7 +212,7 @@ export function Learn() {
               compact
               suggestions={suggestions}
               busy={starting !== null || openingId !== null}
-              onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title } }, c.id))}
+              onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start(() => startConcept(c), c.id))}
             />
           )}
         <section aria-labelledby="ask-cat-heading" className={`parchment space-y-3 rounded-2xl p-5 ${suggestions.length ? "" : "mx-auto max-w-3xl"}`}>

@@ -7,6 +7,7 @@ import { CheshireGrin, Tart } from "@/components/wonder";
 import { SocraLogo } from "@/components/logo";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
+import { LiveStats, WhySocra } from "@/components/whysocra";
 import { SparkleTrail } from "@/components/celebrations";
 import { api, ApiError, PASSWORD_MAX, PASSWORD_MIN, signUpThrowaway, USERNAME_RE } from "@/lib/api";
 
@@ -229,10 +230,13 @@ export function Landing() {
           ))}
         </ol>
 
+        <WhySocra />
+        <LiveStats />
+
         <p className="text-center text-xs text-muted-foreground">
           Inspired by UC Irvine research (SIGCSE 2026) on slow, Socratic-paced AI tutoring.
           <br />
-          Built with AIsa · ElevenLabs · Keenable · Solana devnet
+          Built with OpenAI · Solari · ElevenLabs · Keenable · Solana devnet
         </p>
       </main>
       <aside aria-label="Meet the cast" className="absolute left-[max(1rem,calc(50%-40rem))] top-1/2 z-[1] hidden w-[17rem] -translate-y-1/2 min-[1340px]:block">

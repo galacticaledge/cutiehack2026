@@ -553,6 +553,86 @@ main { position: relative; z-index: 1; }
 .map-stone.is-locked { background: var(--muted); border-color: var(--border); color: var(--muted-foreground); }
 .dark .map-stone.is-available { background: #3a2e1a; color: #f1d79a; }
 
+.map-stone.is-own:not(.is-mastered) { background: #efe2ff; border-color: var(--cheshire); color: var(--cheshire); box-shadow: none; }
+.dark .map-stone.is-own:not(.is-mastered) { background: #2d2140; color: #d9c2ff; }
+.own-region { border-style: dashed; border-color: color-mix(in oklab, var(--cheshire) 55%, var(--border)); }
+
+/* ---------- Map view toggle + knowledge graph ---------- */
+.view-toggle { display: inline-flex; padding: 0.2rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card); }
+.view-toggle button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: var(--muted-foreground); }
+.view-toggle button[aria-checked="true"] { background: var(--primary); color: var(--primary-foreground); }
+.view-toggle button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.next-step { border: 1px solid color-mix(in oklab, var(--cheshire) 40%, var(--border)); background: color-mix(in oklab, var(--cheshire) 8%, var(--card)); }
+.graph-scroll { overflow: auto; max-height: 72vh; padding: 0.25rem; overscroll-behavior: contain; }
+.graph-svg { display: block; margin: 0 auto; color: var(--foreground); }
+.graph-edge { fill: none; stroke: color-mix(in oklab, var(--tan) 55%, transparent); stroke-width: 1.6; transition: opacity 0.2s ease, stroke 0.2s ease; }
+.graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 60%, transparent); stroke-dasharray: 5 4; }
+.graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 2.6; }
+.graph-edge.is-dim, .graph-node.is-dim { opacity: 0.22; }
+.graph-node { cursor: pointer; transition: opacity 0.2s ease; }
+.graph-node:focus { outline: none; }
+.graph-node:focus-visible .graph-ring, .graph-node.is-selected .graph-ring { stroke: var(--gold-soft); stroke-width: 4; }
+.graph-node:hover .graph-label { text-decoration: underline; }
+.graph-label { font-size: 12.5px; fill: currentColor; paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
+.graph-node.is-selected .graph-label { font-weight: 700; }
+.graph-sublabel { font-size: 10px; letter-spacing: 0.06em; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
+
+/* ---------- Down the rabbit hole (knowledge graph) ---------- */
+:root { --hole-open: #fff8e6; --hole-own: #efe2ff; --hole-halo: #f4ead6; --hole-top: #efe2c6; --hole-bottom: #dcc7a1; --hole-mouth-in: #2a1f17; --hole-mouth-out: #6b4e33; }
+.dark { --hole-open: #4a3a22; --hole-own: #3a2a52; --hole-halo: #4a3729; --hole-top: #5a4331; --hole-bottom: #46331f; --hole-mouth-in: #05030a; --hole-mouth-out: #2a1d14; }
+.rabbit-hole { background: color-mix(in oklab, var(--card) 70%, transparent); border: 1px solid var(--border); }
+.rh-stop-top { stop-color: var(--hole-top); }
+.rh-stop-bottom { stop-color: var(--hole-bottom); }
+.rh-mouth-in { stop-color: var(--hole-mouth-in); }
+.rh-mouth-out { stop-color: var(--hole-mouth-out); }
+.rh-wall-dark { stop-color: #3b2a1a; stop-opacity: 0.32; }
+.rh-wall-clear { stop-color: #3b2a1a; stop-opacity: 0; }
+.dark .rh-wall-dark { stop-color: #000; stop-opacity: 0.55; }
+.dark .rh-wall-clear { stop-color: #000; stop-opacity: 0; }
+.rh-shaft { stroke: color-mix(in oklab, var(--tan) 55%, transparent); stroke-width: 3; stroke-dasharray: 2 7; stroke-linecap: round; }
+.rh-mouth { stroke: #6f8f3f; stroke-width: 4; }
+.rh-grass { stroke: #7da64a; stroke-width: 2; stroke-linecap: round; fill: none; }
+.dark .rh-grass, .dark .rh-mouth { stroke: #4c6b33; }
+.rh-ledge { stroke: color-mix(in oklab, var(--tan) 45%, transparent); stroke-width: 1.5; stroke-dasharray: 1 6; stroke-linecap: round; }
+.rh-ledge-label { font-family: var(--font-display, serif); font-size: 13px; font-style: italic; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 4px; stroke-linejoin: round; }
+:root { --pebble: #140c07; --pebble-locked: #1d140d; --pebble-mastered: #10231f; --pebble-own: #221432; --pebble-edge: #0b0705; --pebble-ink: #d9c8a8; }
+.dark { --pebble: #120c07; --pebble-locked: #1a130d; --pebble-mastered: #0b1a17; --pebble-own: #170d24; --pebble-edge: #000; --pebble-ink: #cdbb98; }
+:root { --mound: #9a7a55; --mound-edge: #5b442c; --pit-lip: #3a2716; }
+.dark { --mound: #6e5236; --mound-edge: #2a1c10; --pit-lip: #2a1c10; }
+.rh-pebble { filter: drop-shadow(0 -1px 0 rgb(255 240 210 / 0.12)); }
+.rh-pit-deep { stop-color: #000; }
+.rh-pit-mid { stop-color: #120a04; }
+.rh-pit-lip { stop-color: var(--pit-lip); }
+.rh-mound { fill: var(--mound); stroke: var(--mound-edge); stroke-width: 1; filter: drop-shadow(0 2px 1.5px rgb(0 0 0 / 0.35)); }
+.rh-crumb { fill: var(--mound); stroke: var(--mound-edge); stroke-width: 0.6; }
+.rh-suit { font-size: 12px; fill: #f1d79a; pointer-events: none; }
+.rh-suit.is-red { fill: #ff7a8a; }
+.rh-suit.is-own { fill: #d9b8ff; }
+.rh-clutter { font-size: 20px; fill: color-mix(in oklab, var(--tan) 70%, transparent); animation: rh-drift 7s ease-in-out infinite; }
+@keyframes rh-drift { 0%, 100% { transform: translateY(-6px) rotate(-14deg); } 50% { transform: translateY(8px) rotate(16deg); } }
+.rh-fall { animation: rh-fall 0.7s cubic-bezier(0.3, 0.7, 0.35, 1.15) backwards; }
+@keyframes rh-fall { from { opacity: 0; transform: translateY(-46px) rotate(-8deg); } }
+@media (prefers-reduced-motion: reduce) { .rh-clutter, .rh-fall { animation: none; } }
+:root { --tunnel-line: #170c05; --rock: #7a6650; --rock-alt: #5e4c3a; --rock-edge: #2e2217; --bone: #ece2cb; --bone-edge: #6b5841; }
+.dark { --tunnel-line: #0a0603; --rock: #4f3f30; --rock-alt: #3b2e22; --rock-edge: #140d08; --bone: #cfc3a8; --bone-edge: #3d3022; }
+:root { --mud: #4a2f1a; --mud-on: #6e4a22; }
+.dark { --mud: #22150a; --mud-on: #4a3416; }
+.rh-mud { fill: none; stroke: var(--mud); stroke-width: 11; stroke-linecap: round; transition: opacity 0.2s ease; }
+.rh-mud.is-on { stroke: var(--mud-on); stroke-width: 13; }
+.rh-mud.is-dim { opacity: 0.25; }
+.rh-mud.is-shaft { stroke-width: 16; stroke-linecap: butt; }
+.rh-mud.is-shaft.is-on { stroke-width: 17; }
+.rabbit-hole .graph-edge.is-shaft { stroke-width: 4; stroke-linecap: butt; }
+.rabbit-hole .graph-edge { stroke: var(--tunnel-line); stroke-width: 3; stroke-linecap: round; opacity: 0.9; }
+.rabbit-hole .graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 75%, black); stroke-dasharray: 6 4; }
+.rabbit-hole .graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 3.2; opacity: 1; }
+.rabbit-hole .graph-edge.is-dim { opacity: 0.2; }
+.rh-rock { fill: var(--rock); stroke: var(--rock-edge); stroke-width: 1; }
+.rh-rock.is-alt { fill: var(--rock-alt); }
+.rh-bone { fill: var(--bone); stroke: var(--bone-edge); stroke-width: 0.8; }
+.rh-skull-eye { fill: #1a120b; stroke: none; }
+@media (prefers-reduced-motion: reduce) { .graph-edge, .graph-node { transition: none; } }
+
 /* ---------- Judge mode ---------- */
 .presenter { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; width: 19rem; border-radius: 1rem; padding: 0.8rem 0.9rem; }
 .presenter-tab { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.75rem; font-weight: 600; background: var(--night); color: #faf8f1; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
@@ -626,3 +706,15 @@ main { position: relative; z-index: 1; }
 /* ---------- Proficiency level (from backend/src/proficiency.rs) ---------- */
 .level-badge { display: inline-flex; align-items: center; gap: 0.35rem; border: 1.5px solid; border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600; font-size: 0.72rem; background: var(--card); }
 .level-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; }
+
+/* ---------- Landing: Why Socra? + live numbers ---------- */
+.why-card { border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 80%, transparent); }
+.why-card.is-other { filter: saturate(0.6); }
+.why-card.is-socra { border-color: color-mix(in oklab, var(--cheshire) 45%, var(--border)); box-shadow: 0 10px 30px -18px color-mix(in oklab, var(--cheshire) 60%, transparent); }
+.why-bubble { width: fit-content; max-width: 90%; border-radius: 1rem; padding: 0.4rem 0.75rem; line-height: 1.35; }
+.why-bubble.is-student { margin-left: auto; background: var(--primary); color: var(--primary-foreground); border-bottom-right-radius: 0.3rem; }
+.why-bubble.is-bot { background: var(--muted); border-bottom-left-radius: 0.3rem; font-weight: 600; }
+.why-bubble.is-cat { background: color-mix(in oklab, var(--cheshire) 14%, var(--card)); border: 1px solid color-mix(in oklab, var(--cheshire) 35%, transparent); border-bottom-left-radius: 0.3rem; }
+.live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 0.35rem; border-radius: 999px; background: var(--potion); vertical-align: middle; animation: live-pulse 1.8s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
