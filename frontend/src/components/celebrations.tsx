@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
+import type { WakeDetail } from "@/lib/events";
 
 function reducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
 /* ---------------- Hearts burst (the court is convinced) ---------------- */
-
-export function heartsBurst() {
-  window.dispatchEvent(new Event("socra:hearts"));
-}
 
 export function HeartsBurst() {
   const [burst, setBurst] = useState(0);
@@ -92,17 +89,6 @@ export function SparkleTrail() {
 
 
 /* ---------------- Waking up: a short sunrise when the trial ends ---------------- */
-
-type WakeDetail = { amount: number | null; resolve: () => void };
-
-/** Plays the sunrise and resolves when it's over (immediately for reduced motion). */
-export function wakeUp(amount: number | null): Promise<void> {
-  if (reducedMotion()) return Promise.resolve();
-  return new Promise((resolve) => {
-    window.dispatchEvent(new CustomEvent<WakeDetail>("socra:wakeup", { detail: { amount, resolve } }));
-    setTimeout(resolve, 3200); // safety net if nothing is listening
-  });
-}
 
 export function WakeUp() {
   const [wake, setWake] = useState<WakeDetail | null>(null);

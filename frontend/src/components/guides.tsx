@@ -1,9 +1,10 @@
 import { BookHeart, Check, Clock, Crown, FlaskConical, Gavel, KeyRound, Rabbit, ScrollText, ShieldCheck, Sigma, Sparkles, Sprout, Sunrise, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheshireGrin, flavorFor, Tart } from "@/components/wonder";
+import { CheshireGrin, Tart } from "@/components/wonder";
+import { flavorFor } from "@/lib/flavor";
 import { api, type ConceptMap, type Me, type Problem, type SessionView } from "@/lib/api";
-import { conceptForTemplate, LEVELS } from "@/components/proficiency";
+import { conceptForTemplate, LEVELS } from "@/lib/proficiency";
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
