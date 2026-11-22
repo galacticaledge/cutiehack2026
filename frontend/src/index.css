@@ -578,8 +578,8 @@ main { position: relative; z-index: 1; }
 .graph-sublabel { font-size: 10px; letter-spacing: 0.06em; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
 
 /* ---------- Down the rabbit hole (knowledge graph) ---------- */
-:root { --hole-open: #fff8e6; --hole-own: #efe2ff; --hole-halo: #f6efe0; --hole-top: #eadcbf; --hole-bottom: #c9b6e4; --hole-mouth-in: #2a1f17; --hole-mouth-out: #6b4e33; }
-.dark { --hole-open: #3a2e1a; --hole-own: #2d2140; --hole-halo: #1d1530; --hole-top: #3a2c24; --hole-bottom: #120b22; --hole-mouth-in: #05030a; --hole-mouth-out: #2a1d14; }
+:root { --hole-open: #fff8e6; --hole-own: #efe2ff; --hole-halo: #f4ead6; --hole-top: #efe2c6; --hole-bottom: #dcc7a1; --hole-mouth-in: #2a1f17; --hole-mouth-out: #6b4e33; }
+.dark { --hole-open: #4a3a22; --hole-own: #3a2a52; --hole-halo: #4a3729; --hole-top: #5a4331; --hole-bottom: #46331f; --hole-mouth-in: #05030a; --hole-mouth-out: #2a1d14; }
 .rabbit-hole { background: color-mix(in oklab, var(--card) 70%, transparent); border: 1px solid var(--border); }
 .rh-stop-top { stop-color: var(--hole-top); }
 .rh-stop-bottom { stop-color: var(--hole-bottom); }

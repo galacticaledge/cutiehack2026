@@ -3,7 +3,7 @@ import { LEVELS } from "@/lib/proficiency";
 import type { ConceptNode } from "@/lib/api";
 
 /**
- * The knowledge graph as a rabbit hole: the basics sit at the mouth of the hole and every
+ * The Rabbit hole (the knowledge graph): the basics sit at the mouth of the hole and every
  * step of prerequisites is a ledge further down the tunnel. Lines run from a topic down to
  * what it unlocks. Picking a topic lights up what it builds on and what it opens; links
  * between subjects show only then, so the tunnel stays readable. Your own topics have a
@@ -98,6 +98,59 @@ function Clutter({ height, width }: { height: number; width: number }) {
   return <g aria-hidden="true">{items}</g>;
 }
 
+/** A small stable number from a string, so each pebble keeps its own shape between renders. */
+function seed(str: string) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967295;
+}
+
+/** A lumpy pebble of about radius r: a circle with a few soft bumps, smoothed with quadratic curves. */
+function pebble(r: number, s: number) {
+  const n = 12;
+  const pts = Array.from({ length: n }, (_, i) => {
+    const t = (i / n) * Math.PI * 2 + s * 6;
+    const k = 1 + 0.2 * Math.sin(3 * t + s * 11) + 0.11 * Math.sin(5 * t + s * 23) + 0.05 * Math.sin(7 * t + s * 5);
+    return [Math.cos(t) * r * k, Math.sin(t) * r * k];
+  });
+  const mid = (a: number[], b: number[]) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(pts[n - 1], pts[0]);
+  let d = `M${start[0].toFixed(2)} ${start[1].toFixed(2)}`;
+  for (let i = 0; i < n; i++) {
+    const m = mid(pts[i], pts[(i + 1) % n]);
+    d += ` Q${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} ${m[0].toFixed(2)} ${m[1].toFixed(2)}`;
+  }
+  return d + "Z";
+}
+
+/** One earthen wall from the mouth to the bottom, with lumps of rock and roots. */
+function wallPoints(x: number, top: number, bottom: number, dir: 1 | -1, salt: number) {
+  const segs: { c: [number, number]; to: [number, number] }[] = [];
+  let y = top;
+  for (let i = 0; y < bottom; i++) {
+    const ny = Math.min(bottom, y + 30 + ((i * 37 + salt) % 23));
+    const bump = dir * (7 + ((i * 53 + salt) % 14));
+    segs.push({ c: [x + bump, (y + ny) / 2], to: [x + dir * (((i * 29 + salt) % 9) - 4), ny] });
+    y = ny;
+  }
+  return segs;
+}
+
+/** The tunnel's outline: down the left wall, across the bottom, back up the right wall. */
+function tunnelPath(left: number, right: number, top: number, bottom: number) {
+  const l = wallPoints(left, top, bottom, -1, 3);
+  const r = wallPoints(right, top, bottom, 1, 11);
+  const f = (n: number) => n.toFixed(1);
+  let d = `M${left} ${top}`;
+  for (const s of l) d += ` Q${f(s.c[0])} ${f(s.c[1])} ${f(s.to[0])} ${f(s.to[1])}`;
+  d += ` L${f(r[r.length - 1].to[0])} ${bottom}`;
+  for (let k = r.length - 1; k >= 0; k--) {
+    const from = k > 0 ? r[k - 1].to : ([right, top] as [number, number]);
+    d += ` Q${f(r[k].c[0])} ${f(r[k].c[1])} ${f(from[0])} ${f(from[1])}`;
+  }
+  return d + " Z";
+}
+
 const STATUS_FILL: Record<ConceptNode["status"], string> = {
   mastered: "var(--potion)",
   available: "var(--hole-open)",
@@ -134,7 +187,7 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
   const rx = width / 2 - SIDE + 22;
   const ry = MOUTH_H / 2 - 6;
   return (
-    <div ref={box} className="graph-scroll rabbit-hole rounded-2xl" role="group" aria-label="Knowledge graph: down the rabbit hole">
+    <div ref={box} className="graph-scroll rabbit-hole rounded-2xl" role="group" aria-label="Rabbit hole: your knowledge graph">
       <svg width={width} height={height} className="graph-svg">
         <title>Down the rabbit hole: the basics are at the top, and each ledge down builds on the ones above</title>
         <defs>
@@ -156,7 +209,7 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
 
         {/* the tunnel with wobbly earthen walls */}
         <path
-          d={`M${SIDE - 20} ${MOUTH_H / 2} C${SIDE - 38} ${height * 0.3}, ${SIDE + 6} ${height * 0.62}, ${SIDE - 12} ${height} L${width - SIDE + 12} ${height} C${width - SIDE - 6} ${height * 0.62}, ${width - SIDE + 38} ${height * 0.3}, ${width - SIDE + 20} ${MOUTH_H / 2} Z`}
+          d={tunnelPath(SIDE - 16, width - SIDE + 16, MOUTH_H / 2, height)}
           fill={`url(#shaft-${gid})`}
           className="rh-shaft"
         />
@@ -225,8 +278,8 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
                 onClick={() => onSelect(c.id)}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(c.id))}
               >
-                <circle r={R + 4} fill="none" stroke={ring} strokeWidth="3" strokeDasharray={c.practiceOnly ? "4 3" : undefined} className="graph-ring" />
-                <circle r={R} fill={c.practiceOnly ? "var(--hole-own)" : STATUS_FILL[c.status]} stroke={c.practiceOnly ? "var(--cheshire)" : "currentColor"} strokeWidth="1.5" />
+                <path d={pebble(R + 4.5, seed(c.id))} fill="none" stroke={ring} strokeWidth="3" strokeDasharray={c.practiceOnly ? "4 3" : undefined} className="graph-ring" />
+                <path d={pebble(R, seed(c.id))} fill={c.practiceOnly ? "var(--hole-own)" : STATUS_FILL[c.status]} stroke={c.practiceOnly ? "var(--cheshire)" : "currentColor"} strokeWidth="1.5" />
                 {c.status === "locked" && <path d="M-4 1h8v5h-8zM-2.5 1v-2a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" />}
                 {c.status === "mastered" && <path d="M-4.5 0.5l3 3 6-6.5" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
                 {c.status === "available" && (

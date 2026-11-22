@@ -335,7 +335,7 @@ export function WonderMap() {
                   <MapIcon className="size-4" /> Regions
                 </button>
                 <button type="button" role="radio" aria-checked={view === "graph"} onClick={() => changeView("graph")}>
-                  <Network className="size-4" /> Knowledge graph
+                  <Network className="size-4" /> Rabbit hole
                 </button>
               </div>
               <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground" aria-label="Map legend">
@@ -364,7 +364,7 @@ export function WonderMap() {
                   {detail ?? (
                     <div className="parchment rounded-2xl p-5 text-sm text-muted-foreground">
                       <p className="font-display text-xl text-foreground">Pick a place</p>
-                      <p className="mt-1">Choose any topic on the graph to see what it builds on, your level there, and to ask the Caterpillar what to learn next.</p>
+                      <p className="mt-1">Choose any topic in the rabbit hole to see what it builds on, your level there, and to ask the Caterpillar what to learn next.</p>
                     </div>
                   )}
                 </aside>
