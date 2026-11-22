@@ -84,27 +84,20 @@ pub fn normalize_math(input: &str) -> String {
             while j < chars.len() && is_valid_char(chars[j], first_dot, first_minus, first_char) {
                 first_dot = first_dot || chars[j] == '.';
                 first_minus = first_minus || chars[j] == '-';
-                first_char = false;
+                // Leading spaces don't count: "cos -0" is still cos(-0).
+                first_char = first_char && chars[j] == ' ';
                 j += 1;
             }
 
-            match j - i {
-                // Can't be fixed
-                0 => {
-                    out.extend(pattern.chars());
-                }
-                1 if chars[i] == '-' => {
-                    out.extend(pattern.chars());
-                }
-
-                // Insert parenthesis
-                _ => {
-                    replacement.push('(');
-                    replacement.extend(chars[i..j].iter());
-                    replacement.push(')');
-                    out.extend(replacement.chars());
-                    i += j - i;
-                }
+            // Only wrap when there is a number to wrap; otherwise ("sqrt pi", "cos-") leave it as typed.
+            if chars[i..j].iter().any(|c| c.is_ascii_digit()) {
+                replacement.push('(');
+                replacement.extend(chars[i..j].iter());
+                replacement.push(')');
+                out.extend(replacement.chars());
+                i = j;
+            } else {
+                out.extend(pattern.chars());
             }
         } else {
             out.push(chars[i]);
@@ -350,6 +343,11 @@ mod tests {
         assert_eq!(normalize_math("sin 15"), "sin( 15)");
         assert_eq!(normalize_math("cos-9.5"), "cos(-9.5)");
         assert_eq!(normalize_math("cos-9-5"), "cos(-9)-5");
+        // A space before the minus is fine; a minus after the number ends the function's argument
+        assert_eq!(normalize_math("cos -0"), "cos( -0)");
+        assert_eq!(normalize_math("sqrt 4 - 1"), "sqrt( 4 )- 1");
+        // Nothing numeric to wrap: left as typed
+        assert_eq!(normalize_math("sqrt pi"), "sqrt pi");
 
         // Standalone negatives cannot be normalized
         assert_eq!(normalize_math("cos-"), "cos-");
@@ -369,6 +367,11 @@ mod tests {
         assert_eq!(n("2^3^2"), Some(512.0));
         assert_eq!(n("3/4"), Some(0.75));
         assert_eq!(n("sqrt(16)"), Some(4.0));
+        // Shorthand without brackets, as students type it
+        assert_eq!(n(&normalize_math("sqrt9-1")), Some(2.0));
+        assert_eq!(n(&normalize_math("sqrt 4 - 1")), Some(1.0));
+        assert_eq!(n(&normalize_math("cos -0")), Some(1.0));
+        assert_eq!(n(&normalize_math("sqrt -5")), None);
         assert_eq!(n("2(3+1)"), Some(8.0));
         assert!((n("2pi").unwrap() - 2.0 * std::f64::consts::PI).abs() < TARGET_PRECISION);
         assert_eq!(n("1/0"), None);
