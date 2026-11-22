@@ -2097,7 +2097,7 @@ mod tests {
         assert_eq!(public["sessionId"], "exhausted-public");
         let old_public = json(
             post("/api/sessions", Some("u"))
-                .json(&json!({"custom":{"kind":"topic","text":"Fractions"}}))
+                .json(&json!({"custom":{"kind":"topic","text":"Fractions","quest":true}}))
                 .send()
                 .await
                 .unwrap(),
@@ -2226,7 +2226,7 @@ mod tests {
                 .json(&body)
         };
 
-        let typed = start(json!({"custom":{"kind":"topic","text":"Fractions"}}));
+        let typed = start(json!({"custom":{"kind":"topic","text":"Fractions","quest":true}}));
         let typed = tokio::spawn(async move { typed.send().await.unwrap() });
         tokio::time::timeout(Duration::from_secs(5), entered.notified())
             .await
