@@ -1,4 +1,5 @@
-//! Username + password login with an HMAC-signed session cookie.
+//! Username + password login
+
 use crate::error::AppError;
 use crate::models::User;
 use crate::state::AppState;
@@ -51,7 +52,6 @@ fn time_days(d: i64) -> time::Duration {
 
 // ---------- credentials ----------
 
-/// True when a username satisfies the API's rules (2–24 chars, [a-z0-9_-]).
 pub fn valid_username(username: &str) -> bool {
     (2..=24).contains(&username.len())
         && username
@@ -59,12 +59,10 @@ pub fn valid_username(username: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
-/// True when a password is within the accepted length window (8–72 chars).
 pub fn valid_password(password: &str) -> bool {
     (8..=72).contains(&password.len())
 }
 
-/// Hash a plaintext password into an Argon2id PHC string for storage.
 pub fn hash_password(password: &str) -> String {
     use argon2::password_hash::rand_core::OsRng;
     let salt = SaltString::generate(&mut OsRng);
@@ -74,8 +72,6 @@ pub fn hash_password(password: &str) -> String {
         .to_string()
 }
 
-/// Constant-time check of a plaintext password against a stored Argon2id PHC string.
-/// Returns false for empty/malformed stored hashes rather than panicking.
 pub fn verify_password(password: &str, stored: &str) -> bool {
     if stored.is_empty() {
         return false;
@@ -89,7 +85,7 @@ pub fn verify_password(password: &str, stored: &str) -> bool {
         .is_ok()
 }
 
-/// Extractor: the logged-in user, or 401.
+/// An axum extractor for the user
 pub struct AuthUser(pub User);
 
 impl FromRequestParts<AppState> for AuthUser {
