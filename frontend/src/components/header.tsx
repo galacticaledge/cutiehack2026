@@ -8,7 +8,6 @@ import { LookingGlassToggle } from "@/components/scenery";
 import { SoundToggle } from "@/components/sound";
 import { api, getFeatures, isGuestName, mapAvailable, type Me } from "@/lib/api";
 
-/** Header tabs: the page you're on is lit, with a gold underline (and aria-current="page" for screen readers). */
 const tabClass = ({ isActive }: { isActive: boolean }) =>
   `header-tab relative flex items-center gap-1 rounded-full px-2 py-1 transition ${
     isActive ? "is-active bg-white/15 font-semibold text-white" : "text-[#d6ecf7] hover:bg-white/10 hover:text-white"
@@ -75,7 +74,6 @@ export function Header() {
               <Tart />
               {me.balance.toLocaleString()} <span className="hidden sm:inline">TARTS</span>
             </NavLink>
-            {/* The name is you: it opens your journal. The wallet is its own link, only when it holds real (devnet) tarts. */}
             <Link
               to="/journal"
               className="hidden items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white sm:flex"

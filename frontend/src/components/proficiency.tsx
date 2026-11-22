@@ -5,13 +5,6 @@ import { LEVELS, type Level, type Suggestion } from "@/lib/proficiency";
 
 export type { Level, Suggestion };
 
-/**
- * Learning progress comes from the backend's concept proficiency (backend/src/proficiency.rs):
- * New → Learning → Demonstrated → Proficient, tracked separately from rewards. Repeating the
- * same question counts once, so "Proficient" needs verified solves on two different problems.
- * This file only displays it and suggests where to go next; it computes no scores of its own.
- */
-
 export function LevelBadge({ level, attemptsToday }: { level: Level; attemptsToday?: number }) {
   const l = LEVELS[level] ?? LEVELS.new;
   return (
@@ -25,7 +18,6 @@ export function LevelBadge({ level, attemptsToday }: { level: Level; attemptsTod
   );
 }
 
-/** Four steps, filled up to the current level. */
 export function LevelSteps({ level }: { level: Level }) {
   const order: Level[] = ["new", "learning", "demonstrated", "proficient"];
   const at = order.indexOf(level);

@@ -9,7 +9,6 @@ import { Flashbang, HeartsBurst, WakeUp } from "@/components/celebrations";
 import { DealtCards } from "@/components/skeletons";
 import { PresenterPanel } from "@/components/presenter";
 
-// Each page loads only when it's visited; the landing page stays in the first download.
 const loadLearn = () => import("@/pages/Learn").then((m) => ({ default: m.Learn }));
 const loadWorkspace = () => import("@/pages/Workspace").then((m) => ({ default: m.Workspace }));
 const loadJournal = () => import("@/pages/Journal").then((m) => ({ default: m.Journal }));
@@ -21,7 +20,6 @@ const Journal = lazy(loadJournal);
 const WonderMap = lazy(loadMap);
 const Tarts = lazy(loadTarts);
 
-/** Warm the likely next pages once the browser is idle, so moving on feels instant. */
 function usePrefetchPages() {
   useEffect(() => {
     const warm = () => {

@@ -37,7 +37,6 @@ export function refreshBalance() {
   window.dispatchEvent(new Event("socra:balance"));
 }
 
-/** Best-effort anti-cheat telemetry. Never sends pasted content, only its length. */
 export function postEvent(sessionId: string, type: "hidden" | "visible" | "paste", data: Record<string, unknown> = {}) {
   try {
     const body = JSON.stringify({ type, data });
@@ -50,7 +49,6 @@ export function postEvent(sessionId: string, type: "hidden" | "visible" | "paste
   }
 }
 
-// ---- API types (mirror the Rust responses; never contain answers) ----
 export interface Me {
   username: string;
   walletPubkey: string;
@@ -131,7 +129,6 @@ export interface Features {
   llmProvider: string;
   solana: boolean;
   codeRunner?: boolean;
-  /** Personal topics and "What's next?" (absent on older servers: find out on first use). */
   personalizedConcepts?: boolean;
 }
 
@@ -145,7 +142,6 @@ export interface ConceptNode {
   attemptsToday: number;
   rewarded: boolean;
   bankTemplateId: string | null;
-  /** Personal (private) topics: the student's own, practice only, never pay. */
   practiceOnly?: boolean;
   objective?: string | null;
 }
@@ -173,56 +169,45 @@ export interface JournalEntry {
   reward: RewardView | null;
 }
 
-/** Whether this server has the Map of Wonderland (/api/concepts). Checked once per page load. */
 let mapProbe: Promise<boolean> | null = null;
 export function mapAvailable(): Promise<boolean> {
   mapProbe ??= fetch("/api/concepts", { credentials: "same-origin" })
-    // Only a real JSON answer counts (an HTML page or a 404 means this server has no map).
     .then((r) => r.status !== 404 && (r.headers.get("content-type") ?? "").includes("json"))
     .catch(() => false);
   return mapProbe;
 }
 
-/** Server features, fetched once per page load. */
 let featuresProbe: Promise<Features | null> | null = null;
 export function getFeatures(): Promise<Features | null> {
   featuresProbe ??= api<Features>("/api/features").catch(() => null);
   return featuresProbe;
 }
 
-/** Throwaway demo accounts (guest pass, judge mode) never hold real tokens. */
 export function isGuestName(username: string) {
   return /^(guest|copycat)-/.test(username);
 }
-
-
-/* ---------------- Accounts (username + password) ---------------- */
 
 export const USERNAME_RE = /^[a-z0-9_-]{2,24}$/;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 72;
 
-/** A random, strong password for throwaway demo accounts (guest pass, judge mode). */
 function randomPassword() {
   const bytes = new Uint8Array(18);
   crypto.getRandomValues(bytes);
   return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "x");
 }
 
-/** Creates and signs in a throwaway account like guest-ab12cd. Its password is random and never shown. */
 export async function signUpThrowaway(prefix: "guest" | "copycat") {
   for (let attempt = 0; attempt < 3; attempt++) {
     const username = `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       return await api<{ username: string; walletPubkey: string }>("/api/auth/signup", { username, password: randomPassword() });
     } catch (e) {
-      if ((e as ApiError).status !== 409) throw e; // name taken: try another
+      if ((e as ApiError).status !== 409) throw e;
     }
   }
   throw new ApiError(409, "Couldn't find a free guest name. Please try again.");
 }
-
-/* ---------------- Personalized knowledge graph (next steps, proposals) ---------------- */
 
 export interface ConceptBrief {
   id: string;
@@ -253,10 +238,6 @@ export function acceptProposal(proposalId: string) {
   return api<{ conceptId: string }>(`/api/concept-proposals/${encodeURIComponent(proposalId)}/accept`, {});
 }
 
-/**
- * Start a topic by its concept id (the server picks a bank problem or builds a checked quest).
- * Servers without concept-id starts fall back to the template or a typed topic.
- */
 export async function startConcept(c: { id: string; title: string; bankTemplateId: string | null }) {
   try {
     return await api<{ sessionId: string }>("/api/sessions", { conceptId: c.id });

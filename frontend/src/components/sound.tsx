@@ -2,8 +2,6 @@ import { Volume2, VolumeX } from "lucide-react";
 import { useEffect, useState } from "react";
 import { play, setSfxEnabled, sfxEnabled } from "@/lib/sfx";
 
-/* ---------------- Sound toggle ---------------- */
-
 export function SoundToggle({ className = "" }: { className?: string }) {
   const [on, setOn] = useState(sfxEnabled);
   useEffect(() => {

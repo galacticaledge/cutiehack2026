@@ -1,4 +1,3 @@
-/** Little Wonderland doors: the answer door (rattles / swings open) and the illustrated Hall of Doors art. */
 
 export type DoorState = "idle" | "rattle" | "open";
 
@@ -21,7 +20,6 @@ function DoorPanelSvg({ wood = "#8d6a43", trim = "#5f4a2c", locked = false }: { 
   );
 }
 
-/** The answer box's door: rattles on a wrong answer, swings open (with light) on the right one. */
 export function AnswerDoor({ state, locked = false }: { state: DoorState; locked?: boolean }) {
   return (
     <div className={`answer-door door-${state} ${locked ? "door-locked" : ""}`} aria-hidden="true">
@@ -33,8 +31,6 @@ export function AnswerDoor({ state, locked = false }: { state: DoorState; locked
     </div>
   );
 }
-
-/* ---------------- Illustrated doors for the Hall of Doors ---------------- */
 
 export type Emblem = "watch" | "hat" | "mushroom" | "hole" | "crown";
 
@@ -112,7 +108,6 @@ function EmblemSvg({ emblem }: { emblem: Emblem }) {
   }
 }
 
-/** An arched Wonderland door with a character emblem that swings open in 3D when `open`. */
 export function DoorArt({ emblem, open = false }: { emblem: Emblem; open?: boolean }) {
   const c = DOOR_COLORS[emblem];
   return (

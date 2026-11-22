@@ -10,8 +10,6 @@ function reducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
-/* ---------------- Falling intro (first open of a door) ---------------- */
-
 const TUMBLERS = [Clock, KeyRound, Coffee, BookOpen, FlaskConical, Spade, Crown, Heart, Rabbit];
 
 export function FallingIntro({ onDone }: { onDone: () => void }) {
@@ -40,14 +38,11 @@ export function FallingIntro({ onDone }: { onDone: () => void }) {
   );
 }
 
-/* ---------------- The White Rabbit's tour ---------------- */
-
 export interface TourStep {
-  target: string; // data-tour value
+  target: string;
   title: string;
   body: string;
 }
-
 
 export function RabbitTour({ steps, onClose }: { steps: TourStep[]; onClose: () => void }) {
   const available = steps.filter((s) => {
@@ -96,7 +91,7 @@ export function RabbitTour({ steps, onClose }: { steps: TourStep[]; onClose: () 
   }, [close, available.length]);
 
   useEffect(() => {
-    if (!step) close(); // nothing on screen to point at
+    if (!step) close();
   }, [step, close]);
 
   if (!step || !rect) return null;
@@ -146,8 +141,6 @@ export function RabbitTour({ steps, onClose }: { steps: TourStep[]; onClose: () 
   );
 }
 
-/* ---------------- Keyboard shortcuts ---------------- */
-
 const SHORTCUTS: [string, string][] = [
   ["/", "Talk to the Cat (focus the chat)"],
   ["A", "Jump to the answer box"],
@@ -179,9 +172,6 @@ export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenC
     </Dialog>
   );
 }
-
-
-/* ---------------- Shareable "I woke up" card ---------------- */
 
 export interface ShareInfo {
   title: string;
@@ -232,7 +222,6 @@ async function drawCard(info: ShareInfo): Promise<Blob | null> {
   const ink = "#334356";
   const tan = "#8d7350";
 
-  // card
   ctx.fillStyle = "#d6ecf7";
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = "#faf8f1";
@@ -248,7 +237,6 @@ async function drawCard(info: ShareInfo): Promise<Blob | null> {
   ctx.roundRect(44, 44, W - 88, H - 88, 24);
   ctx.stroke();
 
-  // pips
   ctx.fillStyle = red ? "#c8314a" : ink;
   ctx.font = '56px "IM Fell English", Georgia, serif';
   ctx.textAlign = "left";
@@ -312,7 +300,6 @@ export function ShareDreamButton({ info, size = "sm" }: { info: ShareInfo; size?
       if (!blob) return;
       const file = new File([blob], "socra-dream.png", { type: "image/png" });
       const text = `I woke up from "${info.title}" on Socra${info.amount ? ` with ${info.amount} TARTS` : ""}. #CutieHack2026`;
-      // Phones get the native share sheet; desktops just download the image.
       const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
       if (touch && navigator.canShare?.({ files: [file] })) {
         try {
@@ -340,8 +327,6 @@ export function ShareDreamButton({ info, size = "sm" }: { info: ShareInfo; size?
     </Button>
   );
 }
-
-/* ---------------- Card-suit collection ---------------- */
 
 const SUIT_TITLES: Record<string, string> = {
   "♥": "The Queen's favour",
@@ -411,6 +396,5 @@ export function DeckPanel({ problems }: { problems: Problem[] }) {
   );
 }
 
-// Hearts burst lives in celebrations.tsx (kept out of the first download).
 export { HeartsBurst, SparkleTrail } from "@/components/celebrations";
 export { SoundToggle } from "@/components/sound";

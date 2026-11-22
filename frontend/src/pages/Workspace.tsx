@@ -92,9 +92,7 @@ export function Workspace() {
   const [flagged, setFlagged] = useState(false);
   const [explainText, setExplainText] = useState("");
   const [explaining, setExplaining] = useState(false);
-  // A weak testimony gets the jury's note and another try (the server counts tries).
   const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
-  // After the trial: how this topic's proficiency stands now, and where to go next.
   const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
@@ -106,7 +104,6 @@ export function Workspace() {
   const [tourOpen, setTourOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [reaction, setReaction] = useState<CatMood | null>(null);
-  // Phones show one panel at a time: the problem or the chat.
   const [mobileTab, setMobileTab] = useState<"problem" | "chat">("problem");
   const [unread, setUnread] = useState(false);
   const tabRef = useRef(mobileTab);
@@ -116,8 +113,6 @@ export function Workspace() {
     if (t === "chat") setUnread(false);
   }, []);
   const tutorCount = useRef<number | null>(null);
-  // Messages already on screen don't animate; a new one keeps its fade-in class for its
-  // first 700ms, so an unrelated re-render can't cut the animation short.
   const firstSeen = useRef<Map<string, number>>(new Map());
   const seenSession = useRef("");
   const [doorState, setDoorState] = useState<DoorState>("idle");
@@ -126,10 +121,8 @@ export function Workspace() {
     if (doorTimer.current) clearTimeout(doorTimer.current);
   }, []);
   const endIntro = useCallback(() => setIntro(false), []);
-  // Keep the newest words in view while the Cat is "typing".
   const followChat = useCallback(() => chatEnd.current?.scrollIntoView({ block: "end" }), []);
 
-  // Judge mode can put a line in the chat box for the presenter (it isn't sent automatically).
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const text = (e as CustomEvent<string>).detail;
@@ -142,7 +135,6 @@ export function Workspace() {
     return () => window.removeEventListener("socra:prefill-chat", onPrefill);
   }, [showTab]);
 
-  // The chat box grows with the message (up to ~6 lines, then scrolls) and shrinks back after sending.
   const CHAT_MAX_PX = 160;
   const fitChat = useCallback(() => {
     const el = chatInput.current;
@@ -158,7 +150,6 @@ export function Workspace() {
     return () => window.removeEventListener("resize", fitChat);
   }, [fitChat]);
 
-  // Play the falling intro once per fresh door, then clear the flag so a reload doesn't replay it.
   useEffect(() => {
     if ((location.state as { fresh?: boolean } | null)?.fresh) {
       setIntro(true);
@@ -173,7 +164,6 @@ export function Workspace() {
       setLoadError(null);
       return v;
     } catch (e) {
-      // First load failing: show a clear message instead of placeholders forever.
       setLoadError((prev) => prev ?? ((e as ApiError).status === 404 ? "missing" : "failed"));
       toast.error((e as Error).message);
       return null;
@@ -194,7 +184,6 @@ export function Workspace() {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [s?.messages.length, mobileTab]);
 
-  // A new Cat reply while the phone is showing the problem lights up the Chat tab.
   const tutorMsgs = s?.messages.filter((m) => m.role === "tutor").length ?? null;
   useEffect(() => {
     if (tutorMsgs === null) return;
@@ -209,7 +198,6 @@ export function Workspace() {
     setUnread(false);
   }, [sessionId]);
 
-  // Anti-cheat telemetry (bank problems only, while active).
   const tracking = (s?.source === "bank" || s?.source === "quest") && s.status === "active";
   useEffect(() => {
     if (!tracking) return;
@@ -218,7 +206,6 @@ export function Workspace() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [tracking, sessionId]);
 
-  // First visit: the White Rabbit's tour (after the falling intro, once the page has loaded).
   const loaded = s !== null;
   useEffect(() => {
     if (!loaded || intro || hasToured()) return;
@@ -226,7 +213,6 @@ export function Workspace() {
     return () => clearTimeout(t);
   }, [loaded, intro]);
 
-  // Keyboard shortcuts (ignored while typing).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || tourOpen) return;
@@ -255,7 +241,6 @@ export function Workspace() {
     return () => window.removeEventListener("keydown", onKey);
   }, [tourOpen, showTab]);
 
-  // Go deeper links after a solve.
   useEffect(() => {
     if (!features?.learnMore || !s || s.source !== "bank" || s.status === "active") return;
     api<{ links: typeof links }>(`/api/sessions/${sessionId}/resources`)
@@ -295,18 +280,15 @@ export function Workspace() {
     return now - (firstSeen.current.get(id) ?? 0) < 700;
   };
   const isBank = s.source === "bank";
-  // Quest: a fresh, verified problem generated for a knowledge-map topic (earns like a bank problem, no hints).
   const isQuest = s.source === "quest";
   const earns = isBank || isQuest;
   const sandboxChecked = isQuest && s.checkedBy === "sandbox";
   const flavor = flavorFor(s.templateId);
-  // The Cheshire Cat appears a little more with every step the math engine confirms.
   const correctSteps = new Set(s.messages.flatMap((m) => m.verdicts.filter((v) => v.status === "correct").map((v) => v.label)));
-  const totalSteps = (s.checkpointCount ?? 0) + 1; // + the final answer
+  const totalSteps = (s.checkpointCount ?? 0) + 1;
   const shownSteps = s.status === "active" ? Math.min(correctSteps.size, s.checkpointCount ?? 0) : totalSteps;
   const catOpacity = isBank && totalSteps > 1 ? 0.3 + 0.7 * (shownSteps / totalSteps) : 1;
   const maxReward = 100 * s.difficulty;
-  // The Cat's expression reacts to the last thing that happened.
   const lastUser = [...s.messages].reverse().find((m) => m.role === "user");
   const derivedMood: CatMood =
     s.status !== "active"
@@ -332,7 +314,7 @@ export function Workspace() {
     setS({ ...s, messages: [...s.messages, { id: tempId, role: "user", content: text, verdicts: [], pending: true }] });
     try {
       const r = await api<{ reply: string; messageId: string; userMessageId: string; verdicts: ChatMessage["verdicts"] }>(`/api/sessions/${sessionId}/chat`, { message: text });
-      firstSeen.current.set(r.userMessageId, 0); // the student's bubble is already showing; only the reply should fade in
+      firstSeen.current.set(r.userMessageId, 0);
       if (r.verdicts.some((v) => v.status === "incorrect")) play("boing");
       else if (r.verdicts.some((v) => v.status === "correct")) play("clink");
       setS((prev) =>
@@ -346,7 +328,7 @@ export function Workspace() {
       );
     } catch (err) {
       toast.error((err as Error).message);
-      setMsg(text); // nothing was saved, so give the student their words back
+      setMsg(text);
       await load();
     } finally {
       setSending(false);
@@ -366,15 +348,12 @@ export function Workspace() {
     }
   }
 
-  /** Math keys insert at the cursor (keeping the 40-character limit) and put the cursor where it's useful. */
   function insertIntoAnswer(text: string, caret = text.length) {
     const el = answerInput.current;
     const start = el?.selectionStart ?? answer.length;
     const end = el?.selectionEnd ?? answer.length;
     const next = answer.slice(0, start) + text + answer.slice(end);
     if (next.length > 40) return;
-    // Commit the new value and place the cursor in the same tick, so a key typed
-    // right after tapping a math key lands at the cursor, not at the end.
     flushSync(() => setAnswer(next));
     el?.focus();
     el?.setSelectionRange(start + caret, start + caret);
@@ -392,7 +371,6 @@ export function Workspace() {
         setDoorState("open");
         if (earns) {
           setFlagged(Boolean(r.flagged));
-          // Let the little door swing open before the trial begins.
           await new Promise((res) => setTimeout(res, reducedMotion() ? 0 : 850));
           setExplainOpen(true);
         } else {
@@ -426,7 +404,6 @@ export function Workspace() {
         text: retry ? "" : explainText,
       });
       if (r.retry) {
-        // Not convinced yet: keep the trial open with the jury's note and the student's words.
         setJury({ feedback: r.feedback, triesLeft: r.triesLeft ?? 0 });
         setReaction("puzzled");
         play("boing");
@@ -435,7 +412,6 @@ export function Workspace() {
       }
       setJury(null);
       setExplainOpen(false);
-      // The dream ends: a short sunrise, then the celebrations and the result.
       if (!retry) await wakeUp(r.reward?.status === "paid" && r.reward.amount > 0 ? r.reward.amount : null);
       if (!retry) {
         if (r.pass) {
@@ -497,7 +473,6 @@ export function Workspace() {
             <DreamMap s={s} correctLabels={[...correctSteps]} />
           </div>
         </aside>
-        {/* Left: problem */}
         <div className={`space-y-4 lg:block ${mobileTab === "problem" ? "" : "hidden"}`} role="tabpanel">
           <Card className="parchment" data-tour="problem">
             <CardHeader>
@@ -724,7 +699,6 @@ export function Workspace() {
           )}
         </div>
 
-        {/* Right: chat */}
         <Card
           className={`parchment h-[calc(100dvh-10.5rem)] min-h-[380px] flex-col gap-0 py-0 lg:flex lg:h-[calc(100vh-8rem)] lg:min-h-[420px] ${mobileTab === "chat" ? "flex" : "hidden"}`}
           data-tour="chat"
@@ -762,9 +736,7 @@ export function Workspace() {
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${m.role === "user" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-[var(--border)] bg-secondary"} ${m.pending ? "opacity-70" : ""}`}
                   >
-                    {/* Student line breaks are kept (Markdown would otherwise join them into one line). */}
                     {m.role === "user" ? (
-                      // Shown exactly as typed: "4*2, 4*3" must not turn into Markdown italics; line breaks kept.
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
                     ) : (
                       <TypedMarkdown text={m.content} animate={isFresh(m.id)} onProgress={followChat} />
@@ -806,7 +778,6 @@ export function Workspace() {
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
                 onKeyDown={(e) => {
-                  // Enter sends; Shift+Enter makes a new line (and never while an IME is composing).
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     e.currentTarget.form?.requestSubmit();

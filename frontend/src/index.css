@@ -50,7 +50,6 @@
 }
 
 :root {
-  /* "Dream to Wonderland": Cutie Hack 2026's sky, cream, gold and slate, plus a Cheshire accent. */
   --background: #e8f3fb;
   --foreground: #334356;
   --card: #faf8f1;
@@ -83,7 +82,6 @@
   --sidebar-accent-foreground: #334356;
   --sidebar-border: #dccfb3;
   --sidebar-ring: #8d7350;
-  /* Wonderland accents */
   --heart: #c8314a;
   --gold: #a87b2e;
   --gold-soft: #e0b775;
@@ -95,7 +93,6 @@
 }
 
 .dark {
-  /* Through the Looking-Glass: the same dream, at midnight. */
   --background: #171128;
   --foreground: #efe6fb;
   --card: #231a3a;
@@ -156,7 +153,6 @@
     @apply font-sans;
   }
 }
-/* Markdown + math content */
 .md { line-height: 1.6; overflow-wrap: anywhere; }
 .md p { margin: 0.35rem 0; }
 .md p:first-child { margin-top: 0; }
@@ -169,24 +165,20 @@
 .md strong { font-weight: 600; }
 .md .katex-display { overflow-x: auto; overflow-y: hidden; }
 
-/* ---------- Wonderland ---------- */
 .font-display { font-family: var(--font-display); letter-spacing: 0.005em; }
 
-/* The checkerboard floor of the hall. */
 .checker {
   height: 10px;
   background: repeating-conic-gradient(var(--night) 0 25%, #faf8f1 0 50%) 0 0 / 20px 20px;
   opacity: 0.85;
 }
 
-/* Parchment cards with a faint gilt edge. */
 .parchment {
   background: linear-gradient(180deg, #fdfcf7 0%, #faf8f1 100%);
   border: 1.5px solid rgba(141, 115, 80, 0.45);
   box-shadow: 0 0 0 4px rgba(250, 248, 241, 0.7), 0 0 0 5px rgba(141, 115, 80, 0.18), 0 14px 34px -20px rgba(51, 67, 86, 0.55);
 }
 
-/* Playing-card problem tiles. */
 .playing-card {
   position: relative;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -196,13 +188,11 @@
 .pip-tl { top: 0.6rem; left: 0.75rem; }
 .pip-br { bottom: 0.6rem; right: 0.75rem; transform: rotate(180deg); }
 
-/* The Cheshire Cat fades in and out while thinking. */
 @keyframes cheshire { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
 .cheshire-fade { animation: cheshire 2.4s ease-in-out infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); } 50% { transform: translateY(-10px) rotate(var(--r, 0deg)); } }
 .float { animation: float 6s ease-in-out infinite; }
 
-/* Falling cards when the tarts arrive. */
 @keyframes fall {
   0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
   10% { opacity: 1; }
@@ -210,7 +200,6 @@
 }
 .falling-card { position: fixed; top: 0; z-index: 60; pointer-events: none; animation: fall var(--dur, 3.2s) cubic-bezier(0.3, 0.1, 0.5, 1) forwards; }
 
-/* Drink Me hint labels. */
 .drink-me { background: linear-gradient(180deg, #eaf7f5, #dff1ee); border: 1px solid #b9ddd7; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -219,7 +208,6 @@
   .playing-card:hover { transform: none; }
 }
 
-/* ---------- Looking-Glass (dark) overrides ---------- */
 .dark body {
   background-color: var(--background);
   background-image:
@@ -245,7 +233,6 @@
 }
 .through-glass #root { animation: through-glass 0.32s ease-in-out; }
 
-/* ---------- Side rails (wide screens only) ---------- */
 .rail {
   position: fixed;
   top: 66px;
@@ -261,8 +248,6 @@
 .rail-right { right: 0; display: none; flex-direction: column; align-items: center; gap: 1.5rem; padding: 0 0.9rem 2rem; }
 @media (min-width: 1700px) { .rail-right { display: flex; } }
 
-/* The rabbit hole: a dark funnel with things tumbling through it. */
-/* The opening of the rabbit hole: an earthy rim with darkness falling away beneath it. */
 .hole-mouth {
   position: absolute;
   top: 18px;
@@ -295,7 +280,6 @@
 .tumble { position: absolute; top: 0; width: 26px; height: 26px; color: var(--tan); animation: tumble 20s linear infinite; }
 .rail-caption { position: absolute; bottom: 1.2rem; width: 100%; text-align: center; font-style: italic; color: var(--muted-foreground); font-size: 0.95rem; }
 
-/* Pocket watch on a chain. */
 @keyframes swing { 0%, 100% { transform: rotate(9deg); } 50% { transform: rotate(-9deg); } }
 .pendulum { display: flex; flex-direction: column; align-items: center; transform-origin: top center; animation: swing 3.6s ease-in-out infinite; }
 .chain { width: 2px; height: 70px; background: repeating-linear-gradient(180deg, #c9962b 0 4px, transparent 4px 6px); }
@@ -306,10 +290,8 @@
 .quote-card figcaption { margin-top: 0.5rem; font-size: 0.72rem; color: var(--muted-foreground); text-align: right; }
 .suit-ribbon { margin-top: auto; writing-mode: vertical-rl; letter-spacing: 0.6em; color: var(--heart); opacity: 0.45; font-size: 1.3rem; }
 
-/* Keep page content above the rails (header keeps its own sticky positioning). */
 main { position: relative; z-index: 1; }
 
-/* ---------- Card-flip reveals ---------- */
 @keyframes flip-in {
   0% { transform: perspective(700px) rotateY(88deg); opacity: 0; }
   60% { transform: perspective(700px) rotateY(-8deg); opacity: 1; }
@@ -322,14 +304,12 @@ main { position: relative; z-index: 1; }
   100% { transform: perspective(700px) rotate(-1.5deg) rotateY(0); opacity: 1; }
 }
 
-/* ---------- Shrinking tart ---------- */
 .tart-size { transition: width 0.6s cubic-bezier(0.4, 1.6, 0.6, 1), height 0.6s cubic-bezier(0.4, 1.6, 0.6, 1); }
 @keyframes shrink-pop { 0% { transform: scale(1); } 30% { transform: scale(0.55) rotate(-12deg); } 100% { transform: scale(1); } }
 @keyframes grow-pop { 0% { transform: scale(1); } 40% { transform: scale(1.4) rotate(8deg); } 100% { transform: scale(1); } }
 .shrink-pop { animation: shrink-pop 0.8s ease; }
 .grow-pop { animation: grow-pop 0.8s ease; }
 
-/* ---------- The Cat appearing as you get steps right ---------- */
 .grin-progress { transition: opacity 0.9s ease, filter 0.9s ease; }
 @keyframes appear { 0% { transform: scale(1); } 40% { transform: scale(1.25) rotate(-6deg); } 100% { transform: scale(1); } }
 .grin-appear { animation: appear 0.9s ease; }
@@ -339,7 +319,6 @@ main { position: relative; z-index: 1; }
   .through-glass #root { animation: none !important; }
 }
 
-/* ---------- Dream clouds ---------- */
 .clouds { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
 @keyframes drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 .cloud { position: absolute; left: 0; color: #ffffff; opacity: 0.85; animation: drift linear infinite; filter: drop-shadow(0 6px 10px rgba(51, 67, 86, 0.08)); }
@@ -347,7 +326,6 @@ main { position: relative; z-index: 1; }
 .dark .cloud { color: #2c2450; opacity: 0.45; filter: none; }
 .dark .cloud.blue { color: #1f2d4f; }
 
-/* ---------- Flip cards (Hall of Doors) ---------- */
 .flip-card { perspective: 1200px; }
 .flip-inner { display: grid; transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.3, 1); transform-style: preserve-3d; height: 100%; }
 .flip-card.is-flipped .flip-inner { transform: rotateY(180deg); }
@@ -366,13 +344,10 @@ main { position: relative; z-index: 1; }
   .flip-inner { transition: none; }
 }
 
-/* Landing floaters give way to the side rails on wide screens. */
 @media (min-width: 1340px) { .landing-floater { display: none !important; } }
 
-/* ---------- Cat moods ---------- */
 .cat-face { transition: transform 0.4s cubic-bezier(0.4, 1.6, 0.6, 1); transform-origin: 32px 32px; }
 
-/* ---------- Falling intro ---------- */
 .falling-intro {
   position: fixed; inset: 0; z-index: 80; cursor: pointer; overflow: hidden;
   background: radial-gradient(ellipse at 50% 30%, #3d4f66 0%, #223042 55%, #141b26 100%);
@@ -385,7 +360,6 @@ main { position: relative; z-index: 1; }
 .intro-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: clamp(2rem, 6vw, 4rem); font-style: italic; color: #faf8f1; animation: intro-text 2.1s ease forwards; }
 .intro-skip { position: absolute; bottom: 2rem; width: 100%; text-align: center; font-size: 0.75rem; color: #b9deff; opacity: 0.7; }
 
-/* ---------- White Rabbit tour ---------- */
 .tour-spotlight {
   position: fixed; border-radius: 1rem; pointer-events: none;
   box-shadow: 0 0 0 9999px rgba(20, 27, 38, 0.62), 0 0 0 3px #e0b775;
@@ -396,7 +370,6 @@ main { position: relative; z-index: 1; }
   .cat-face, .tour-spotlight { transition: none; }
 }
 
-/* ---------- Answer door ---------- */
 .answer-door { position: relative; width: 34px; height: 44px; flex-shrink: 0; perspective: 260px; }
 .door-frame { position: absolute; inset: -2px; border-radius: 19px 19px 3px 3px; background: #241a10; }
 .door-light {
@@ -418,7 +391,6 @@ main { position: relative; z-index: 1; }
 .door-rattle .door-panel { animation: rattle 0.55s ease; transform-origin: 50% 100%; }
 .door-locked { filter: saturate(0.4) brightness(0.9); }
 
-/* ---------- Illustrated Hall of Doors art ---------- */
 .door-art { position: relative; width: 100%; max-width: 8.5rem; aspect-ratio: 100 / 120; margin: 0 auto; perspective: 700px; }
 .door-art-light { position: absolute; inset: 2px 4px 0; border-radius: 50% 50% 4px 4px / 40% 40% 4px 4px; opacity: 0.25; transition: opacity 0.6s ease; }
 .door-art-panel { position: absolute; inset: 0; transform-origin: 6% 50%; transition: transform 0.8s cubic-bezier(0.3, 0.7, 0.3, 1); filter: drop-shadow(0 6px 8px rgba(51, 67, 86, 0.25)); }
@@ -431,7 +403,6 @@ main { position: relative; z-index: 1; }
   .door-rattle .door-panel { animation: none; }
 }
 
-/* ---------- Drink Me bottles ---------- */
 .potion { width: 26px; height: 41px; overflow: visible; transform-origin: 50% 100%; }
 .potion-liquid { transition: transform 0.8s cubic-bezier(0.5, 0, 0.6, 1); }
 .potion-cork { transition: transform 0.4s ease, opacity 0.4s ease; transform-origin: 14px 9px; }
@@ -450,7 +421,6 @@ main { position: relative; z-index: 1; }
   .potion-gulp { animation: none; }
 }
 
-/* ---------- Messages arrive; the Cat materialises ---------- */
 @keyframes msg-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes msg-in-cat { 0% { opacity: 0; filter: blur(4px); transform: translateX(-6px); } 60% { filter: blur(0); } 100% { opacity: 1; transform: none; } }
 .msg-in { animation: msg-in 0.35s ease-out both; }
@@ -470,7 +440,6 @@ main { position: relative; z-index: 1; }
   .cat-appearing .ca-face, .cat-appearing .ca-eyes, .cat-appearing .ca-grin, .cat-appearing .ca-teeth { animation: none; opacity: 1; stroke-dashoffset: 0; }
 }
 
-/* ---------- Dealt-card loading placeholders ---------- */
 .card-skeleton {
   position: relative; overflow: hidden;
   background-color: var(--night);
@@ -494,12 +463,10 @@ main { position: relative; z-index: 1; }
   .deal-in, .card-skeleton::after { animation: none; }
 }
 
-/* ---------- Footer scenery ---------- */
 .footer-scene { display: block; width: 100%; height: 110px; margin-bottom: -1px; }
 @media (min-width: 768px) { .footer-scene { height: 140px; } }
 .dark .footer-scene { filter: brightness(0.55) saturate(0.75) hue-rotate(-10deg); }
 
-/* ---------- Sparkle trail ---------- */
 .sparkle-layer { position: fixed; inset: 0; pointer-events: none; z-index: 65; overflow: hidden; }
 .sparkle { position: absolute; transform: translate(-50%, -50%); line-height: 1; animation: sparkle 0.9s ease-out forwards; text-shadow: 0 0 6px currentColor; }
 @keyframes sparkle {
@@ -508,7 +475,6 @@ main { position: relative; z-index: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.5) rotate(120deg); }
 }
 
-/* ---------- Hearts burst ---------- */
 .hearts-burst { position: fixed; left: 50%; top: 45%; width: 0; height: 0; z-index: 75; pointer-events: none; }
 .burst-heart {
   position: absolute; left: 0; top: 0; font-size: var(--size); line-height: 1;
@@ -523,14 +489,12 @@ main { position: relative; z-index: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(1.1); }
 }
 
-/* ---------- Solari sandbox badge ---------- */
 .solari-badge {
   display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; padding: 0.25rem 0.7rem;
   font-size: 0.78rem; font-weight: 600; color: #1f5f5a; background: #e3f4f1; border: 1px solid #b9ddd7;
 }
 .dark .solari-badge { color: #9fe3da; background: #143130; border-color: #2c6461; }
 
-/* ---------- Map of Wonderland ---------- */
 .map-path { display: flex; flex-wrap: wrap; align-items: center; row-gap: 0.65rem; }
 .map-path > li { display: flex; align-items: center; }
 .map-path > li:not(:last-child)::after {
@@ -557,7 +521,6 @@ main { position: relative; z-index: 1; }
 .dark .map-stone.is-own:not(.is-mastered) { background: #2d2140; color: #d9c2ff; }
 .own-region { border-style: dashed; border-color: color-mix(in oklab, var(--cheshire) 55%, var(--border)); }
 
-/* ---------- Map view toggle + knowledge graph ---------- */
 .view-toggle { display: inline-flex; padding: 0.2rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card); }
 .view-toggle button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: var(--muted-foreground); }
 .view-toggle button[aria-checked="true"] { background: var(--primary); color: var(--primary-foreground); }
@@ -577,7 +540,6 @@ main { position: relative; z-index: 1; }
 .graph-node.is-selected .graph-label { font-weight: 700; }
 .graph-sublabel { font-size: 10px; letter-spacing: 0.06em; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
 
-/* ---------- Down the rabbit hole (knowledge graph) ---------- */
 :root { --hole-open: #fff8e6; --hole-own: #efe2ff; --hole-halo: #f4ead6; --hole-top: #efe2c6; --hole-bottom: #dcc7a1; --hole-mouth-in: #2a1f17; --hole-mouth-out: #6b4e33; }
 .dark { --hole-open: #4a3a22; --hole-own: #3a2a52; --hole-halo: #4a3729; --hole-top: #5a4331; --hole-bottom: #46331f; --hole-mouth-in: #05030a; --hole-mouth-out: #2a1d14; }
 .rabbit-hole { background: color-mix(in oklab, var(--card) 70%, transparent); border: 1px solid var(--border); }
@@ -633,7 +595,6 @@ main { position: relative; z-index: 1; }
 .rh-skull-eye { fill: #1a120b; stroke: none; }
 @media (prefers-reduced-motion: reduce) { .graph-edge, .graph-node { transition: none; } }
 
-/* ---------- Judge mode ---------- */
 .presenter { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; width: 19rem; border-radius: 1rem; padding: 0.8rem 0.9rem; }
 .presenter-tab { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.75rem; font-weight: 600; background: var(--night); color: #faf8f1; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
 .presenter-btn { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.2rem 0.55rem; font-size: 0.75rem; font-weight: 600; background: var(--card); }
@@ -643,7 +604,6 @@ main { position: relative; z-index: 1; }
 .presenter-step.is-active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 @media (max-width: 640px) { .presenter { left: 0.5rem; right: 0.5rem; width: auto; } }
 
-/* ---------- Math keys + answer preview ---------- */
 .math-key {
   min-width: 2.1rem; height: 1.9rem; padding: 0 0.5rem; border-radius: 0.5rem;
   border: 1px solid var(--border); background: var(--card); font-size: 0.9rem; font-weight: 600;
@@ -655,7 +615,6 @@ main { position: relative; z-index: 1; }
 .answer-preview { font-size: 0.85rem; min-height: 1.4rem; }
 .answer-preview .katex { font-size: 1.1em; }
 
-/* ---------- Socra logo ---------- */
 .socra-logo { overflow: visible; }
 .socra-logo .logo-branch { stroke-dasharray: 100; stroke-dashoffset: 100; animation: logo-draw 0.9s ease-out forwards; }
 .socra-logo path.logo-branch[stroke-dasharray="2 5"] { stroke-dasharray: 2 5; stroke-dashoffset: 0; animation: none; }
@@ -670,14 +629,11 @@ main { position: relative; z-index: 1; }
   .socra-logo .logo-glow { animation: none; opacity: 0; }
 }
 
-/* ---------- The Cat typing ---------- */
 .type-caret { display: inline-block; width: 0.45rem; height: 0.95rem; margin-left: 1px; vertical-align: -2px; border-radius: 2px; background: var(--cheshire); animation: caret-blink 0.8s steps(2) infinite; }
 @keyframes caret-blink { 50% { opacity: 0; } }
 
-/* ---------- Jury's note on a weak testimony ---------- */
 .jury-note { border-radius: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid color-mix(in oklab, var(--heart) 35%, transparent); background: color-mix(in oklab, var(--heart) 8%, var(--card)); }
 
-/* ---------- Waking up (sunrise) ---------- */
 .wakeup { position: fixed; inset: 0; z-index: 85; overflow: hidden; cursor: pointer; animation: wake-sky 2.4s ease-in-out forwards; background: #141b33; }
 @keyframes wake-sky {
   0% { background: #141b33; opacity: 0; }
@@ -696,18 +652,15 @@ main { position: relative; z-index: 1; }
 .wakeup-tarts { font-weight: 700; font-size: 1.3rem; color: #c8314a; }
 @keyframes wake-text { 0%, 30% { opacity: 0; transform: translateY(14px); } 50%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
-/* ---------- Easter egg: Cheshire flashbang ---------- */
 .flashbang { position: fixed; inset: 0; z-index: 95; display: flex; align-items: center; justify-content: center; background: #4a1a78; cursor: pointer; animation: flashbang-in 0.15s ease-out; }
 .flashbang video, .flashbang img { width: 100%; height: 100%; object-fit: cover; }
 .flashbang-still { animation: flashbang-soft 0.6s ease-out both; }
 @keyframes flashbang-soft { from { opacity: 0; } to { opacity: 1; } }
 @keyframes flashbang-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* ---------- Proficiency level (from backend/src/proficiency.rs) ---------- */
 .level-badge { display: inline-flex; align-items: center; gap: 0.35rem; border: 1.5px solid; border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600; font-size: 0.72rem; background: var(--card); }
 .level-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; }
 
-/* ---------- Landing: Why Socra? + live numbers ---------- */
 .why-card { border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 80%, transparent); }
 .why-card.is-other { filter: saturate(0.6); }
 .why-card.is-socra { border-color: color-mix(in oklab, var(--cheshire) 45%, var(--border)); box-shadow: 0 10px 30px -18px color-mix(in oklab, var(--cheshire) 60%, transparent); }
@@ -719,7 +672,6 @@ main { position: relative; z-index: 1; }
 @keyframes live-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 
-/* ---------- Header: which tab you're on ---------- */
 .header-tab.is-active::after {
   content: ""; position: absolute; left: 50%; bottom: -7px; width: 18px; height: 3px; border-radius: 999px;
   transform: translateX(-50%); background: var(--gold-soft); box-shadow: 0 0 8px var(--gold-soft);
