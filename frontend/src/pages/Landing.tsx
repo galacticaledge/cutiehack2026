@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheshireGrin, Tart } from "@/components/wonder";
 import { SocraLogo } from "@/components/logo";
+import { CheshireTree, MushroomDream } from "@/components/dreamart";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
 import { LiveStats, WhySocra } from "@/components/whysocra";
@@ -100,6 +101,12 @@ export function Landing() {
       ))}
 
       <SparkleTrail />
+      <div className="pointer-events-none absolute top-24 right-[calc(50%+22.5rem)] hidden w-[16rem] min-[1180px]:block 2xl:w-[18rem]">
+        <MushroomDream />
+      </div>
+      <div className="pointer-events-none absolute top-20 left-[calc(50%+22.5rem)] hidden w-[16rem] min-[1180px]:block 2xl:w-[18rem]">
+        <CheshireTree />
+      </div>
       <nav aria-label="Display" className="absolute right-4 top-4 z-10">
         <LookingGlassToggle className=" border border-[var(--border)] bg-card/70 text-foreground backdrop-blur hover:bg-secondary" labelClassName="" />
       </nav>
