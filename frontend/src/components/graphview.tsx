@@ -98,6 +98,59 @@ function Clutter({ height, width }: { height: number; width: number }) {
   return <g aria-hidden="true">{items}</g>;
 }
 
+/** Rocks, bones and the odd skull lodged in the tunnel walls, so it feels dug out of the earth. */
+function WallDebris({ height, width }: { height: number; width: number }) {
+  const items = [];
+  for (let i = 0, y = MOUTH_H + 46; y < height - 24; i++) {
+    const r = (k: number) => seed(`${i}:${k}`);
+    for (const side of [0, 1] as const) {
+      const xIn = SIDE - 8 + r(side + 1) * 22; // just inside the tunnel wall, embedded in the earth
+      const x = side === 0 ? xIn : width - xIn;
+      const yy = y + (r(side + 3) - 0.5) * 26;
+      const rot = Math.round(r(side + 5) * 360);
+      const pick = (i * 7 + side * 3) % 13;
+      const key = `${i}-${side}`;
+      if (pick === 4 || pick === 9) {
+        items.push(
+          <g key={key} transform={`translate(${x.toFixed(1)} ${yy.toFixed(1)}) rotate(${rot}) scale(1.3)`} className="rh-bone">
+            <rect x={-9} y={-1.7} width={18} height={3.4} rx={1.6} />
+            <circle cx={-9} cy={-2.1} r={2.5} />
+            <circle cx={-9} cy={2.1} r={2.5} />
+            <circle cx={9} cy={-2.1} r={2.5} />
+            <circle cx={9} cy={2.1} r={2.5} />
+          </g>,
+        );
+      } else if (pick === 11) {
+        items.push(
+          <g key={key} transform={`translate(${x.toFixed(1)} ${yy.toFixed(1)}) rotate(${(rot % 50) - 25})`} className="rh-bone">
+            <circle cx={0} cy={-1.5} r={7.5} />
+            <rect x={-4.2} y={3.2} width={8.4} height={5} rx={1.6} />
+            <circle cx={-2.8} cy={-1.4} r={2} className="rh-skull-eye" />
+            <circle cx={2.8} cy={-1.4} r={2} className="rh-skull-eye" />
+            <path d="M0 1.6l-1 1.8h2z" className="rh-skull-eye" />
+          </g>,
+        );
+      } else {
+        const size = 4 + r(side + 7) * 9;
+        items.push(
+          <path
+            key={key}
+            d={pebble(size, r(side + 9))}
+            transform={`translate(${x.toFixed(1)} ${yy.toFixed(1)}) rotate(${rot})`}
+            className={`rh-rock ${(i + side) % 3 === 0 ? "is-alt" : ""}`}
+          />,
+        );
+        if (r(side + 11) > 0.55) {
+          const s2 = 2.5 + r(side + 13) * 4;
+          items.push(<path key={`${key}b`} d={pebble(s2, r(side + 15))} transform={`translate(${(x + (side ? 1 : -1) * (size * 0.6)).toFixed(1)} ${(yy + size * 0.6).toFixed(1)})`} className="rh-rock is-alt" />);
+        }
+      }
+    }
+    y += 34 + seed(`gap${i}`) * 26;
+  }
+  return <g aria-hidden="true">{items}</g>;
+}
+
 /** A small stable number from a string, so each pebble keeps its own shape between renders. */
 function seed(str: string) {
   let h = 2166136261;
@@ -226,6 +279,7 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           className="rh-grass"
           aria-hidden="true"
         />
+        <WallDebris height={height} width={width} />
         <Clutter height={height} width={width} />
 
         {/* ledges */}

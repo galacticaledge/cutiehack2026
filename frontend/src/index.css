@@ -595,7 +595,7 @@ main { position: relative; z-index: 1; }
 .dark .rh-grass, .dark .rh-mouth { stroke: #4c6b33; }
 .rh-ledge { stroke: color-mix(in oklab, var(--tan) 45%, transparent); stroke-width: 1.5; stroke-dasharray: 1 6; stroke-linecap: round; }
 .rh-ledge-label { font-family: var(--font-display, serif); font-size: 13px; font-style: italic; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 4px; stroke-linejoin: round; }
-:root { --pebble: #1f150e; --pebble-locked: #2b2119; --pebble-mastered: #10231f; --pebble-own: #221432; --pebble-edge: #0b0705; --pebble-ink: #d9c8a8; }
+:root { --pebble: #140c07; --pebble-locked: #1d140d; --pebble-mastered: #10231f; --pebble-own: #221432; --pebble-edge: #0b0705; --pebble-ink: #d9c8a8; }
 .dark { --pebble: #120c07; --pebble-locked: #1a130d; --pebble-mastered: #0b1a17; --pebble-own: #170d24; --pebble-edge: #000; --pebble-ink: #cdbb98; }
 .rh-pebble { filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.45)); }
 .rh-suit { font-size: 12px; fill: #f1d79a; pointer-events: none; }
@@ -606,7 +606,16 @@ main { position: relative; z-index: 1; }
 .rh-fall { animation: rh-fall 0.7s cubic-bezier(0.3, 0.7, 0.35, 1.15) backwards; }
 @keyframes rh-fall { from { opacity: 0; transform: translateY(-46px) rotate(-8deg); } }
 @media (prefers-reduced-motion: reduce) { .rh-clutter, .rh-fall { animation: none; } }
-.rabbit-hole .graph-edge:not(.is-on):not(.is-dim) { opacity: 0.45; }
+:root { --tunnel-line: #24170d; --rock: #7a6650; --rock-alt: #5e4c3a; --rock-edge: #2e2217; --bone: #ece2cb; --bone-edge: #6b5841; }
+.dark { --tunnel-line: #0a0603; --rock: #4f3f30; --rock-alt: #3b2e22; --rock-edge: #140d08; --bone: #cfc3a8; --bone-edge: #3d3022; }
+.rabbit-hole .graph-edge { stroke: var(--tunnel-line); stroke-width: 2.6; stroke-linecap: round; opacity: 0.85; }
+.rabbit-hole .graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 75%, black); stroke-dasharray: 6 4; }
+.rabbit-hole .graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 3.2; opacity: 1; }
+.rabbit-hole .graph-edge.is-dim { opacity: 0.2; }
+.rh-rock { fill: var(--rock); stroke: var(--rock-edge); stroke-width: 1; }
+.rh-rock.is-alt { fill: var(--rock-alt); }
+.rh-bone { fill: var(--bone); stroke: var(--bone-edge); stroke-width: 0.8; }
+.rh-skull-eye { fill: #1a120b; stroke: none; }
 @media (prefers-reduced-motion: reduce) { .graph-edge, .graph-node { transition: none; } }
 
 /* ---------- Judge mode ---------- */
