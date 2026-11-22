@@ -10,7 +10,7 @@ import { Tart } from "@/components/wonder";
 import { api, getFeatures, isGuestName, type Me, type TartsEstimate, type TartsLedgerEntry, type Treasury } from "@/lib/api";
 
 const RATE_KEY = "socra:tart-rate";
-const DEFAULT_RATE = 1; // what-if dollars per 100 tarts
+const DEFAULT_RATE = 1;
 
 function loadRate() {
   try {
@@ -50,7 +50,7 @@ export function Tarts() {
     try {
       localStorage.setItem(RATE_KEY, String(rate));
     } catch {
-      /* per-viewer convenience only */
+      /* ignore */
     }
   }, [rate]);
 
@@ -87,8 +87,6 @@ export function Tarts() {
     </>
   );
 }
-
-/* ---------------- Balance ---------------- */
 
 function BalanceCard({ me, t, solana }: { me: Me; t: Treasury; solana: boolean }) {
   const todayShare = t.dailyCap > 0 ? Math.min(1, t.earnedToday / t.dailyCap) : 0;
@@ -152,8 +150,6 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/* ---------------- Last 14 days ---------------- */
-
 function DailyBars({ daily }: { daily: Treasury["daily"] }) {
   const max = Math.max(1, ...daily.map((d) => d.amount));
   const total = daily.reduce((s, d) => s + d.amount, 0);
@@ -185,8 +181,6 @@ function DailyBars({ daily }: { daily: Treasury["daily"] }) {
     </section>
   );
 }
-
-/* ---------------- Estimator 1: what a solve pays (computed by the server's payout formula) ---------------- */
 
 function Segmented<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
@@ -317,8 +311,6 @@ function PayEstimator({ t, rate }: { t: Treasury; rate: number }) {
   );
 }
 
-/* ---------------- Estimator 2: what-if dollar value ---------------- */
-
 function WorthEstimator({ me, t, rate, setRate }: { me: Me; t: Treasury; rate: number; setRate: (r: number) => void }) {
   const week = useMemo(() => t.daily.slice(-7).reduce((s, d) => s + d.amount, 0), [t.daily]);
   const perDay = week / 7;
@@ -386,8 +378,6 @@ function Row({ label, tartsValue, money, strong }: { label: string; tartsValue: 
   );
 }
 
-/* ---------------- How tarts are baked ---------------- */
-
 function Recipe({ t }: { t: Treasury }) {
   const r = t.rates;
   const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -413,8 +403,6 @@ function Recipe({ t }: { t: Treasury }) {
     </section>
   );
 }
-
-/* ---------------- Ledger ---------------- */
 
 function statusText(e: TartsLedgerEntry) {
   if (e.status === "paid") return { text: `+${tarts(e.amount)}`, tone: "text-[var(--gold)]" };

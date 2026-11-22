@@ -4,7 +4,6 @@ use serde::Serialize;
 pub const BASE: f64 = 100.0;
 /// Generated problems on knowledge-graph concepts: AI-authored, so they pay half of a d1 bank problem.
 pub const QUEST_BASE: f64 = 50.0;
-/// Open-chat testimony on a skill-tree node: LLM-graded explanation only (no checked answer), so it pays half a quest.
 pub const CHAT_BASE: f64 = 25.0;
 
 pub fn bank_base(difficulty: i32) -> f64 {

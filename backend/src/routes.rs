@@ -309,8 +309,6 @@ async fn stats(State(st): State<AppState>) -> ApiResult<Json<Value>> {
 struct CustomBody {
     kind: Option<String>,
     text: Option<String>,
-    /// From the map or a suggestion: go straight to the node's checked problem.
-    /// Typed topics and pasted problems always open the chat (a claim banner leads to the checked problem).
     #[serde(default)]
     quest: bool,
 }
@@ -402,7 +400,6 @@ async fn create_session(
     Ok(Json(json!({ "sessionId": s.id })))
 }
 
-/// An open chat, tagged with its skill-tree node so the chat can offer a claim on that node.
 async fn open_chat_ref(
     st: &AppState,
     user_id: &str,
@@ -426,7 +423,6 @@ async fn open_chat_ref(
             r.concept_id = Some(c.id.clone());
             r.matched_template_id = c.bank_template_id.clone();
         } else {
-            // Not on the map yet: grow it (a new public node), or say why not.
             match crate::grow::grow(st, user_id, text, &public).await? {
                 crate::grow::Grown::Node(c) => {
                     r.concept_id = Some(c.id.clone());
@@ -445,7 +441,6 @@ async fn open_chat_ref(
     Ok(r)
 }
 
-/// "Claim TARTS" from an open chat: the node's checked problem (new or reused), under the usual graph rules.
 async fn claim(
     State(st): State<AppState>,
     AuthUser(user): AuthUser,
@@ -476,7 +471,6 @@ async fn claim(
     Ok(Json(json!({ "sessionId": session_id })))
 }
 
-/// Open-chat testimony: before it, the student must have talked it through.
 pub const CHAT_MIN_MESSAGES: i64 = 3;
 pub const CHAT_MIN_SECONDS: i64 = 60;
 pub const CHAT_TESTIMONY_TRIES: i64 = 3;
@@ -490,9 +484,6 @@ pub async fn chat_testimony_tries(pool: &sqlx::PgPool, session_id: &str) -> anyh
     .await?)
 }
 
-/// Earn on a skill-tree node from the open chat: explain the concept in your own words.
-/// Same graph rules as every topic reward (one payout per node per student, prerequisites,
-/// daily topic cap), plus engagement minimums and a few tries per chat.
 async fn testify(
     State(st): State<AppState>,
     AuthUser(user): AuthUser,
@@ -566,7 +557,6 @@ async fn testify(
         None,
     )
     .await?;
-    // No fallback pass here: without a checked answer, the grade is the only evidence.
     let Some(pass) = verdict.as_ref().and_then(|v| v["pass"].as_bool()) else {
         return Err(AppError::new(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -758,7 +748,6 @@ async fn save_checked_quest(
     if let Some(claim) = claim {
         claim.lock(&mut tx).await?;
     }
-    // A practice quest doesn't block a new earning one once the node can pay.
     if let Some(existing) = active_quest(&mut *tx, &user.id, c)
         .await?
         .filter(|e| !(payable && is_practice_quest(e)))
@@ -801,7 +790,6 @@ async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
     } else {
         public_concepts(&st.pool).await?
     };
-    // Nodes students grew by asking about a new topic (shown with a sprout on the map).
     let grown: std::collections::HashSet<String> =
         sqlx::query_scalar("SELECT id FROM concepts WHERE created_by IS NOT NULL")
             .fetch_all(&st.pool)

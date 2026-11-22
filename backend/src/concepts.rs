@@ -116,9 +116,6 @@ pub(crate) fn match_alias<'a>(concepts: &'a [Concept], text: &str) -> Option<&'a
     top.next().is_none().then_some(*c)
 }
 
-/// Fast-path alias match for free text: only when the matched name is most of what was typed
-/// ("the chain rule", "momentum and collisions"). A single shared word inside a longer question
-/// ("how do hash tables handle collisions?") is left to the classifier.
 pub(crate) fn match_name<'a>(concepts: &'a [Concept], text: &str) -> Option<&'a Concept> {
     let c = match_alias(concepts, text)?;
     let t = normalize(text);

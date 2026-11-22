@@ -1,5 +1,3 @@
-//! The Tart Treasury (`/tarts`): every TARTS payout in one place, plus the reward estimator.
-//! The estimator runs the same `compute_reward` the payout uses, so it can't drift from what's paid.
 use crate::auth::AuthUser;
 use crate::error::ApiResult;
 use crate::models::Reward;
@@ -120,7 +118,6 @@ fn daily_series(first_day: NaiveDate, amounts: &[f64]) -> Vec<Value> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateQuery {
-    /// "problem" (the verified bank) or "topic" (a generated problem on the map).
     kind: String,
     #[serde(default = "one")]
     difficulty: i32,
@@ -147,8 +144,6 @@ pub struct Estimate {
     pub note: Option<&'static str>,
 }
 
-/// What a clean (unflagged) solve would pay. Topics have no Drink Me bottles and pay nothing
-/// without a passing testimony, matching the payout in `routes::explain`.
 pub fn estimate(q: &EstimateQuery, earned_today: f64, daily_cap: f64) -> Estimate {
     let topic = q.kind == "topic";
     let input = RewardInput {
@@ -234,12 +229,10 @@ mod tests {
 
     #[test]
     fn matches_the_payout_formula() {
-        // d2, one bottle, two wrong turns: 200 × 0.75 × 0.8 = 120.
         assert_eq!(
             estimate(&q("problem", 2, 1, 2, true), 0.0, 1000.0).amount,
             120
         );
-        // Missed testimony halves a bank problem: 100 × 0.5 = 50.
         assert_eq!(
             estimate(&q("problem", 1, 0, 0, false), 0.0, 1000.0).amount,
             50

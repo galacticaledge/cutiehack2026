@@ -276,8 +276,6 @@ JSON only: {{\"pass\": boolean, \"feedback\": \"one encouraging sentence\"}}",
     ]
 }
 
-/// Grades a testimony given in an open chat (no checked problem): the student explains a
-/// skill-tree concept in their own words after talking it through with the tutor.
 pub fn chat_testimony_grader(concept: &str, chat: &str, text: &str) -> Vec<Msg> {
     vec![
         Msg::system("You grade short student explanations of a concept. Answer only in JSON."),

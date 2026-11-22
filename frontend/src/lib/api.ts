@@ -120,14 +120,12 @@ export interface SessionView {
   explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
-  /** Open chat on a skill-tree node: the way to earn on it (a checked problem). */
   claim?: {
     conceptId: string;
     title: string;
     reason: string | null;
     existingSessionId: string | null;
     reward: number;
-    /** Earn in the chat itself by explaining the concept (POST /testify). */
     chatReward: number;
     testimonyTriesLeft: number;
     earnedHere: RewardView | null;
@@ -153,7 +151,6 @@ export interface ConceptNode {
   proficiency: "new" | "learning" | "demonstrated" | "proficient";
   attemptsToday: number;
   rewarded: boolean;
-  /** Added to the map by a student asking about a new topic. */
   grown?: boolean;
   bankTemplateId: string | null;
   practiceOnly?: boolean;
