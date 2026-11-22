@@ -143,6 +143,9 @@ export interface ConceptNode {
   attemptsToday: number;
   rewarded: boolean;
   bankTemplateId: string | null;
+  /** Personal (private) topics: the student's own, practice only, never pay. */
+  practiceOnly?: boolean;
+  objective?: string | null;
 }
 
 export interface ConceptMap {
@@ -215,4 +218,49 @@ export async function signUpThrowaway(prefix: "guest" | "copycat") {
     }
   }
   throw new ApiError(409, "Couldn't find a free guest name. Please try again.");
+}
+
+/* ---------------- Personalized knowledge graph (next steps, proposals) ---------------- */
+
+export interface ConceptBrief {
+  id: string;
+  title: string;
+  subject: string;
+  prereqs: string[];
+  bankTemplateId: string | null;
+  practiceOnly: boolean;
+  objective: string | null;
+}
+
+export interface Proposal {
+  proposalId: string;
+  anchorId: string;
+  title: string;
+  objective: string;
+  reason: string;
+  prereqIds: string[];
+}
+
+export type NextStep = { kind: "existing"; concept: ConceptBrief } | { kind: "proposal"; proposal: Proposal };
+
+export function nextStep(conceptId: string) {
+  return api<NextStep>(`/api/concepts/${encodeURIComponent(conceptId)}/next-step`, {});
+}
+
+export function acceptProposal(proposalId: string) {
+  return api<{ conceptId: string }>(`/api/concept-proposals/${encodeURIComponent(proposalId)}/accept`, {});
+}
+
+/**
+ * Start a topic by its concept id (the server picks a bank problem or builds a checked quest).
+ * Servers without concept-id starts fall back to the template or a typed topic.
+ */
+export async function startConcept(c: { id: string; title: string; bankTemplateId: string | null }) {
+  try {
+    return await api<{ sessionId: string }>("/api/sessions", { conceptId: c.id });
+  } catch (e) {
+    const err = e as ApiError;
+    if (err.status !== 400 || !/Unknown problem/i.test(err.message)) throw e;
+    return api<{ sessionId: string }>("/api/sessions", c.bankTemplateId ? { templateId: c.bankTemplateId } : { custom: { kind: "topic", text: c.title } });
+  }
 }

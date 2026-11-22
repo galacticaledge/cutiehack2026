@@ -553,6 +553,33 @@ main { position: relative; z-index: 1; }
 .map-stone.is-locked { background: var(--muted); border-color: var(--border); color: var(--muted-foreground); }
 .dark .map-stone.is-available { background: #3a2e1a; color: #f1d79a; }
 
+.map-stone.is-own:not(.is-mastered) { background: #efe2ff; border-color: var(--cheshire); color: var(--cheshire); box-shadow: none; }
+.dark .map-stone.is-own:not(.is-mastered) { background: #2d2140; color: #d9c2ff; }
+.own-region { border-style: dashed; border-color: color-mix(in oklab, var(--cheshire) 55%, var(--border)); }
+
+/* ---------- Map view toggle + knowledge graph ---------- */
+.view-toggle { display: inline-flex; padding: 0.2rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card); }
+.view-toggle button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: var(--muted-foreground); }
+.view-toggle button[aria-checked="true"] { background: var(--primary); color: var(--primary-foreground); }
+.view-toggle button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.next-step { border: 1px solid color-mix(in oklab, var(--cheshire) 40%, var(--border)); background: color-mix(in oklab, var(--cheshire) 8%, var(--card)); }
+.graph-scroll { overflow: auto; max-height: 72vh; padding: 0.25rem; overscroll-behavior: contain; }
+.graph-svg { display: block; margin: 0 auto; color: var(--foreground); }
+.graph-edge { fill: none; stroke: color-mix(in oklab, var(--tan) 55%, transparent); stroke-width: 1.6; transition: opacity 0.2s ease, stroke 0.2s ease; }
+.graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 60%, transparent); stroke-dasharray: 5 4; }
+.graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 2.6; }
+.graph-edge.is-dim, .graph-node.is-dim { opacity: 0.22; }
+.graph-node { cursor: pointer; transition: opacity 0.2s ease; }
+.graph-node:focus { outline: none; }
+.graph-node:focus-visible .graph-ring, .graph-node.is-selected .graph-ring { stroke: var(--gold-soft); stroke-width: 4; }
+.graph-node:hover .graph-label { text-decoration: underline; }
+.graph-label { font-size: 12.5px; fill: currentColor; paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
+.graph-node.is-selected .graph-label { font-weight: 700; }
+.graph-band { fill: color-mix(in oklab, var(--tan) 6%, transparent); stroke: color-mix(in oklab, var(--tan) 18%, transparent); }
+.graph-band.is-alt { fill: color-mix(in oklab, var(--potion) 5%, transparent); }
+.graph-band-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; fill: var(--tan); }
+@media (prefers-reduced-motion: reduce) { .graph-edge, .graph-node { transition: none; } }
+
 /* ---------- Judge mode ---------- */
 .presenter { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; width: 19rem; border-radius: 1rem; padding: 0.8rem 0.9rem; }
 .presenter-tab { position: fixed; left: 1rem; bottom: 1rem; z-index: 66; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.75rem; font-weight: 600; background: var(--night); color: #faf8f1; box-shadow: 0 6px 18px -8px rgba(0,0,0,.5); }
