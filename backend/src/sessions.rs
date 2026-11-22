@@ -156,7 +156,6 @@ pub async fn topic_block_reason(
     Ok(None)
 }
 
-/// A quest built while its node couldn't pay (prerequisites, daily cap, already earned...).
 pub fn is_practice_quest(s: &ProblemSession) -> bool {
     s.custom_ref
         .as_ref()
@@ -164,8 +163,6 @@ pub fn is_practice_quest(s: &ProblemSession) -> bool {
         .is_some_and(|v| !v.is_null())
 }
 
-/// The quest to reopen for `c`. A practice quest isn't reopened once the node can pay:
-/// the student gets a fresh problem that earns (earning quests still never reroll).
 pub async fn reusable_quest(
     state: &AppState,
     user_id: &str,
@@ -480,7 +477,6 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
         .as_deref()
         .and_then(get_template);
 
-    // Open chat on a public node without a bank problem: offer the node's checked problem.
     let claim = match concept.as_ref() {
         Some(c)
             if s.source.starts_with("custom_")
@@ -492,9 +488,7 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
                 "conceptId": c.id,
                 "title": c.title,
                 "reason": reason,
-                // What a clean claim pays (the quest base); 0 while the node can't pay.
                 "reward": if reason.is_none() { QUEST_BASE as i64 } else { 0 },
-                // Earn right here: explain it in your own words (see routes::testify).
                 "chatReward": if reason.is_none() { CHAT_BASE as i64 } else { 0 },
                 "testimonyTriesLeft": crate::routes::CHAT_TESTIMONY_TRIES
                     - crate::routes::chat_testimony_tries(&state.pool, &s.id).await?,

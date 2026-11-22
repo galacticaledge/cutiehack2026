@@ -1,10 +1,3 @@
-//! The growing map: an academic topic that isn't on the knowledge map becomes a new public node
-//! the first time someone asks about it. Each node pays each student once (`concept:<id>`), so
-//! asking again (in any wording) lands on the same node and can't pay twice.
-//!
-//! Guards: the LLM must say the topic is new (not a duplicate or a narrower case of a node);
-//! titles, subjects and aliases are validated here; each user can add `DAILY_NEW_NODE_CAP` nodes
-//! per UTC day; payouts still need a checked problem or a graded testimony, once per node.
 use crate::concepts::{Concept, already_named, normalize, visible_concept};
 use crate::llm::{Kind, Msg, complete_json};
 use crate::state::AppState;
@@ -13,16 +6,13 @@ use std::collections::BTreeSet;
 
 #[derive(Debug, PartialEq)]
 pub enum NodeDecision {
-    /// The topic is an existing node (by id).
     Existing(String),
-    /// A new node to add.
     New {
         id: String,
         title: String,
         subject: String,
         aliases: Vec<String>,
     },
-    /// Not a single checkable concept: stays practice.
     None,
 }
 
@@ -50,7 +40,6 @@ JSON only: {{\"decision\": \"existing\"|\"new\"|\"none\", \"conceptId\": string|
     ]
 }
 
-/// URL-safe id from a title: "Hash Tables" → "hash-tables".
 pub fn slug(title: &str) -> String {
     normalize(title)
         .split_whitespace()
@@ -68,7 +57,6 @@ fn clean(s: &str, max: usize) -> Option<String> {
     ok.then_some(t)
 }
 
-/// Validates the LLM's answer against the current graph. Pure, so it's tested without a provider.
 pub fn decide(v: &Value, concepts: &[Concept], subjects: &[String]) -> NodeDecision {
     match v["decision"].as_str() {
         Some("existing") => v["conceptId"]
@@ -91,8 +79,6 @@ pub fn decide(v: &Value, concepts: &[Concept], subjects: &[String]) -> NodeDecis
             if id.len() < 2 {
                 return NodeDecision::None;
             }
-            // Same id, or a title that IS an existing node's name: it's that node, not a new one.
-            // (Exact names only: "Hash Collisions" is not Momentum and collisions.)
             let key = normalize(&title);
             if let Some(c) = concepts
                 .iter()
@@ -100,7 +86,6 @@ pub fn decide(v: &Value, concepts: &[Concept], subjects: &[String]) -> NodeDecis
             {
                 return NodeDecision::Existing(c.id.clone());
             }
-            // Keep aliases that don't already point at another node (they'd make matching ambiguous).
             let mut seen = BTreeSet::from([normalize(&title)]);
             let aliases = v["aliases"]
                 .as_array()
@@ -121,7 +106,6 @@ pub fn decide(v: &Value, concepts: &[Concept], subjects: &[String]) -> NodeDecis
     }
 }
 
-/// New nodes this user added today (UTC).
 pub async fn nodes_added_today(st: &AppState, user_id: &str) -> sqlx::Result<i64> {
     sqlx::query_scalar(
         "SELECT COUNT(*) FROM concepts WHERE created_by = $1 AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",
@@ -133,12 +117,10 @@ pub async fn nodes_added_today(st: &AppState, user_id: &str) -> sqlx::Result<i64
 
 pub enum Grown {
     Node(Concept),
-    /// The user hit today's limit on new nodes.
     Limit,
     None,
 }
 
-/// Finds or adds the node for an unmapped academic topic.
 pub async fn grow(
     st: &AppState,
     user_id: &str,
@@ -177,7 +159,6 @@ pub async fn grow(
         return Ok(Grown::Limit);
     }
     let mut tx = st.pool.begin().await?;
-    // catalog_order is UNIQUE: serialize the append (rare, and only for brand-new topics).
     sqlx::query("LOCK TABLE concepts IN SHARE ROW EXCLUSIVE MODE")
         .execute(&mut *tx)
         .await?;

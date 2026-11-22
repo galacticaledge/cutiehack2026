@@ -11,7 +11,6 @@ pub struct Config {
     pub session_secret: String,
     pub daily_cap: f64,
     pub daily_topic_cap: i64,
-    /// New map nodes one user can add per UTC day by asking about an unmapped topic.
     pub daily_new_node_cap: i64,
     pub personalized_concepts_enabled: bool,
     pub demo_fixed_seeds: bool,
