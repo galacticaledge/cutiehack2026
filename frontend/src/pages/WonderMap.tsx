@@ -88,7 +88,7 @@ export function WonderMap() {
   async function start(c: ConceptNode) {
     setStarting(c.id);
     try {
-      const body = c.bankTemplateId ? { templateId: c.bankTemplateId } : { custom: { kind: "topic", text: c.title } };
+      const body = c.bankTemplateId ? { templateId: c.bankTemplateId } : { custom: { kind: "topic", text: c.title, quest: true } };
       const { sessionId } = await api<{ sessionId: string }>("/api/sessions", body);
       navigate(`/learn/${sessionId}`, { state: { fresh: true } });
     } catch (e) {

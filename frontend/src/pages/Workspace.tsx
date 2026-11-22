@@ -8,7 +8,7 @@ import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { celebrate, CheshireAppearing, CheshireGrin, flavorFor, type CatMood } from "@/components/wonder";
+import { celebrate, CheshireAppearing, CheshireGrin, flavorFor, Tart, type CatMood } from "@/components/wonder";
 import { wakeUp } from "@/components/celebrations";
 import { FallingIntro, hasToured, heartsBurst, isTypingTarget, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
 import { play } from "@/lib/sfx";
@@ -94,6 +94,7 @@ export function Workspace() {
   // After the trial: how this topic's proficiency stands now, and where to go next.
   const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
   const chatInput = useRef<HTMLTextAreaElement>(null);
@@ -462,6 +463,18 @@ export function Workspace() {
     }
   }
 
+  async function claimTopic() {
+    setClaiming(true);
+    try {
+      const r = await api<{ sessionId: string }>(`/api/sessions/${sessionId}/claim`, {});
+      navigate(`/learn/${r.sessionId}`, { state: { fresh: true } });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   return (
     <>
       <Header />
@@ -504,7 +517,14 @@ export function Workspace() {
                   <h1>{s.title}</h1>
                 </CardTitle>
                 {earns && s.startedAt && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
-                {!earns && <Badge variant="secondary">Practice dream</Badge>}
+                {!earns &&
+                  (s.claim && s.claim.reward > 0 ? (
+                    <Badge className="bg-[var(--gold)] text-white">
+                      <Tart /> Claim up to {s.claim.reward} tarts
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Practice dream</Badge>
+                  ))}
                 {isQuest && <Badge variant="outline" className="border-[var(--tan)]/50 text-[var(--tan)]"><Sparkles /> New topic</Badge>}
                 {earns && s.practice && <Badge variant="secondary">{isQuest ? "Practice dream" : "Unbirthday: already earned"}</Badge>}
                 {s.status !== "active" && earns && <Badge className="bg-[var(--gold)] text-white">Solved</Badge>}
@@ -709,6 +729,31 @@ export function Workspace() {
                   </span>
                   <Button onClick={goSimilar} disabled={similarLoading}>
                     {similarLoading ? "Opening…" : "Earn tarts"}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : s.claim ? (
+              <Card className="parchment">
+                <CardContent className="space-y-2 pt-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold">Earn tarts on {s.claim.title}</p>
+                    {s.claim.reward > 0 ? (
+                      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 text-sm font-bold text-white" title="What a clean solve with a passing testimony pays">
+                        <Tart /> +{s.claim.reward} TARTS
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground">Practice: no tarts</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {s.claim.existingSessionId
+                      ? `You already have a checked problem on ${s.claim.title}. Pick it up where you left off.`
+                      : s.claim.reason
+                        ? `${s.claim.reason.replace(/ This one is practice\.$/, "")} You can still try a checked problem for practice.`
+                        : `Chat as much as you like here (it's free practice). When you're ready, answer one checked problem on ${s.claim.title} and explain your method to earn up to ${s.claim.reward} tarts.`}
+                  </p>
+                  <Button onClick={claimTopic} disabled={claiming}>
+                    {claiming ? "Building your problem…" : s.claim.existingSessionId ? "Continue my problem" : s.claim.reason ? "Try a checked problem" : "Claim tarts"}
                   </Button>
                 </CardContent>
               </Card>

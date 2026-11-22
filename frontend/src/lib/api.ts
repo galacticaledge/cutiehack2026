@@ -122,6 +122,8 @@ export interface SessionView {
   explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
+  /** Open chat on a skill-tree node: the way to earn on it (a checked problem). */
+  claim?: { conceptId: string; title: string; reason: string | null; existingSessionId: string | null; reward: number } | null;
   messages: ChatMessage[];
 }
 

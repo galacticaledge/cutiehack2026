@@ -210,7 +210,7 @@ export function Learn() {
               compact
               suggestions={suggestions}
               busy={starting !== null || openingId !== null}
-              onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title } }, c.id))}
+              onOpen={(c) => (c.bankTemplateId ? openDoor(c.bankTemplateId) : void start({ custom: { kind: "topic", text: c.title, quest: true } }, c.id))}
             />
           )}
         <section aria-labelledby="ask-cat-heading" className={`parchment space-y-3 rounded-2xl p-5 ${suggestions.length ? "" : "mx-auto max-w-3xl"}`}>

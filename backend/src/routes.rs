@@ -64,6 +64,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/sessions", post(create_session))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}/similar", post(similar))
+        .route("/api/sessions/{id}/claim", post(claim))
         .route("/api/sessions/{id}/chat", post(chat))
         .route("/api/sessions/{id}/hint", post(hint))
         .route("/api/sessions/{id}/answer", post(answer))
@@ -277,6 +278,10 @@ async fn features(State(st): State<AppState>) -> J {
 struct CustomBody {
     kind: Option<String>,
     text: Option<String>,
+    /// From the map or a suggestion: go straight to the node's checked problem.
+    /// Typed topics and pasted problems always open the chat (a claim banner leads to the checked problem).
+    #[serde(default)]
+    quest: bool,
 }
 
 #[derive(Deserialize)]
@@ -330,10 +335,10 @@ async fn create_session(
                 "Please keep it under {CUSTOM_MAX} characters."
             )));
         }
-        let custom_ref = if kind == "problem" {
-            TopicOutcome::Practice(intake_problem(&st, &text).await)
-        } else {
+        let custom_ref = if kind == "topic" && c.quest {
             topic_session(&st, &user, &text).await?
+        } else {
+            TopicOutcome::Practice(open_chat_ref(&st, kind, &text).await?)
         };
         let custom_ref = match custom_ref {
             TopicOutcome::Session(id) => return Ok(Json(json!({ "sessionId": id }))),
@@ -364,6 +369,60 @@ async fn create_session(
     )
     .await?;
     Ok(Json(json!({ "sessionId": s.id })))
+}
+
+/// An open chat, tagged with its skill-tree node so the chat can offer a claim on that node.
+async fn open_chat_ref(st: &AppState, kind: &str, text: &str) -> ApiResult<CustomRef> {
+    let public = public_concepts(&st.pool).await?;
+    let (mut r, class) = if kind == "problem" {
+        tokio::join!(intake_problem(st, text), classify_topic(st, text, &public))
+    } else {
+        (
+            CustomRef::default(),
+            classify_topic(st, text, &public).await,
+        )
+    };
+    if kind == "topic" {
+        r.academic = Some(class.academic);
+    }
+    if r.academic != Some(false) && class.academic {
+        if let Some(c) = class.concept {
+            r.concept_id = Some(c.id.clone());
+            r.matched_template_id = c.bank_template_id.clone();
+        }
+    }
+    Ok(r)
+}
+
+/// "Claim TARTS" from an open chat: the node's checked problem (new or reused), under the usual graph rules.
+async fn claim(
+    State(st): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> ApiResult<J> {
+    let s = load_session(&st, &id, &user.id).await?;
+    if !s.source.starts_with("custom_") {
+        return Err(AppError::bad("Only open chats can claim a topic."));
+    }
+    let c = match s.concept_id.as_deref() {
+        Some(cid) => visible_concept(&st.pool, &user.id, cid).await?,
+        None => None,
+    }
+    .filter(|c| !c.is_private())
+    .ok_or_else(|| AppError::not_found("This chat isn't on the knowledge map yet."))?;
+    let session_id = if let Some(bank) = &c.bank_template_id {
+        create_bank_session(&st, &user, bank, Some(&s.id)).await?.id
+    } else {
+        start_checked_quest(&st, &user, &c, Some(c.title.as_str()))
+            .await?
+            .ok_or_else(|| {
+                AppError::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Couldn't build a checked problem for this topic right now. Try again in a moment.",
+                )
+            })?
+    };
+    Ok(Json(json!({ "sessionId": session_id })))
 }
 
 enum TopicOutcome {

@@ -455,6 +455,26 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
         .as_deref()
         .and_then(get_template);
 
+    // Open chat on a public node without a bank problem: offer the node's checked problem.
+    let claim = match concept.as_ref() {
+        Some(c)
+            if s.source.starts_with("custom_")
+                && !c.is_private()
+                && c.bank_template_id.is_none() =>
+        {
+            let reason = topic_block_reason(state, user_id, c).await?;
+            Some(json!({
+                "conceptId": c.id,
+                "title": c.title,
+                "reason": reason,
+                // What a clean claim pays (the quest base); 0 while the node can't pay.
+                "reward": if reason.is_none() { QUEST_BASE as i64 } else { 0 },
+                "existingSessionId": active_quest(&state.pool, user_id, c).await?.map(|q| q.id),
+            }))
+        }
+        _ => None,
+    };
+
     let msgs: Vec<Value> = messages
         .iter()
         .map(|m| {
@@ -504,6 +524,7 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
         },
         "explanation": s.explanation, // the student's own testimony (for the share card)
         "reward": reward.as_ref().map(|r| reward_json(&state.cfg, r)),
+        "claim": claim,
         "matchedTemplate": if !is_bank { matched.map(|t| json!({ "id": t.id, "title": t.title })) } else { None },
         "messages": msgs,
     }))
