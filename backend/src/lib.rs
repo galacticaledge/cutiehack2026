@@ -19,6 +19,7 @@ pub mod config;
 pub mod context;
 pub mod custom;
 pub mod error;
+pub mod grow;
 pub mod llm;
 pub mod models;
 mod personalized;

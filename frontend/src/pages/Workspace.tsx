@@ -8,7 +8,7 @@ import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheshireAppearing, CheshireGrin, type CatMood } from "@/components/wonder";
+import { CheshireAppearing, CheshireGrin, Tart, type CatMood } from "@/components/wonder";
 import { flavorFor } from "@/lib/flavor";
 import { celebrate, heartsBurst, wakeUp } from "@/lib/events";
 import { FallingIntro, RabbitTour, ShareDreamButton, ShortcutsDialog, type TourStep } from "@/components/extras";
@@ -101,6 +101,10 @@ export function Workspace() {
   const [jury, setJury] = useState<{ feedback: string; triesLeft: number } | null>(null);
   const concepts = useConceptMap(s?.status === "done" && (s.source === "bank" || s.source === "quest") ? `${s.id}:done` : null);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [chatTestimony, setChatTestimony] = useState("");
+  const [testifying, setTestifying] = useState(false);
+  const [chatVerdict, setChatVerdict] = useState<{ pass: boolean; feedback: string } | null>(null);
   const [links, setLinks] = useState<{ title: string; url: string; domain: string }[]>([]);
   const chatEnd = useRef<HTMLDivElement>(null);
   const chatInput = useRef<HTMLTextAreaElement>(null);
@@ -445,6 +449,38 @@ export function Workspace() {
     }
   }
 
+  async function testifyInChat() {
+    setTestifying(true);
+    try {
+      const r = await api<{ pass: boolean; feedback: string; reward?: RewardView }>(`/api/sessions/${sessionId}/testify`, { text: chatTestimony });
+      setChatVerdict({ pass: r.pass, feedback: r.feedback });
+      if (r.pass && r.reward?.status === "paid") {
+        toast.success(`+${r.reward.amount} tarts for explaining it in your own words!`);
+        celebrate();
+        refreshBalance();
+      } else if (r.pass && r.reward?.breakdown) {
+        toast(r.reward.breakdown);
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setTestifying(false);
+    }
+  }
+
+  async function claimTopic() {
+    setClaiming(true);
+    try {
+      const r = await api<{ sessionId: string }>(`/api/sessions/${sessionId}/claim`, {});
+      navigate(`/learn/${r.sessionId}`, { state: { fresh: true } });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   return (
     <>
       <Header />
@@ -486,7 +522,14 @@ export function Workspace() {
                   <h1>{s.title}</h1>
                 </CardTitle>
                 {earns && s.startedAt && <span className="ml-auto"><PocketWatch startedAt={s.startedAt} stoppedAt={s.solvedAt} /></span>}
-                {!earns && <Badge variant="secondary">Practice dream</Badge>}
+                {!earns &&
+                  (s.claim && s.claim.reward > 0 ? (
+                    <Badge className="bg-[var(--gold)] text-white">
+                      <Tart /> Claim up to {s.claim.reward} tarts
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Practice dream</Badge>
+                  ))}
                 {isQuest && <Badge variant="outline" className="border-[var(--tan)]/50 text-[var(--tan)]"><Sparkles /> New topic</Badge>}
                 {earns && s.practice && <Badge variant="secondary">{isQuest ? "Practice dream" : "Unbirthday: already earned"}</Badge>}
                 {s.status !== "active" && earns && <Badge className="bg-[var(--gold)] text-white">Solved</Badge>}
@@ -695,6 +738,68 @@ export function Workspace() {
                   <Button onClick={goSimilar} disabled={similarLoading}>
                     {similarLoading ? "Opening…" : "Earn tarts"}
                   </Button>
+                </CardContent>
+              </Card>
+            ) : s.claim ? (
+              <Card className="parchment">
+                <CardContent className="space-y-2 pt-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold">Earn tarts on {s.claim.title}</p>
+                    {s.claim.reward > 0 ? (
+                      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 text-sm font-bold text-white" title="What a clean solve with a passing testimony pays">
+                        <Tart /> +{s.claim.reward} TARTS
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground">Practice: no tarts</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {s.claim.reason
+                      ? `${s.claim.reason.replace(/ This one is practice\.$/, "")} ${s.claim.existingSessionId ? "Your checked problem here is practice for now." : "You can still try a checked problem for practice."}`
+                      : s.claim.existingSessionId
+                        ? `You already have a checked problem on ${s.claim.title} worth up to ${s.claim.reward} tarts. Pick it up where you left off.`
+                        : `Chat as much as you like here (it's free practice). When you're ready, answer one checked problem on ${s.claim.title} and explain your method to earn up to ${s.claim.reward} tarts.`}
+                  </p>
+                  <Button variant={s.claim.reason ? "outline" : "default"} onClick={claimTopic} disabled={claiming}>
+                    {claiming ? "Building your problem…" : s.claim.existingSessionId ? (s.claim.reason ? "Continue practicing" : "Continue my problem") : s.claim.reason ? "Try a checked problem" : "Claim tarts"}
+                  </Button>
+
+                  {s.claim.earnedHere ? (
+                    <p className="flex items-center gap-1.5 border-t pt-3 text-sm font-semibold text-[var(--gold)]">
+                      <Tart /> You earned {s.claim.earnedHere.amount} tarts in this chat by explaining {s.claim.title}.
+                    </p>
+                  ) : (
+                    !s.claim.reason &&
+                    s.claim.chatReward > 0 && (
+                      <div className="space-y-2 border-t pt-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold">Or earn right here: explain {s.claim.title} in your own words</p>
+                          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 text-sm font-bold text-white">
+                            <Tart /> +{s.claim.chatReward} TARTS
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          After a few messages with the Cat, tell the court how or why it works. Once per topic; {s.claim.testimonyTriesLeft} {s.claim.testimonyTriesLeft === 1 ? "try" : "tries"} left in this chat.
+                        </p>
+                        <Textarea
+                          value={chatTestimony}
+                          onChange={(e) => setChatTestimony(e.target.value)}
+                          onPaste={(e) => {
+                            e.preventDefault();
+                            toast("Write it in your own words: pasting is turned off here.");
+                          }}
+                          rows={3}
+                          maxLength={1500}
+                          placeholder={`In your own words: how does ${s.claim.title.toLowerCase()} work?`}
+                          aria-label={`Explain ${s.claim.title} in your own words`}
+                        />
+                        {chatVerdict && <p className={`text-sm ${chatVerdict.pass ? "text-[var(--gold)]" : "text-[var(--heart)]"}`}>{chatVerdict.feedback}</p>}
+                        <Button onClick={testifyInChat} disabled={testifying || chatTestimony.trim().length < 40 || s.claim.testimonyTriesLeft <= 0}>
+                          {testifying ? "The court is listening…" : "Testify"}
+                        </Button>
+                      </div>
+                    )
+                  )}
                 </CardContent>
               </Card>
             ) : (

@@ -379,7 +379,7 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
                   {c.title.length > 22 ? `${c.title.slice(0, 21)}…` : c.title}
                 </text>
                 <text y={R + 34} textAnchor="middle" className="graph-sublabel">
-                  {c.practiceOnly ? "your own" : c.subject}
+                  {c.practiceOnly ? "your own" : c.grown ? `🌱 ${c.subject}` : c.subject}
                 </text>
                 <title>{`${c.title} · ${c.subject}`}</title>
               </g>

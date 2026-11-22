@@ -120,6 +120,18 @@ export interface SessionView {
   explanation: string | null;
   reward: RewardView | null;
   matchedTemplate?: { id: string; title: string } | null;
+  /** Open chat on a skill-tree node: the way to earn on it (a checked problem). */
+  claim?: {
+    conceptId: string;
+    title: string;
+    reason: string | null;
+    existingSessionId: string | null;
+    reward: number;
+    /** Earn in the chat itself by explaining the concept (POST /testify). */
+    chatReward: number;
+    testimonyTriesLeft: number;
+    earnedHere: RewardView | null;
+  } | null;
   messages: ChatMessage[];
 }
 
@@ -141,6 +153,8 @@ export interface ConceptNode {
   proficiency: "new" | "learning" | "demonstrated" | "proficient";
   attemptsToday: number;
   rewarded: boolean;
+  /** Added to the map by a student asking about a new topic. */
+  grown?: boolean;
   bankTemplateId: string | null;
   practiceOnly?: boolean;
   objective?: string | null;
@@ -244,7 +258,7 @@ export async function startConcept(c: { id: string; title: string; bankTemplateI
   } catch (e) {
     const err = e as ApiError;
     if (err.status !== 400 || !/Unknown problem/i.test(err.message)) throw e;
-    return api<{ sessionId: string }>("/api/sessions", c.bankTemplateId ? { templateId: c.bankTemplateId } : { custom: { kind: "topic", text: c.title } });
+    return api<{ sessionId: string }>("/api/sessions", c.bankTemplateId ? { templateId: c.bankTemplateId } : { custom: { kind: "topic", text: c.title, quest: true } });
   }
 }
 

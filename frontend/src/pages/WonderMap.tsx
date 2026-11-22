@@ -199,6 +199,7 @@ export function WonderMap() {
           <p className="font-display text-xl leading-tight">{sel.title}</p>
           <p className="text-xs text-muted-foreground">
             {sel.practiceOnly ? "Your own topic · " : ""}
+            {sel.grown ? "🌱 Grown by a student's question · " : ""}
             {{ available: "Open to explore", mastered: "Mastered", locked: "Locked" }[sel.status]}
           </p>
         </div>
@@ -402,12 +403,17 @@ export function WonderMap() {
                               onClick={() => select(c.id === selected ? null : c.id)}
                               className={`map-node ${selected === c.id ? "is-selected" : ""}`}
                               aria-expanded={selected === c.id}
-                              aria-label={`${c.title}: ${c.status}${c.rewarded ? ", earned" : ""}${c.practiceOnly ? ", your own topic" : ""}`}
+                              aria-label={`${c.title}: ${c.status}${c.rewarded ? ", earned" : ""}${c.practiceOnly ? ", your own topic" : ""}${c.grown ? ", grown by a student" : ""}`}
                             >
                               <span className={`map-stone is-${c.status} ${c.practiceOnly ? "is-own" : ""}`}>
                                 <StoneIcon c={c} />
                               </span>
                               <span className="map-label">{c.title}</span>
+                              {c.grown && (
+                                <span className="shrink-0 text-xs" title="Grown by a student's question" aria-hidden="true">
+                                  🌱
+                                </span>
+                              )}
                               {c.rewarded && <Tart className="size-3.5 shrink-0" />}
                             </button>
                           </li>

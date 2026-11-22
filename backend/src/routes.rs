@@ -19,7 +19,7 @@ use crate::proficiency::{Proficiency, concept_progress, utc_day};
 use crate::prompts::{self, opening_message};
 use crate::quest::Quest;
 use crate::resources::learn_more_links;
-use crate::rewards::{QUEST_BASE, RewardInput, RewardStatus, bank_base, compute_reward};
+use crate::rewards::{CHAT_BASE, QUEST_BASE, RewardInput, RewardStatus, bank_base, compute_reward};
 use crate::rng::random_seed;
 use crate::sessions::*;
 use crate::solana::{explorer_address_url, explorer_tx_url, generate_user_wallet};
@@ -64,6 +64,8 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/sessions", post(create_session))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}/similar", post(similar))
+        .route("/api/sessions/{id}/claim", post(claim))
+        .route("/api/sessions/{id}/testify", post(testify))
         .route("/api/sessions/{id}/chat", post(chat))
         .route("/api/sessions/{id}/hint", post(hint))
         .route("/api/sessions/{id}/answer", post(answer))
@@ -307,6 +309,10 @@ async fn stats(State(st): State<AppState>) -> ApiResult<Json<Value>> {
 struct CustomBody {
     kind: Option<String>,
     text: Option<String>,
+    /// From the map or a suggestion: go straight to the node's checked problem.
+    /// Typed topics and pasted problems always open the chat (a claim banner leads to the checked problem).
+    #[serde(default)]
+    quest: bool,
 }
 
 #[derive(Deserialize)]
@@ -360,10 +366,10 @@ async fn create_session(
                 "Please keep it under {CUSTOM_MAX} characters."
             )));
         }
-        let custom_ref = if kind == "problem" {
-            TopicOutcome::Practice(intake_problem(&st, &text).await)
-        } else {
+        let custom_ref = if kind == "topic" && c.quest {
             topic_session(&st, &user, &text).await?
+        } else {
+            TopicOutcome::Practice(open_chat_ref(&st, &user.id, kind, &text).await?)
         };
         let custom_ref = match custom_ref {
             TopicOutcome::Session(id) => return Ok(Json(json!({ "sessionId": id }))),
@@ -394,6 +400,234 @@ async fn create_session(
     )
     .await?;
     Ok(Json(json!({ "sessionId": s.id })))
+}
+
+/// An open chat, tagged with its skill-tree node so the chat can offer a claim on that node.
+async fn open_chat_ref(
+    st: &AppState,
+    user_id: &str,
+    kind: &str,
+    text: &str,
+) -> ApiResult<CustomRef> {
+    let public = public_concepts(&st.pool).await?;
+    let (mut r, class) = if kind == "problem" {
+        tokio::join!(intake_problem(st, text), classify_topic(st, text, &public))
+    } else {
+        (
+            CustomRef::default(),
+            classify_topic(st, text, &public).await,
+        )
+    };
+    if kind == "topic" {
+        r.academic = Some(class.academic);
+    }
+    if r.academic != Some(false) && class.academic {
+        if let Some(c) = class.concept {
+            r.concept_id = Some(c.id.clone());
+            r.matched_template_id = c.bank_template_id.clone();
+        } else {
+            // Not on the map yet: grow it (a new public node), or say why not.
+            match crate::grow::grow(st, user_id, text, &public).await? {
+                crate::grow::Grown::Node(c) => {
+                    r.concept_id = Some(c.id.clone());
+                    r.matched_template_id = c.bank_template_id.clone();
+                }
+                crate::grow::Grown::Limit => {
+                    r.practice_reason = Some(format!(
+                        "You've added {} new topics to the map today, so this one is practice. Ask again tomorrow to add it.",
+                        st.cfg.daily_new_node_cap
+                    ));
+                }
+                crate::grow::Grown::None => {}
+            }
+        }
+    }
+    Ok(r)
+}
+
+/// "Claim TARTS" from an open chat: the node's checked problem (new or reused), under the usual graph rules.
+async fn claim(
+    State(st): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> ApiResult<J> {
+    let s = load_session(&st, &id, &user.id).await?;
+    if !s.source.starts_with("custom_") {
+        return Err(AppError::bad("Only open chats can claim a topic."));
+    }
+    let c = match s.concept_id.as_deref() {
+        Some(cid) => visible_concept(&st.pool, &user.id, cid).await?,
+        None => None,
+    }
+    .filter(|c| !c.is_private())
+    .ok_or_else(|| AppError::not_found("This chat isn't on the knowledge map yet."))?;
+    let session_id = if let Some(bank) = &c.bank_template_id {
+        create_bank_session(&st, &user, bank, Some(&s.id)).await?.id
+    } else {
+        start_checked_quest(&st, &user, &c, Some(c.title.as_str()))
+            .await?
+            .ok_or_else(|| {
+                AppError::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Couldn't build a checked problem for this topic right now. Try again in a moment.",
+                )
+            })?
+    };
+    Ok(Json(json!({ "sessionId": session_id })))
+}
+
+/// Open-chat testimony: before it, the student must have talked it through.
+pub const CHAT_MIN_MESSAGES: i64 = 3;
+pub const CHAT_MIN_SECONDS: i64 = 60;
+pub const CHAT_TESTIMONY_TRIES: i64 = 3;
+
+pub async fn chat_testimony_tries(pool: &sqlx::PgPool, session_id: &str) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE session_id = $1 AND type = 'chat_testimony'",
+    )
+    .bind(session_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+/// Earn on a skill-tree node from the open chat: explain the concept in your own words.
+/// Same graph rules as every topic reward (one payout per node per student, prerequisites,
+/// daily topic cap), plus engagement minimums and a few tries per chat.
+async fn testify(
+    State(st): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(b): Json<ExplainBody>,
+) -> ApiResult<J> {
+    let s = load_session(&st, &id, &user.id).await?;
+    if !s.source.starts_with("custom_") {
+        return Err(AppError::bad("Testimony here is for open chats."));
+    }
+    let c = match s.concept_id.as_deref() {
+        Some(cid) => visible_concept(&st.pool, &user.id, cid).await?,
+        None => None,
+    }
+    .filter(|c| !c.is_private())
+    .ok_or_else(|| AppError::not_found("This chat isn't on the knowledge map yet."))?;
+    if let Some(existing) =
+        sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+            .bind(&s.id)
+            .fetch_optional(&st.pool)
+            .await?
+    {
+        return Ok(Json(
+            json!({ "pass": true, "feedback": "You already earned here.", "reward": reward_json(&st.cfg, &existing) }),
+        ));
+    }
+    if let Some(reason) = topic_block_reason(&st, &user.id, &c).await? {
+        return Err(AppError::bad(reason));
+    }
+    let history = history(&st.pool, &s.id).await?;
+    let said = history.iter().filter(|m| m.role == "user").count() as i64;
+    let seconds = (Utc::now() - s.started_at).num_seconds();
+    if said < CHAT_MIN_MESSAGES || seconds < CHAT_MIN_SECONDS {
+        return Err(AppError::bad(format!(
+            "Talk it through with the Cat a little more first (at least {CHAT_MIN_MESSAGES} messages and a minute), then explain it in your own words."
+        )));
+    }
+    let tries = chat_testimony_tries(&st.pool, &s.id).await?;
+    if tries >= CHAT_TESTIMONY_TRIES {
+        return Err(AppError::bad(
+            "No testimony tries left in this chat. Try the checked problem instead.",
+        ));
+    }
+    let text = b.text.unwrap_or_default().trim().to_string();
+    if text.chars().count() < 40 {
+        return Err(AppError::bad(
+            "Explain it in a few sentences: how or why does it work?",
+        ));
+    }
+    if text.chars().count() > 1500 {
+        return Err(AppError::bad("Please keep it under 1500 characters."));
+    }
+    let chat = history
+        .iter()
+        .rev()
+        .take(16)
+        .rev()
+        .map(|m| {
+            format!(
+                "{}: {}",
+                if m.role == "user" { "Student" } else { "Tutor" },
+                m.content
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let verdict = complete_json(
+        &st,
+        Kind::Check,
+        &prompts::chat_testimony_grader(&c.title, &chat, &text),
+        None,
+    )
+    .await?;
+    // No fallback pass here: without a checked answer, the grade is the only evidence.
+    let Some(pass) = verdict.as_ref().and_then(|v| v["pass"].as_bool()) else {
+        return Err(AppError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "The court couldn't hear your testimony just now. Try again in a moment.",
+        ));
+    };
+    let feedback = verdict
+        .as_ref()
+        .and_then(|v| v["feedback"].as_str())
+        .map(|f| f.trim().chars().take(400).collect::<String>())
+        .unwrap_or_default();
+    sqlx::query(
+        "INSERT INTO events (id, session_id, type, data) VALUES ($1, $2, 'chat_testimony', $3)",
+    )
+    .bind(new_id())
+    .bind(&s.id)
+    .bind(json!({ "text": text, "pass": pass, "feedback": feedback }))
+    .execute(&st.pool)
+    .await?;
+    if !pass {
+        return Ok(Json(json!({
+            "pass": false,
+            "feedback": feedback,
+            "triesLeft": CHAT_TESTIMONY_TRIES - (tries + 1),
+        })));
+    }
+    let r = compute_reward(&RewardInput {
+        base: CHAT_BASE,
+        hints_used: 0,
+        wrong_attempts: 0,
+        explain_passed: true,
+        flagged: false,
+        earned_today: earned_today(&st, &user.id).await?,
+        daily_cap: st.cfg.daily_cap,
+    });
+    if r.amount == 0 {
+        return Ok(Json(
+            json!({ "pass": true, "feedback": feedback, "reward": practice_reward("The Queen's treasury is closed for today (daily cap reached). Explain it again tomorrow to earn your tarts.") }),
+        ));
+    }
+    let inserted = sqlx::query_as::<_, Reward>(
+        "INSERT INTO rewards (id, user_id, session_id, template_id, amount, breakdown, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'minting') ON CONFLICT DO NOTHING RETURNING *",
+    )
+    .bind(new_id())
+    .bind(&user.id)
+    .bind(&s.id)
+    .bind(reward_key(&c.id))
+    .bind(st.cfg.to_base_units(r.amount as f64))
+    .bind(json!({ "items": r.breakdown, "summary": format!("Chat testimony on {} = {} TARTS", c.title, r.amount) }))
+    .fetch_optional(&st.pool)
+    .await?;
+    let Some(reward) = inserted else {
+        return Ok(Json(
+            json!({ "pass": true, "feedback": feedback, "reward": practice_reward(&format!("You've already earned on {}.", c.title)) }),
+        ));
+    };
+    let settled = settle(&st, &reward, &user.wallet_pubkey).await?;
+    Ok(Json(
+        json!({ "pass": true, "feedback": feedback, "reward": reward_json(&st.cfg, &settled) }),
+    ))
 }
 
 enum TopicOutcome {
@@ -454,7 +688,7 @@ async fn start_checked_quest(
             ));
         }
     }
-    if let Some(existing) = active_quest(&st.pool, &user.id, c).await? {
+    if let Some(existing) = reusable_quest(st, &user.id, c).await? {
         return Ok(Some(existing.id));
     }
     // Both entry points share the generation claim, but only ID starts consume quota.
@@ -471,7 +705,7 @@ async fn build_checked_quest(
     text: Option<&str>,
     claim: &GenerationClaim,
 ) -> ApiResult<Option<String>> {
-    if let Some(existing) = active_quest(&st.pool, &user.id, c).await? {
+    if let Some(existing) = reusable_quest(st, &user.id, c).await? {
         return Ok(Some(existing.id));
     }
     let reason = topic_block_reason(st, &user.id, c).await?;
@@ -509,6 +743,7 @@ async fn save_checked_quest(
     if quest.concept_id != c.id || (c.is_private() && quest.ran_in_sandbox) {
         return Err(anyhow::anyhow!("inconsistent checked quest generation").into());
     }
+    let payable = practice_reason.is_none();
     let r = CustomRef {
         quest: Some(quest),
         practice_reason,
@@ -523,7 +758,11 @@ async fn save_checked_quest(
     if let Some(claim) = claim {
         claim.lock(&mut tx).await?;
     }
-    if let Some(existing) = active_quest(&mut *tx, &user.id, c).await? {
+    // A practice quest doesn't block a new earning one once the node can pay.
+    if let Some(existing) = active_quest(&mut *tx, &user.id, c)
+        .await?
+        .filter(|e| !(payable && is_practice_quest(e)))
+    {
         tx.commit().await?;
         return Ok(existing.id);
     }
@@ -562,6 +801,13 @@ async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
     } else {
         public_concepts(&st.pool).await?
     };
+    // Nodes students grew by asking about a new topic (shown with a sprout on the map).
+    let grown: std::collections::HashSet<String> =
+        sqlx::query_scalar("SELECT id FROM concepts WHERE created_by IS NOT NULL")
+            .fetch_all(&st.pool)
+            .await?
+            .into_iter()
+            .collect();
     let list: Vec<Value> = graph
         .iter()
         .map(|c| {
@@ -582,6 +828,7 @@ async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
             summary["attemptsToday"] = json!(evidence.map_or(0, |p| p.attempts_today));
             summary["status"] = json!(status);
             summary["rewarded"] = json!(rewarded.contains(&c.id));
+            summary["grown"] = json!(grown.contains(&c.id));
             summary
         })
         .collect();
@@ -1297,6 +1544,7 @@ mod tests {
             session_secret: String::new(),
             daily_cap: 1000.0,
             daily_topic_cap: 3,
+            daily_new_node_cap: 3,
             personalized_concepts_enabled: false,
             demo_fixed_seeds: false,
             solana_rpc_url: String::new(),
@@ -1849,7 +2097,7 @@ mod tests {
         assert_eq!(public["sessionId"], "exhausted-public");
         let old_public = json(
             post("/api/sessions", Some("u"))
-                .json(&json!({"custom":{"kind":"topic","text":"Fractions"}}))
+                .json(&json!({"custom":{"kind":"topic","text":"Fractions","quest":true}}))
                 .send()
                 .await
                 .unwrap(),
@@ -1978,7 +2226,7 @@ mod tests {
                 .json(&body)
         };
 
-        let typed = start(json!({"custom":{"kind":"topic","text":"Fractions"}}));
+        let typed = start(json!({"custom":{"kind":"topic","text":"Fractions","quest":true}}));
         let typed = tokio::spawn(async move { typed.send().await.unwrap() });
         tokio::time::timeout(Duration::from_secs(5), entered.notified())
             .await
