@@ -680,3 +680,15 @@ main { position: relative; z-index: 1; }
 /* ---------- Proficiency level (from backend/src/proficiency.rs) ---------- */
 .level-badge { display: inline-flex; align-items: center; gap: 0.35rem; border: 1.5px solid; border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600; font-size: 0.72rem; background: var(--card); }
 .level-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; }
+
+/* ---------- Landing: Why Socra? + live numbers ---------- */
+.why-card { border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 80%, transparent); }
+.why-card.is-other { filter: saturate(0.6); }
+.why-card.is-socra { border-color: color-mix(in oklab, var(--cheshire) 45%, var(--border)); box-shadow: 0 10px 30px -18px color-mix(in oklab, var(--cheshire) 60%, transparent); }
+.why-bubble { width: fit-content; max-width: 90%; border-radius: 1rem; padding: 0.4rem 0.75rem; line-height: 1.35; }
+.why-bubble.is-student { margin-left: auto; background: var(--primary); color: var(--primary-foreground); border-bottom-right-radius: 0.3rem; }
+.why-bubble.is-bot { background: var(--muted); border-bottom-left-radius: 0.3rem; font-weight: 600; }
+.why-bubble.is-cat { background: color-mix(in oklab, var(--cheshire) 14%, var(--card)); border: 1px solid color-mix(in oklab, var(--cheshire) 35%, transparent); border-bottom-left-radius: 0.3rem; }
+.live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 0.35rem; border-radius: 999px; background: var(--potion); vertical-align: middle; animation: live-pulse 1.8s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
