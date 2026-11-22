@@ -152,9 +152,9 @@ function tunnelPath(left: number, right: number, top: number, bottom: number) {
 }
 
 const STATUS_FILL: Record<ConceptNode["status"], string> = {
-  mastered: "var(--potion)",
-  available: "var(--hole-open)",
-  locked: "var(--muted)",
+  mastered: "var(--pebble-mastered)",
+  available: "var(--pebble)",
+  locked: "var(--pebble-locked)",
 };
 
 export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptNode[]; selected: string | null; onSelect: (id: string) => void }) {
@@ -279,9 +279,9 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(c.id))}
               >
                 <path d={pebble(R + 4.5, seed(c.id))} fill="none" stroke={ring} strokeWidth="3" strokeDasharray={c.practiceOnly ? "4 3" : undefined} className="graph-ring" />
-                <path d={pebble(R, seed(c.id))} fill={c.practiceOnly ? "var(--hole-own)" : STATUS_FILL[c.status]} stroke={c.practiceOnly ? "var(--cheshire)" : "currentColor"} strokeWidth="1.5" />
-                {c.status === "locked" && <path d="M-4 1h8v5h-8zM-2.5 1v-2a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" strokeWidth="1.3" />}
-                {c.status === "mastered" && <path d="M-4.5 0.5l3 3 6-6.5" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
+                <path d={pebble(R, seed(c.id))} fill={c.practiceOnly ? "var(--pebble-own)" : STATUS_FILL[c.status]} stroke={c.practiceOnly ? "var(--cheshire)" : "var(--pebble-edge)"} strokeWidth="1.5" className="rh-pebble" />
+                {c.status === "locked" && <path d="M-4 1h8v5h-8zM-2.5 1v-2a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="var(--pebble-ink)" strokeWidth="1.3" />}
+                {c.status === "mastered" && <path d="M-4.5 0.5l3 3 6-6.5" fill="none" stroke="var(--potion)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />}
                 {c.status === "available" && (
                   <text y={4.5} textAnchor="middle" className={`rh-suit ${suit === "♥" || suit === "♦" ? "is-red" : ""} ${suit === "✦" ? "is-own" : ""}`}>
                     {suit}

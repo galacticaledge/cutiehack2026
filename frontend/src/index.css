@@ -595,10 +595,12 @@ main { position: relative; z-index: 1; }
 .dark .rh-grass, .dark .rh-mouth { stroke: #4c6b33; }
 .rh-ledge { stroke: color-mix(in oklab, var(--tan) 45%, transparent); stroke-width: 1.5; stroke-dasharray: 1 6; stroke-linecap: round; }
 .rh-ledge-label { font-family: var(--font-display, serif); font-size: 13px; font-style: italic; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 4px; stroke-linejoin: round; }
-.rh-suit { font-size: 12px; fill: var(--night); pointer-events: none; }
-.rh-suit.is-red { fill: var(--heart); }
-.rh-suit.is-own { fill: var(--cheshire); }
-.dark .rh-suit:not(.is-red):not(.is-own) { fill: #f1d79a; }
+:root { --pebble: #1f150e; --pebble-locked: #2b2119; --pebble-mastered: #10231f; --pebble-own: #221432; --pebble-edge: #0b0705; --pebble-ink: #d9c8a8; }
+.dark { --pebble: #120c07; --pebble-locked: #1a130d; --pebble-mastered: #0b1a17; --pebble-own: #170d24; --pebble-edge: #000; --pebble-ink: #cdbb98; }
+.rh-pebble { filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.45)); }
+.rh-suit { font-size: 12px; fill: #f1d79a; pointer-events: none; }
+.rh-suit.is-red { fill: #ff7a8a; }
+.rh-suit.is-own { fill: #d9b8ff; }
 .rh-clutter { font-size: 20px; fill: color-mix(in oklab, var(--tan) 70%, transparent); animation: rh-drift 7s ease-in-out infinite; }
 @keyframes rh-drift { 0%, 100% { transform: translateY(-6px) rotate(-14deg); } 50% { transform: translateY(8px) rotate(16deg); } }
 .rh-fall { animation: rh-fall 0.7s cubic-bezier(0.3, 0.7, 0.35, 1.15) backwards; }
