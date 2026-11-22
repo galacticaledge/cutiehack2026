@@ -278,6 +278,34 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           className="rh-shaft"
         />
         <rect x={SIDE - 30} y={MOUTH_H / 2} width={width - 2 * SIDE + 60} height={height - MOUTH_H / 2} fill={`url(#walls-${gid})`} aria-hidden="true" />
+        {/* the starting topics are dug straight down out of the mouth (drawn underneath it, so they emerge from its shadow) */}
+        {(() => {
+          const shafts = concepts
+            .filter((c) => pos.get(c.id)!.depth === 0)
+            .map((c) => {
+              const t = pos.get(c.id)!;
+              const sx = width / 2 + (t.x - width / 2) * 0.9;
+              const sy = MOUTH_H / 2;
+              const mid = (sy + t.y) / 2;
+              return {
+                key: c.id,
+                d: `M${sx.toFixed(1)} ${sy} C${sx.toFixed(1)} ${mid}, ${t.x} ${mid - 4}, ${t.x} ${t.y - R - 4}`,
+                state: sel?.id === c.id ? "is-on" : sel ? "is-dim" : "",
+              };
+            });
+          return (
+            <g aria-hidden="true">
+              <g filter={`url(#mud-${gid})`}>
+                {shafts.map((l) => (
+                  <path key={l.key} d={l.d} className={`rh-mud is-shaft ${l.state}`} />
+                ))}
+              </g>
+              {shafts.map((l) => (
+                <path key={l.key} d={l.d} className={`graph-edge is-shaft ${l.state}`} />
+              ))}
+            </g>
+          );
+        })()}
         {/* the mouth, ringed with grass */}
         <ellipse cx={width / 2} cy={MOUTH_H / 2} rx={rx} ry={ry} fill={`url(#mouth-${gid})`} className="rh-mouth" />
         <path
@@ -313,19 +341,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
               })
               .filter((l): l is NonNullable<typeof l> => l !== null),
           );
-          // The starting topics are dug straight down from the mouth of the hole.
-          for (const c of concepts) {
-            const b = pos.get(c.id)!;
-            if (b.depth !== 0) continue;
-            const sx = width / 2 + (b.x - width / 2) * 0.82;
-            const sy = MOUTH_H / 2 + ry * 0.35;
-            links.unshift({
-              key: `mouth->${c.id}`,
-              d: `M${sx.toFixed(1)} ${sy.toFixed(1)} C${sx.toFixed(1)} ${(sy + b.y) / 2}, ${b.x} ${(sy + b.y) / 2 - 6}, ${b.x} ${b.y - R - 4}`,
-              state: sel?.id === c.id ? "is-on" : sel ? "is-dim" : "",
-              personal: false,
-            });
-          }
           return (
             <>
               <g filter={`url(#mud-${gid})`} aria-hidden="true">

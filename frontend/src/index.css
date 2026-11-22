@@ -620,6 +620,9 @@ main { position: relative; z-index: 1; }
 .rh-mud { fill: none; stroke: var(--mud); stroke-width: 11; stroke-linecap: round; transition: opacity 0.2s ease; }
 .rh-mud.is-on { stroke: var(--mud-on); stroke-width: 13; }
 .rh-mud.is-dim { opacity: 0.25; }
+.rh-mud.is-shaft { stroke-width: 16; stroke-linecap: butt; }
+.rh-mud.is-shaft.is-on { stroke-width: 17; }
+.rabbit-hole .graph-edge.is-shaft { stroke-width: 4; stroke-linecap: butt; }
 .rabbit-hole .graph-edge { stroke: var(--tunnel-line); stroke-width: 3; stroke-linecap: round; opacity: 0.9; }
 .rabbit-hole .graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 75%, black); stroke-dasharray: 6 4; }
 .rabbit-hole .graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 3.2; opacity: 1; }
