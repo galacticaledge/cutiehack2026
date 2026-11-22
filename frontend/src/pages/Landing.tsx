@@ -26,6 +26,8 @@ const STEPS = [
 
 export function Landing() {
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vanishes, setVanishes] = useState(0);
@@ -35,8 +37,10 @@ export function Landing() {
     setLoading(true);
     setError(null);
     try {
-      const name = `guest-${Math.random().toString(36).slice(2, 8)}`;
-      await api("/api/auth/login", { username: name });
+      const [suffix, ...secret] = crypto.getRandomValues(new Uint32Array(5));
+      const name = `guest-${suffix.toString(36)}`;
+      const guestPassword = secret.map((word) => word.toString(16).padStart(8, "0")).join("");
+      await api("/api/auth/signup", { username: name, password: guestPassword });
       const { sessionId } = await api<{ sessionId: string }>("/api/sessions", { templateId: "cs-trace-loop-1" });
       navigate(`/learn/${sessionId}`, { state: { fresh: true } });
     } catch (err) {
@@ -58,7 +62,7 @@ export function Landing() {
     setLoading(true);
     setError(null);
     try {
-      await api("/api/auth/login", { username });
+      await api(creatingAccount ? "/api/auth/signup" : "/api/auth/login", { username, password });
       navigate("/learn");
     } catch (err) {
       setError((err as Error).message);
@@ -117,18 +121,38 @@ export function Landing() {
           </p>
         </div>
 
-        <form onSubmit={submit} className="parchment mx-auto flex w-full max-w-md gap-2 rounded-2xl p-2">
+        <form onSubmit={submit} className="parchment mx-auto grid w-full max-w-md gap-2 rounded-2xl p-2">
           <Input
             autoFocus
-            placeholder="Who are YOU? (pick a username)"
+            placeholder="Who are YOU? (username)"
+            autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="h-11 border-0 bg-transparent text-base shadow-none focus-visible:ring-0"
+            className="h-11 text-base"
             aria-label="Username"
+            required
           />
-          <Button type="submit" size="lg" className="h-11 px-5" disabled={loading || !username.trim()}>
-            {loading ? "Falling…" : "Follow the rabbit"}
+          <Input
+            type="password"
+            placeholder="Password"
+            autoComplete={creatingAccount ? "new-password" : "current-password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-11 text-base"
+            aria-label="Password"
+            required
+          />
+          <Button type="submit" size="lg" className="h-11 px-5" disabled={loading || !username.trim() || !password}>
+            {loading ? "Falling…" : creatingAccount ? "Create an account" : "Sign in"}
           </Button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => { setCreatingAccount(!creatingAccount); setPassword(""); setError(null); }}
+            className="py-1 text-sm font-semibold text-[var(--tan)] hover:underline disabled:opacity-50"
+          >
+            {creatingAccount ? "Already have an account? Sign in" : "New here? Create an account"}
+          </button>
         </form>
         <p className="-mt-5 text-center text-sm text-muted-foreground">
           Just looking?{" "}

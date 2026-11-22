@@ -1,21 +1,24 @@
 //! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
 use crate::answers::{is_correct, is_locked, parse_answer};
-use crate::anticheat::{TelemetryEvent, compute_flags};
 use crate::auth::{
     AuthUser, COOKIE, hash_password, session_cookie, valid_password, valid_username,
     verify_password,
 };
 use crate::claims::verify_message;
-use crate::concepts::{CONCEPTS, bank_template_for, reward_key};
+use crate::concepts::{Concept, public_concepts, reward_key, visible_concept, visible_concepts};
 use crate::context::CustomRef;
 use crate::context::problem_context;
 use crate::custom::{CUSTOM_MAX, classify_topic, generate_quest, intake_problem};
 use crate::error::{ApiResult, AppError};
 use crate::llm::{Kind, complete_json};
 use crate::models::{Message, ProblemSession, Reward, User, new_id};
+use crate::personalized::{
+    self, Generation, GenerationClaim, PRIVATE_PRACTICE_REASON, concept_summary,
+};
 use crate::problems::{TEMPLATES, get_template};
 use crate::proficiency::{Proficiency, concept_progress, utc_day};
 use crate::prompts::{self, opening_message};
+use crate::quest::Quest;
 use crate::resources::learn_more_links;
 use crate::rewards::{QUEST_BASE, RewardInput, RewardStatus, bank_base, compute_reward};
 use crate::rng::random_seed;
@@ -45,6 +48,14 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/me", get(me))
         .route("/api/problems", get(problems))
         .route("/api/concepts", get(concepts))
+        .route(
+            "/api/concepts/{id}/next-step",
+            post(personalized::next_step),
+        )
+        .route(
+            "/api/concept-proposals/{id}/accept",
+            post(personalized::accept),
+        )
         .route("/api/journal", get(journal))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
@@ -213,7 +224,9 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
 /// Dream journal: the user's finished verified problems, newest first. Never includes answers.
 async fn journal(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J> {
     let sessions = sqlx::query_as::<_, ProblemSession>(
-        "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'bank' AND status = 'done' ORDER BY solved_at DESC NULLS LAST LIMIT 100",
+        "SELECT s.* FROM problem_sessions s LEFT JOIN concepts c ON c.id = s.concept_id
+         WHERE s.user_id = $1 AND s.source = 'bank' AND s.status = 'done' AND c.owner_id IS NULL
+         ORDER BY s.solved_at DESC NULLS LAST LIMIT 100",
     )
     .bind(&user.id)
     .fetch_all(&st.pool)
@@ -268,6 +281,8 @@ struct CustomBody {
 struct CreateBody {
     #[serde(rename = "templateId")]
     template_id: Option<String>,
+    #[serde(rename = "conceptId")]
+    concept_id: Option<String>,
     custom: Option<CustomBody>,
 }
 
@@ -276,6 +291,28 @@ async fn create_session(
     AuthUser(user): AuthUser,
     Json(b): Json<CreateBody>,
 ) -> ApiResult<J> {
+    if let Some(id) = b.concept_id {
+        if b.template_id.is_some() || b.custom.is_some() {
+            return Err(AppError::bad("Choose only one way to start a session."));
+        }
+        let c = visible_concept(&st.pool, &user.id, &id)
+            .await?
+            .filter(|c| st.cfg.personalized_concepts_enabled || !c.is_private())
+            .ok_or_else(|| AppError::not_found("Concept not found."))?;
+        let id = if let Some(bank) = &c.bank_template_id {
+            create_bank_session(&st, &user, bank, None).await?.id
+        } else {
+            start_checked_quest(&st, &user, &c, None)
+                .await?
+                .ok_or_else(|| {
+                    AppError::new(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "Couldn't build a checked problem for this topic right now.",
+                    )
+                })?
+        };
+        return Ok(Json(json!({ "sessionId": id })));
+    }
     if let Some(c) = b.custom {
         let kind = match c.kind.as_deref() {
             Some("problem") => "problem",
@@ -301,14 +338,16 @@ async fn create_session(
             TopicOutcome::Practice(r) => r,
         };
         let s = sqlx::query_as::<_, ProblemSession>(
-            "INSERT INTO problem_sessions (id, user_id, source, custom_text, custom_ref, template_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            "INSERT INTO problem_sessions (id, user_id, source, custom_text, custom_ref, template_id, concept_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
         )
         .bind(new_id())
         .bind(&user.id)
         .bind(if kind == "problem" { "custom_problem" } else { "custom_topic" })
         .bind(&text)
         .bind(serde_json::to_value(&custom_ref)?)
-        .bind(custom_ref.matched_template_id.clone())
+        .bind(&custom_ref.matched_template_id)
+        .bind(&custom_ref.concept_id)
         .fetch_one(&st.pool)
         .await?;
         let ctx = problem_context(&s)?;
@@ -334,14 +373,12 @@ enum TopicOutcome {
 
 /// Topic → knowledge-graph node → generated, engine-checked problem when possible.
 async fn topic_session(st: &AppState, user: &User, text: &str) -> ApiResult<TopicOutcome> {
-    let class = classify_topic(st, text).await;
+    let public = public_concepts(&st.pool).await?;
+    let class = classify_topic(st, text, &public).await;
     let practice = |reason: Option<String>| CustomRef {
         academic: Some(class.academic),
-        concept_id: class.concept.map(|c| c.id.to_string()),
-        matched_template_id: class
-            .concept
-            .and_then(|c| bank_template_for(c.id))
-            .map(String::from),
+        concept_id: class.concept.map(|c| c.id.clone()),
+        matched_template_id: class.concept.and_then(|c| c.bank_template_id.clone()),
         practice_reason: reason,
         ..Default::default()
     };
@@ -353,41 +390,128 @@ async fn topic_session(st: &AppState, user: &User, text: &str) -> ApiResult<Topi
             "This topic isn't on the knowledge map yet, so it's practice only.".into(),
         ))));
     };
-    if bank_template_for(c.id).is_some() {
+    if c.bank_template_id.is_some() {
         return Ok(TopicOutcome::Practice(practice(Some(format!(
             "{} has a verified problem in the bank. Use the button below to earn TARTS on it.",
             c.title
         )))));
     }
-    if let Some(existing) = active_quest(&st.pool, &user.id, c.id).await? {
-        return Ok(TopicOutcome::Session(existing.id));
-    }
-    let reason = topic_block_reason(st, &user.id, c).await?;
-    let seed = random_seed();
-    let Some(quest) = generate_quest(st, c, seed).await else {
-        return Ok(TopicOutcome::Practice(practice(Some(
+    match start_checked_quest(st, user, c, Some(text)).await? {
+        Some(id) => Ok(TopicOutcome::Session(id)),
+        None => Ok(TopicOutcome::Practice(practice(Some(
             "Couldn't build a checked problem for this topic right now, so it's practice only."
                 .into(),
-        ))));
+        )))),
+    }
+}
+
+async fn start_checked_quest(
+    st: &AppState,
+    user: &User,
+    c: &Concept,
+    text: Option<&str>,
+) -> ApiResult<Option<String>> {
+    if c.is_private() {
+        if !st.cfg.personalized_concepts_enabled {
+            return Err(AppError::not_found("Concept not found."));
+        }
+        if !c.ready(&mastered_concepts(&st.pool, &user.id).await?) {
+            return Err(AppError::new(
+                StatusCode::CONFLICT,
+                "Demonstrate this concept's prerequisites first.",
+            ));
+        }
+    }
+    if let Some(existing) = active_quest(&st.pool, &user.id, c).await? {
+        return Ok(Some(existing.id));
+    }
+    // Both entry points share the generation claim, but only ID starts consume quota.
+    let claim = GenerationClaim::acquire(&st.pool, &user.id, &c.id, Generation::Quest).await?;
+    let result = build_checked_quest(st, user, c, text, &claim).await;
+    claim.release().await;
+    result
+}
+
+async fn build_checked_quest(
+    st: &AppState,
+    user: &User,
+    c: &Concept,
+    text: Option<&str>,
+    claim: &GenerationClaim,
+) -> ApiResult<Option<String>> {
+    if let Some(existing) = active_quest(&st.pool, &user.id, c).await? {
+        return Ok(Some(existing.id));
+    }
+    let reason = topic_block_reason(st, &user.id, c).await?;
+    if text.is_none() {
+        claim.reserve(st).await?;
+    }
+    let seed = random_seed();
+    // Bound provider work to less than the four-minute claim lease on both entry points.
+    let quest = tokio::time::timeout(Duration::from_secs(180), generate_quest(st, c, seed))
+        .await
+        .map_err(|_| {
+            AppError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Building a quest timed out. Please retry.",
+            )
+        })?;
+    let Some(quest) = quest else {
+        return Ok(None);
     };
+    Ok(Some(
+        save_checked_quest(st, user, c, text, seed, quest, reason, Some(claim)).await?,
+    ))
+}
+
+async fn save_checked_quest(
+    st: &AppState,
+    user: &User,
+    c: &Concept,
+    text: Option<&str>,
+    seed: i64,
+    quest: Quest,
+    practice_reason: Option<String>,
+    claim: Option<&GenerationClaim>,
+) -> ApiResult<String> {
+    if quest.concept_id != c.id || (c.is_private() && quest.ran_in_sandbox) {
+        return Err(anyhow::anyhow!("inconsistent checked quest generation").into());
+    }
     let r = CustomRef {
         quest: Some(quest),
-        ..practice(reason)
+        practice_reason,
+        ..Default::default()
     };
+    let mut tx = st.pool.begin().await?;
+    // Serialize the final recheck and insert (not provider work). Concurrent starts reuse one quest.
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await?;
+    if let Some(claim) = claim {
+        claim.lock(&mut tx).await?;
+    }
+    if let Some(existing) = active_quest(&mut *tx, &user.id, c).await? {
+        tx.commit().await?;
+        return Ok(existing.id);
+    }
     let s = sqlx::query_as::<_, ProblemSession>(
-        "INSERT INTO problem_sessions (id, user_id, source, template_id, seed, custom_text, custom_ref) VALUES ($1, $2, 'quest', $3, $4, $5, $6) RETURNING *",
+        "INSERT INTO problem_sessions (id, user_id, source, concept_id, template_id, seed, custom_text, custom_ref)
+         VALUES ($1, $2, 'quest', $3, $4, $5, $6, $7) RETURNING *",
     )
     .bind(new_id())
     .bind(&user.id)
-    .bind(reward_key(c.id))
+    .bind(&c.id)
+    .bind((!c.is_private()).then(|| reward_key(&c.id)))
     .bind(seed)
     .bind(text)
     .bind(serde_json::to_value(&r)?)
-    .fetch_one(&st.pool)
+    .fetch_one(&mut *tx)
     .await?;
     let ctx = problem_context(&s)?;
-    insert_message(&st.pool, &s.id, "tutor", opening_message(&ctx), None).await?;
-    Ok(TopicOutcome::Session(s.id))
+    insert_message(&mut *tx, &s.id, "tutor", opening_message(&ctx), None).await?;
+    tx.commit().await?;
+    Ok(s.id)
 }
 
 /// The knowledge map: every node with the student's status on it.
@@ -401,28 +525,32 @@ async fn concepts(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
             Some(Proficiency::Demonstrated | Proficiency::Proficient)
         )
     };
-    let list: Vec<Value> = CONCEPTS
+    let graph = if st.cfg.personalized_concepts_enabled {
+        visible_concepts(&st.pool, &user.id).await?
+    } else {
+        public_concepts(&st.pool).await?
+    };
+    let list: Vec<Value> = graph
         .iter()
         .map(|c| {
-            let status = if mastered(c.id) {
+            let status = if mastered(&c.id) {
                 "mastered"
             } else if c.prereqs.iter().all(|p| mastered(p)) {
                 "available"
             } else {
                 "locked"
             };
-            let evidence = progress.get(c.id);
-            json!({
-                "id": c.id,
-                "title": c.title,
-                "proficiency": evidence.map(|p| &p.proficiency).unwrap_or(&Proficiency::New),
-                "attemptsToday": evidence.map_or(0, |p| p.attempts_today),
-                "subject": c.subject,
-                "prereqs": c.prereqs,
-                "status": status,
-                "rewarded": rewarded.contains(c.id),
-                "bankTemplateId": bank_template_for(c.id),
-            })
+            let evidence = progress.get(&c.id);
+            let mut summary = concept_summary(c);
+            summary["proficiency"] = json!(
+                evidence
+                    .map(|p| &p.proficiency)
+                    .unwrap_or(&Proficiency::New)
+            );
+            summary["attemptsToday"] = json!(evidence.map_or(0, |p| p.attempts_today));
+            summary["status"] = json!(status);
+            summary["rewarded"] = json!(rewarded.contains(&c.id));
+            summary
         })
         .collect();
     Ok(Json(json!({
@@ -447,12 +575,16 @@ async fn similar(
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     if s.source == "bank" {
         return Err(AppError::bad("This is already a verified problem."));
     }
-    let ctx = problem_context(&s)?;
-    let Some(matched) = ctx.custom_ref.matched_template_id else {
+    let matched = if s.source == "quest" {
+        None
+    } else {
+        problem_context(&s)?.custom_ref.matched_template_id
+    };
+    let Some(matched) = matched else {
         return Err(AppError::not_found(
             "No verified problem matches this concept yet.",
         ));
@@ -475,7 +607,7 @@ async fn chat(
     Path(id): Path<String>,
     Json(b): Json<ChatBody>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     let message = b.message.unwrap_or_default().trim().to_string();
     if message.is_empty() {
         return Err(AppError::bad("Type a message first."));
@@ -583,7 +715,7 @@ async fn hint(
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     if s.source != "bank" {
         return Err(AppError::bad(
             "Hints are only available on problems from the bank.",
@@ -626,7 +758,7 @@ async fn answer(
     Path(id): Path<String>,
     Json(b): Json<AnswerBody>,
 ) -> ApiResult<Response> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     let ctx = problem_context(&s)?;
     let raw = b.answer.unwrap_or_default();
     let Some(correct_answer) = ctx.answer else {
@@ -663,7 +795,8 @@ async fn answer(
         let Some(result) = result else {
             return Ok(Json(json!({ "correct": true, "wrongAttempts": wrong, "locked": false, "practice": true })).into_response());
         };
-        let practice = ctx.custom_ref.practice_reason.is_some()
+        let practice = !has_public_reward_key(&st.pool, &s).await?
+            || ctx.custom_ref.practice_reason.is_some()
             || reward_elsewhere(
                 &st.pool,
                 &user.id,
@@ -781,7 +914,7 @@ async fn explain(
     Path(id): Path<String>,
     Json(b): Json<ExplainBody>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     if s.source != "bank" && s.source != "quest" {
         return Err(AppError::bad(
             "Practice sessions don't pay out. Try a verified problem on this concept to earn TARTS.",
@@ -793,12 +926,14 @@ async fn explain(
     let prev_pass = s.explain_passed.unwrap_or(true);
     let prev_feedback = s.explain_feedback.clone().unwrap_or_default();
 
-    // Retry path: a previous mint failed.
-    if let Some(existing) =
-        sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
-            .bind(&s.id)
-            .fetch_optional(&st.pool)
-            .await?
+    let public_reward = has_public_reward_key(&st.pool, &s).await?;
+    // Retry a failed mint only for an authoritative public reward key.
+    if public_reward
+        && let Some(existing) =
+            sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+                .bind(&s.id)
+                .fetch_optional(&st.pool)
+                .await?
     {
         if existing.status == "failed" {
             let claimed = sqlx::query_as::<_, Reward>("UPDATE rewards SET status = 'minting' WHERE id = $1 AND status = 'failed' RETURNING *")
@@ -818,7 +953,7 @@ async fn explain(
     }
     if s.explanation.is_some() {
         return Ok(Json(
-            json!({ "pass": prev_pass, "feedback": prev_feedback, "reward": practice_reward("Practice mode: no reward") }),
+            json!({ "pass": prev_pass, "feedback": prev_feedback, "reward": practice_reward(if public_reward { "Practice mode: no reward" } else { PRIVATE_PRACTICE_REASON }) }),
         ));
     }
 
@@ -890,6 +1025,11 @@ async fn explain(
         return Err(AppError::new(StatusCode::CONFLICT, "Already submitted."));
     }
 
+    if !public_reward {
+        return Ok(Json(
+            json!({ "pass": pass, "feedback": feedback, "reward": practice_reward(PRIVATE_PRACTICE_REASON) }),
+        ));
+    }
     let template_id = s.template_id.clone().unwrap_or_default();
     if reward_elsewhere(&st.pool, &user.id, &template_id, &s.id).await? {
         return Ok(Json(
@@ -995,7 +1135,7 @@ async fn events(
     // sendBeacon may post without a JSON content-type, so parse the raw body.
     let b: EventBody =
         serde_json::from_slice(&body).map_err(|_| AppError::bad("Unknown event."))?;
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     let kind = b.kind.unwrap_or_default();
     if !["hidden", "visible", "paste"].contains(&kind.as_str()) {
         return Err(AppError::bad("Unknown event."));
@@ -1032,7 +1172,7 @@ async fn resources(
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
 ) -> ApiResult<J> {
-    let s = load_session(&st.pool, &id, &user.id).await?;
+    let s = load_session(&st, &id, &user.id).await?;
     if s.source != "bank" || s.status == "active" {
         return Err(AppError::new(
             StatusCode::FORBIDDEN,
@@ -1072,12 +1212,7 @@ async fn tts(
     if b.text.is_some() {
         return Err(AppError::bad("Raw text is not accepted."));
     }
-    let s = load_session(
-        &st.pool,
-        b.session_id.as_deref().unwrap_or_default(),
-        &user.id,
-    )
-    .await?;
+    let s = load_session(&st, b.session_id.as_deref().unwrap_or_default(), &user.id).await?;
     let text = if let Some(mid) = b.message_id {
         let row: Option<(String, String, String)> =
             sqlx::query_as("SELECT session_id, role, content FROM messages WHERE id = $1")
@@ -1119,11 +1254,7 @@ async fn tts(
 mod tests {
     use super::*;
 
-    #[sqlx::test]
-    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
-    async fn answer_handler_counts_checked_practice_but_not_custom_or_rejected_answers(
-        pool: sqlx::PgPool,
-    ) {
+    fn test_state(pool: sqlx::PgPool) -> AppState {
         let cfg = crate::config::Config {
             openai_api_key: None,
             openai_base_url: String::new(),
@@ -1134,6 +1265,7 @@ mod tests {
             session_secret: String::new(),
             daily_cap: 1000.0,
             daily_topic_cap: 3,
+            personalized_concepts_enabled: false,
             demo_fixed_seeds: false,
             solana_rpc_url: String::new(),
             mint_authority_secret: None,
@@ -1151,8 +1283,8 @@ mod tests {
             port: 0,
             secure_cookies: false,
         };
-        let st = AppState {
-            pool: pool.clone(),
+        AppState {
+            pool,
             cfg: cfg.into(),
             http: reqwest::Client::new(),
             solana: None,
@@ -1160,7 +1292,43 @@ mod tests {
             tts_cache: Default::default(),
             resource_cache: Default::default(),
             solari_lock: Default::default(),
-        };
+        }
+    }
+
+    async fn serve_test_api(st: AppState) -> (String, tokio::task::JoinHandle<()>) {
+        let router = api_router().with_state(st);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        (base, server)
+    }
+
+    async fn login_cookie(st: &AppState, base: &str, username: &str, password: &str) -> String {
+        st.http
+            .post(format!("{base}/api/auth/login"))
+            .json(&json!({"username": username, "password": password}))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn answer_handler_counts_checked_practice_but_not_custom_or_rejected_answers(
+        pool: sqlx::PgPool,
+    ) {
+        let st = test_state(pool.clone());
         let user = sqlx::query_as::<_, User>(
             "INSERT INTO users (id, username, wallet_pubkey, wallet_secret)
              VALUES ('u', 'u', 'pub', 'test') RETURNING *",
@@ -1169,9 +1337,9 @@ mod tests {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO problem_sessions (id, user_id, source, template_id, custom_ref) VALUES
-             ('quest', 'u', 'quest', 'concept:fractions', $1),
-             ('custom', 'u', 'custom_problem', NULL, $2)",
+            "INSERT INTO problem_sessions (id, user_id, source, template_id, concept_id, custom_ref) VALUES
+             ('quest', 'u', 'quest', 'concept:fractions', 'fractions', $1),
+             ('custom', 'u', 'custom_problem', NULL, NULL, $2)",
         )
         .bind(json!({
             "conceptId": "fractions",
@@ -1217,6 +1385,606 @@ mod tests {
             attempts,
             vec![("quest".to_owned(), "fractions".to_owned(), true)]
         );
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn signed_in_user_cannot_reach_private_data_when_personalization_is_off(
+        pool: sqlx::PgPool,
+    ) {
+        sqlx::raw_sql(
+            "INSERT INTO users (id,username,wallet_pubkey,wallet_secret) VALUES ('u','alice','fixture','fixture');
+             INSERT INTO concepts (id,owner_id,title,title_key,subject,objective)
+               VALUES ('private-u','u','Private fixture','private fixture','Algebra','Private objective');
+             INSERT INTO concept_proposals (id,user_id,anchor_id,title,objective,reason,prereq_ids)
+               VALUES ('pending','u','fractions','Pending fixture','Calculate.','Reason.',ARRAY['fractions']);
+             INSERT INTO problem_sessions (id,user_id,source,concept_id,custom_ref)
+               VALUES ('private-session','u','quest','private-u','{\"quest\":{\"conceptId\":\"private-u\",\"prompt\":\"Private prompt\",\"answer\":2,\"tolerance\":0.1,\"steps\":[]}}');
+             INSERT INTO problem_sessions (id,user_id,template_id) VALUES ('public-session','u','alg-linear-1');",
+        ).execute(&pool).await.unwrap();
+        let mut st = test_state(pool.clone());
+        let config = std::sync::Arc::make_mut(&mut st.cfg);
+        config.elevenlabs_api_key = Some("fixture".into());
+        config.elevenlabs_voice_id = Some("fixture".into());
+        let password = "alice-test-password";
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = 'u'")
+            .bind(hash_password(password))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let (base, server) = serve_test_api(st.clone()).await;
+        let cookie = login_cookie(&st, &base, "alice", password).await;
+        assert!(cookie.starts_with(COOKIE));
+        let get = |path: &str| {
+            st.http
+                .get(format!("{base}{path}"))
+                .header(header::COOKIE, cookie.as_str())
+        };
+        let post = |path: &str| {
+            st.http
+                .post(format!("{base}{path}"))
+                .header(header::COOKIE, cookie.as_str())
+        };
+        let map = get("/api/concepts")
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap();
+        assert_eq!(map["concepts"].as_array().unwrap().len(), 42);
+        assert_eq!(
+            get("/api/sessions/public-session")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post("/api/sessions")
+                .json(&json!({"conceptId":"linear-equations"}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        for response in [
+            post("/api/concepts/fractions/next-step")
+                .send()
+                .await
+                .unwrap(),
+            post("/api/concepts/private-u/next-step")
+                .send()
+                .await
+                .unwrap(),
+            post("/api/concept-proposals/pending/accept")
+                .send()
+                .await
+                .unwrap(),
+            post("/api/sessions")
+                .json(&json!({"conceptId":"private-u"}))
+                .send()
+                .await
+                .unwrap(),
+        ] {
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+        let path = "/api/sessions/private-session";
+        let mut responses = vec![
+            get(path).send().await.unwrap(),
+            get(&format!("{path}/resources")).send().await.unwrap(),
+        ];
+        for (suffix, body) in [
+            ("similar", json!({})),
+            ("chat", json!({"message":"Hello"})),
+            ("hint", json!({})),
+            ("answer", json!({"answer":"2"})),
+            ("explain", json!({"text":"Private explanation."})),
+            ("events", json!({"type":"hidden"})),
+        ] {
+            responses.push(
+                post(&format!("{path}/{suffix}"))
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap(),
+            );
+        }
+        responses.push(
+            post("/api/tts")
+                .json(&json!({"sessionId":"private-session", "hintIndex":0}))
+                .send()
+                .await
+                .unwrap(),
+        );
+        for response in responses {
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            assert_eq!(
+                response.json::<Value>().await.unwrap()["error"],
+                "Session not found."
+            );
+        }
+        let untouched: bool = sqlx::query_scalar("SELECT NOT EXISTS (SELECT FROM concept_generation_quota) AND NOT EXISTS (SELECT FROM answer_attempts) AND NOT EXISTS (SELECT FROM events) AND EXISTS (SELECT FROM concept_proposals WHERE id = 'pending' AND accepted_concept_id IS NULL)")
+            .fetch_one(&pool).await.unwrap();
+        assert!(untouched);
+        server.abort();
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn personalized_routes_scope_graph_and_keep_private_quests_practice_even_on_retry(
+        pool: sqlx::PgPool,
+    ) {
+        sqlx::raw_sql(
+            "INSERT INTO users (id,username,wallet_pubkey,wallet_secret) VALUES ('u','alice','u','fixture'), ('v','bob','v','fixture');
+             INSERT INTO problem_sessions (id,user_id,source,template_id,concept_id,status,explain_passed) VALUES
+               ('fractions','u','quest','concept:fractions','fractions','done',true),
+               ('circles','u','quest','concept:circles','circles','done',true),
+               ('volume','u','quest','concept:volume','volume','done',true);",
+
+        ).execute(&pool).await.unwrap();
+        let mut st = test_state(pool.clone());
+        std::sync::Arc::make_mut(&mut st.cfg).personalized_concepts_enabled = true;
+        let alice_password = "alice-test-password";
+        let bob_password = "bob-test-password";
+        sqlx::query("UPDATE users SET password_hash = CASE id WHEN 'u' THEN $1 ELSE $2 END WHERE id IN ('u','v')")
+            .bind(hash_password(alice_password)).bind(hash_password(bob_password)).execute(&pool).await.unwrap();
+        let (base, server) = serve_test_api(st.clone()).await;
+        let alice_cookie = login_cookie(&st, &base, "alice", alice_password).await;
+        let bob_cookie = login_cookie(&st, &base, "bob", bob_password).await;
+        let req = |method: reqwest::Method, path: &str, as_user: Option<&str>| {
+            let request = st.http.request(method, format!("{base}{path}"));
+            match as_user {
+                Some("u") => request.header(header::COOKIE, alice_cookie.as_str()),
+                Some("v") => request.header(header::COOKIE, bob_cookie.as_str()),
+                Some(other) => panic!("unexpected fixture user {other}"),
+                None => request,
+            }
+        };
+        let post = |path: &str, user: Option<&str>| req(reqwest::Method::POST, path, user);
+        let get = |path: &str, user: Option<&str>| req(reqwest::Method::GET, path, user);
+        let json = |response: reqwest::Response| async move {
+            response
+                .error_for_status()
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        };
+        let next = "/api/concepts/fractions/next-step";
+        assert_eq!(
+            post(next, None).send().await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let ready = json(post(next, Some("u")).send().await.unwrap()).await;
+        assert_eq!(ready["kind"], "existing");
+        assert_eq!(ready["concept"]["id"], "percentages");
+        let proposal_claim = GenerationClaim::acquire(&pool, "u", "volume", Generation::Proposal)
+            .await
+            .unwrap();
+        let busy = post("/api/concepts/volume/next-step", Some("u"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(busy.status(), StatusCode::CONFLICT);
+        assert!(
+            busy.json::<Value>().await.unwrap()["error"]
+                .as_str()
+                .unwrap()
+                .contains("in progress")
+        );
+        sqlx::query("INSERT INTO concept_proposals (id,user_id,anchor_id,title,objective,reason,prereq_ids)
+               VALUES ('proposal','u','volume','Container capacity','Calculate the capacity of a box.','Apply volume to containers.',ARRAY['volume'])")
+            .execute(&pool).await.unwrap();
+        let pending = json(
+            post("/api/concepts/volume/next-step", Some("u"))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(pending["proposal"]["proposalId"], "proposal");
+        proposal_claim.release().await;
+        let before = json(get("/api/concepts", Some("u")).send().await.unwrap()).await;
+        assert_eq!(before["concepts"].as_array().unwrap().len(), 42);
+
+        let accept_path = "/api/concept-proposals/proposal/accept";
+        assert_eq!(
+            post(accept_path, Some("v")).send().await.unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+        let accepted = json(
+            post(accept_path, Some("u"))
+                .json(&json!({"title":"Forged","prereqIds":[]}))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(
+            json(post(accept_path, Some("u")).send().await.unwrap()).await,
+            accepted
+        );
+        let private_id = accepted["conceptId"].as_str().unwrap();
+        let map = |user| get("/api/concepts", Some(user));
+        let own = json(map("u").send().await.unwrap()).await;
+        let node = own["concepts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"] == private_id)
+            .unwrap();
+        assert_eq!(node["title"], "Container capacity");
+        assert_eq!(node["prereqs"], json!(["volume"]));
+        assert_eq!(node["practiceOnly"], true);
+        let other = json(map("v").send().await.unwrap()).await;
+        assert_eq!(other["concepts"].as_array().unwrap().len(), 42);
+        let private_next = format!("/api/concepts/{private_id}/next-step");
+        assert_eq!(
+            post(&private_next, Some("v"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let start = |user, id| post("/api/sessions", Some(user)).json(&json!({ "conceptId": id }));
+        assert_eq!(
+            start("v", private_id).send().await.unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            start("u", "missing").send().await.unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+        let public_claim = GenerationClaim::acquire(&pool, "u", "chain-rule", Generation::Quest)
+            .await
+            .unwrap();
+        assert_eq!(
+            start("u", "chain-rule").send().await.unwrap().status(),
+            StatusCode::CONFLICT
+        );
+        public_claim.release().await;
+        sqlx::query("UPDATE problem_sessions SET explain_passed = false WHERE id = 'volume'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            start("u", private_id).send().await.unwrap().status(),
+            StatusCode::CONFLICT
+        );
+        sqlx::query("UPDATE problem_sessions SET explain_passed = true WHERE id = 'volume'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let private_claim = GenerationClaim::acquire(&pool, "u", private_id, Generation::Quest)
+            .await
+            .unwrap();
+        let (a, b) = tokio::join!(start("u", private_id).send(), start("u", private_id).send());
+        for response in [a.unwrap(), b.unwrap()] {
+            assert_eq!(response.status(), StatusCode::CONFLICT);
+        }
+        private_claim.release().await;
+
+        let user: User = sqlx::query_as("SELECT * FROM users WHERE id = 'u'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let c = visible_concept(&pool, "u", private_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            prompts::quest_template(&c)[1]
+                .content
+                .contains("Calculate the capacity of a box.")
+        );
+        let quest = crate::quest::instantiate(private_id, &json!({"prompt":"A cube has side [[a]] cm. Find its volume in cubic cm.", "answerExpr":"[[a]]^3", "params":{"a":[3,8]}, "steps":["Cube the side."]}), 1).unwrap();
+        let solution = quest.answer.to_string();
+        sqlx::query("INSERT INTO problem_sessions (id,user_id,source,concept_id,status,wrong_attempts,custom_ref,started_at)
+                     VALUES ('exhausted-private','u','quest',$1,'active',5,$2,now() - interval '1 day')")
+            .bind(private_id).bind(json!({"quest":quest})).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO answer_attempts (id,user_id,session_id,concept_id,correct,hints_used,attempted_at)
+                     VALUES ('old-attempt','u','exhausted-private',$1,false,0,now() - interval '1 day')")
+            .bind(private_id).execute(&pool).await.unwrap();
+        // Exhaustion does not reopen this session. With no provider, the replacement fails normally.
+        assert_eq!(
+            start("u", private_id).send().await.unwrap().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        let (a, b) = tokio::join!(
+            save_checked_quest(&st, &user, &c, None, 1, quest.clone(), None, None),
+            save_checked_quest(&st, &user, &c, None, 1, quest, None, None)
+        );
+        let sid = a.unwrap();
+        assert_eq!(b.unwrap(), sid);
+        assert_ne!(sid, "exhausted-private");
+        let old = json(
+            get("/api/sessions/exhausted-private", Some("u"))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(old["locked"], true);
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>(
+                "SELECT count(*) FROM answer_attempts WHERE session_id = 'exhausted-private'"
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            1
+        );
+        sqlx::query(
+            "UPDATE problem_sessions SET started_at = now() - interval '2 minutes' WHERE id = $1",
+        )
+        .bind(&sid)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let reopened = json(start("u", private_id).send().await.unwrap()).await;
+        assert_eq!(reopened["sessionId"], sid);
+        let session = format!("/api/sessions/{sid}");
+        assert_eq!(
+            get(&session, Some("v")).send().await.unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+        let view = json(get(&session, Some("u")).send().await.unwrap()).await;
+        assert_eq!(view["conceptId"], private_id);
+        assert_eq!(view["checkedBy"], "engine");
+        assert_eq!(view["practice"], true);
+        assert_eq!(view["practiceReason"], PRIVATE_PRACTICE_REASON);
+        assert_eq!(view["potentialReward"], 0);
+        assert!(view.get("customRef").is_none());
+        let submit = json(
+            post(&format!("{session}/answer"), Some("u"))
+                .json(&json!({"answer": solution}))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(submit["practice"], true);
+        assert_eq!(submit["correct"], true);
+        let explain_path = format!("{session}/explain");
+        let explain = json(
+            post(&explain_path, Some("u"))
+                .json(&json!({"text":"I cubed the side to find the volume."}))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(explain["pass"], true);
+        assert_eq!(explain["reward"]["status"], "practice");
+        let reward_count: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM rewards WHERE session_id = $1")
+                .bind(&sid)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(reward_count, 0);
+        let progress = concept_progress(&pool, "u", &utc_day(Utc::now()))
+            .await
+            .unwrap();
+        assert_eq!(progress[private_id].proficiency, Proficiency::Demonstrated);
+        assert_eq!(progress[private_id].attempts_today, 1);
+
+        // Even a corrupt reward row or absence of a stored practice reason cannot enter mint retry.
+        sqlx::query("INSERT INTO rewards (id,user_id,session_id,template_id,amount,breakdown,status) VALUES ('bogus','u',$1,$2,50,'{}','failed')")
+            .bind(&sid).bind(reward_key(private_id)).execute(&pool).await.unwrap();
+        let retried = json(
+            post(&explain_path, Some("u"))
+                .json(&json!({}))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(retried["reward"]["status"], "practice");
+        let view = json(get(&session, Some("u")).send().await.unwrap()).await;
+        assert!(view["reward"].is_null());
+        assert_eq!(
+            post(&format!("{session}/similar"), Some("u"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let bank = json(start("u", "linear-equations").send().await.unwrap()).await;
+        let bank_view = json(
+            get(
+                &format!("/api/sessions/{}", bank["sessionId"].as_str().unwrap()),
+                Some("u"),
+            )
+            .send()
+            .await
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(bank_view["conceptId"], "linear-equations");
+        assert_eq!(bank_view["templateId"], "alg-linear-1");
+        assert_eq!(bank_view["practice"], false);
+        sqlx::query("INSERT INTO problem_sessions (id,user_id,source,template_id,wrong_attempts) VALUES ('exhausted-public','u','quest','concept:fractions',5)")
+            .execute(&pool).await.unwrap();
+        let public = json(start("u", "fractions").send().await.unwrap()).await;
+        assert_eq!(public["sessionId"], "exhausted-public");
+        let old_public = json(
+            post("/api/sessions", Some("u"))
+                .json(&json!({"custom":{"kind":"topic","text":"Fractions"}}))
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(old_public["sessionId"], "exhausted-public");
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM concept_generation_quota")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            0
+        );
+        server.abort();
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn id_quest_claim_rechecks_persisted_result_and_applies_shared_quota(pool: sqlx::PgPool) {
+        let user: User = sqlx::query_as("INSERT INTO users (id,username,wallet_pubkey,wallet_secret) VALUES ('u','alice','fixture','fixture') RETURNING *")
+            .fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO concepts (id,owner_id,title,title_key,subject,objective) VALUES ('private-u','u','Private fixture','private fixture','Algebra','Calculate.')")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO problem_sessions (id,user_id,source,concept_id,wrong_attempts) VALUES ('exhausted','u','quest','private-u',5)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO concept_generation_quota VALUES ('u',(statement_timestamp() AT TIME ZONE 'UTC')::date,'quest',6)")
+            .execute(&pool).await.unwrap();
+        let mut st = test_state(pool.clone());
+        let cfg = std::sync::Arc::make_mut(&mut st.cfg);
+        cfg.personalized_concepts_enabled = true;
+        cfg.openai_api_key = Some("local fixture".into());
+        cfg.openai_base_url = "http://127.0.0.1:1".into(); // A regression must not contact OpenAI.
+        let public = visible_concept(&pool, "u", "chain-rule")
+            .await
+            .unwrap()
+            .unwrap();
+        let private = visible_concept(&pool, "u", "private-u")
+            .await
+            .unwrap()
+            .unwrap();
+        for c in [&public, &private] {
+            assert_eq!(
+                start_checked_quest(&st, &user, c, None)
+                    .await
+                    .unwrap_err()
+                    .status,
+                StatusCode::TOO_MANY_REQUESTS
+            );
+        }
+        let claim = GenerationClaim::acquire(&pool, "u", &public.id, Generation::Quest)
+            .await
+            .unwrap();
+        // Fixture for a result saved between the first check and the claimed generation phase.
+        sqlx::query("INSERT INTO problem_sessions (id,user_id,source,template_id) VALUES ('persisted','u','quest','concept:chain-rule')")
+            .execute(&pool).await.unwrap();
+        assert_eq!(
+            build_checked_quest(&st, &user, &public, None, &claim)
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("persisted")
+        );
+        claim.release().await;
+    }
+
+    #[sqlx::test]
+    #[ignore = "requires a disposable PostgreSQL server in DATABASE_URL"]
+    async fn typed_and_id_quest_starts_share_a_claim_before_using_quota_or_provider(
+        pool: sqlx::PgPool,
+    ) {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use tokio::sync::Notify;
+
+        sqlx::query("INSERT INTO users (id,username,wallet_pubkey,wallet_secret) VALUES ('u','alice','fixture','fixture')")
+            .execute(&pool).await.unwrap();
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let stub = Router::new().route(
+            "/chat/completions",
+            post({
+                let (entered, release, calls) = (entered.clone(), release.clone(), calls.clone());
+                move || {
+                    let (entered, release, calls) =
+                        (entered.clone(), release.clone(), calls.clone());
+                    async move {
+                        let answer = if calls.fetch_add(1, Ordering::Relaxed) == 0 {
+                            entered.notify_one();
+                            release.notified().await;
+                            json!({
+                                "prompt": "Evaluate [[a]] minus itself plus forty-two.",
+                                "answerExpr": "[[a]] - [[a]] + 42",
+                                "params": {"a": [2, 5]},
+                                "steps": ["Subtract, then add."]
+                            })
+                        } else {
+                            json!({"numericAnswer": 42})
+                        };
+                        Json(json!({"choices": [{"message": {"content": answer.to_string()}}]}))
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut st = test_state(pool.clone());
+        let cfg = Arc::make_mut(&mut st.cfg);
+        cfg.openai_base_url = format!("http://{}", listener.local_addr().unwrap());
+        cfg.openai_api_key = Some("local fixture".into());
+        let cookie = format!(
+            "{COOKIE}={}",
+            crate::auth::make_token(&cfg.session_secret, "u")
+        );
+        let provider = tokio::spawn(async move { axum::serve(listener, stub).await.unwrap() });
+        let (base, app) = serve_test_api(st).await;
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let start = |body: Value| {
+            client
+                .post(format!("{base}/api/sessions"))
+                .header("Cookie", &cookie)
+                .json(&body)
+        };
+
+        let typed = start(json!({"custom":{"kind":"topic","text":"Fractions"}}));
+        let typed = tokio::spawn(async move { typed.send().await.unwrap() });
+        tokio::time::timeout(Duration::from_secs(5), entered.notified())
+            .await
+            .unwrap();
+        let by_id = || start(json!({"conceptId":"fractions"}));
+        assert_eq!(by_id().send().await.unwrap().status(), StatusCode::CONFLICT);
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        release.notify_one();
+
+        let built = typed
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap();
+        let reused = by_id()
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap();
+        assert!(built["sessionId"].is_string());
+        assert_eq!(built["sessionId"], reused["sessionId"]);
+        assert_eq!(calls.load(Ordering::Relaxed), 2); // One template and one independent check.
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM concept_generation_quota")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            0
+        );
+        app.abort();
+        provider.abort();
     }
 
     #[test]

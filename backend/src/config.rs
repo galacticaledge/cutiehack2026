@@ -11,6 +11,7 @@ pub struct Config {
     pub session_secret: String,
     pub daily_cap: f64,
     pub daily_topic_cap: i64,
+    pub personalized_concepts_enabled: bool,
     pub demo_fixed_seeds: bool,
     pub solana_rpc_url: String,
     pub mint_authority_secret: Option<String>,
@@ -57,6 +58,8 @@ impl Config {
             session_secret,
             daily_cap: or("DAILY_TOKEN_CAP", "1000").parse().unwrap_or(1000.0),
             daily_topic_cap: or("DAILY_TOPIC_CAP", "3").parse().unwrap_or(3),
+            personalized_concepts_enabled: var("PERSONALIZED_CONCEPTS_ENABLED").as_deref()
+                == Some("true"),
             demo_fixed_seeds: or("DEMO_FIXED_SEEDS", "false") == "true",
             solana_rpc_url: or("SOLANA_RPC_URL", "https://api.devnet.solana.com"),
             mint_authority_secret: var("MINT_AUTHORITY_SECRET"),
