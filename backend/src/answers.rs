@@ -1,4 +1,3 @@
-//! Final-answer checking (SPEC §9). Pure.
 use crate::mathexpr::{eval_number, normalize_math};
 
 pub const UNREADABLE: &str = "Couldn't read that answer";

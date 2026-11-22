@@ -27,7 +27,6 @@ pub struct Verdict {
     pub status: Status,
 }
 
-/// Client-safe chip: label only, only correct/incorrect.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Chip {
     pub label: String,
@@ -42,9 +41,7 @@ fn rhs(raw: &str) -> String {
     }
 }
 
-/// A list of values, each of which may be arithmetic ("4, 4*2, 4*3" → [4, 8, 12]).
-/// Items split on commas/semicolons/"and", or on whitespace when there are no commas.
-/// Any item that doesn't evaluate makes the whole list unverifiable (never a false ✗).
+/// A list of values, each of which may be arithmetic ("4, 4*2, 4*3" -> [4, 8, 12]).
 pub fn parse_list(raw: &str) -> Option<Vec<f64>> {
     let lower = normalize_math(raw).to_lowercase();
     let s = lower
@@ -79,7 +76,7 @@ fn squash(s: &str) -> String {
         .collect()
 }
 
-/// The extractor must quote the student: a claim whose text isn't in the message is dropped.
+/// The extractor must quote the student. If a claim's text isn't in the message, it is dropped.
 pub fn claim_in_message(claimed: &str, message: &str) -> bool {
     let c = squash(claimed);
     !c.is_empty() && squash(message).contains(&c)
@@ -87,7 +84,7 @@ pub fn claim_in_message(claimed: &str, message: &str) -> bool {
 
 const SAMPLE_POINTS: [f64; 5] = [0.37, 1.3, -0.8, 2.1, -1.7];
 
-/// Some(true/false) if both parse and are (in)equivalent at sample points; None if unparseable.
+/// Test the equivalence of two strings
 pub fn equivalent(a: &str, b: &str, var: &str) -> Option<bool> {
     let ea = parse(&rhs(a), Some(var))?;
     let eb = parse(&rhs(b), Some(var))?;
@@ -158,7 +155,7 @@ pub fn verify_claims(claims: &[Claim], checkpoints: &[Checkpoint]) -> Vec<Verdic
         .collect()
 }
 
-/// Lines for the tutor prompt. Never include expected values.
+/// Lines for the tutor prompt.
 pub fn verdict_lines(verdicts: &[Verdict]) -> Vec<String> {
     let mut lines = Vec::new();
     let mut final_added = false;
@@ -197,14 +194,12 @@ pub fn verdict_chips(verdicts: &[Verdict]) -> Vec<Chip> {
         .collect()
 }
 
-/// Did this stored user message state a final answer? (Its verdicts include a "final" claim.)
 pub fn stated_final(verdicts: Option<&serde_json::Value>) -> bool {
     verdicts
         .and_then(|v| v.as_array())
         .is_some_and(|a| a.iter().any(|v| v["status"] == "final"))
 }
 
-/// Tutor-prompt fact after the student's sketch of how they got a stated answer was graded.
 pub fn sketch_line(sound: bool) -> String {
     if sound {
         "The student's general approach for the answer they stated is SOUND. Say so briefly and have them enter their answer in the answer box. Do not say whether the number itself is right.".into()
@@ -213,7 +208,7 @@ pub fn sketch_line(sound: bool) -> String {
     }
 }
 
-/// Gate: skip the extractor for messages with no digits, operators or code-like tokens.
+/// Skip the extractor for messages with no digits, operators, or code-like tokens.
 pub fn looks_mathy(message: &str) -> bool {
     let m = message.to_lowercase();
     m.chars()
@@ -328,7 +323,7 @@ mod tests {
         assert!(!stated_final(Some(&other)));
         assert!(!stated_final(None));
         assert!(sketch_line(false).contains("first step"));
-        assert!(!sketch_line(false).contains("answer box.")); // never sends a failed sketch to submit
+        assert!(!sketch_line(false).contains("answer box."));
     }
     #[test]
     fn claims_must_quote_the_student() {
@@ -424,7 +419,7 @@ mod tests {
                         c.id
                     );
                 }
-                // steps never state the final answer as a standalone number (beyond the prompt)
+
                 let steps = p.solution_steps.join(" ");
                 assert!(
                     !crate::leak::deterministic_leak(&steps, p.answer, p.tolerance, &p.prompt)
@@ -452,6 +447,7 @@ mod tests {
             panic!()
         };
         let e = parse(value, Some("x")).unwrap();
+
         // f'(k) from the derivative expression must equal the stored answer
         let k: f64 = p
             .prompt
