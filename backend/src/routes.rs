@@ -1,4 +1,3 @@
-//! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
 use crate::answers::{is_correct, is_locked, parse_answer};
 use crate::auth::{
     AuthUser, COOKIE, hash_password, session_cookie, valid_password, valid_username,
@@ -83,7 +82,7 @@ struct AuthBody {
     password: Option<String>,
 }
 
-/// Shared username/password validation used by both signup and login.
+/// Easy combined error checking and message generation helper.
 fn auth_input_error(username: &str, password: &str) -> Option<AppError> {
     if !valid_username(username) {
         return Some(AppError::bad(
@@ -96,7 +95,6 @@ fn auth_input_error(username: &str, password: &str) -> Option<AppError> {
     None
 }
 
-/// Create a new account and immediately start a session.
 async fn signup(
     State(st): State<AppState>,
     jar: CookieJar,
@@ -133,7 +131,6 @@ async fn signup(
     ))
 }
 
-/// Log in with username + password and start a session.
 async fn login(
     State(st): State<AppState>,
     jar: CookieJar,
@@ -144,6 +141,7 @@ async fn login(
     if let Some(e) = auth_input_error(&username, &password) {
         return Err(e);
     }
+
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(&username)
         .fetch_optional(&st.pool)
@@ -152,9 +150,11 @@ async fn login(
         Some(u) => u,
         None => return Err(AppError::unauthorized("Unknown username or password.")),
     };
+
     if !verify_password(&password, &user.password_hash) {
         return Err(AppError::unauthorized("Unknown username or password."));
     }
+
     let jar = jar.add(session_cookie(&st, &user.id));
     Ok((
         jar,
@@ -186,6 +186,7 @@ async fn me(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J
             (st.cfg.from_base_units(sum.unwrap_or(0)), "db")
         }
     };
+
     Ok(Json(json!({
         "username": user.username,
         "walletPubkey": user.wallet_pubkey,
@@ -221,6 +222,7 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
             })
         })
         .collect();
+
     Ok(Json(Value::Array(list)))
 }
 
