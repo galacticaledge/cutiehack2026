@@ -293,17 +293,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
         <WallDebris height={height} width={width} />
         <Clutter height={height} width={width} />
 
-        {/* ledges */}
-        {ledges.map((l) => (
-          <g key={l.depth} aria-hidden="true">
-            {l.depth > 0 && <line x1={SIDE + 4} x2={width - SIDE - 4} y1={l.y + 8} y2={l.y + 8} className="rh-ledge" />}
-            <text x={width / 2} y={l.y + 30} textAnchor="middle" className="rh-ledge-label">
-              {l.depth === 0 ? "" : `${l.depth} ${l.depth === 1 ? "step" : "steps"} down · `}
-              {l.label}
-            </text>
-          </g>
-        ))}
-
         {/* links: tunnels of dug mud from a prerequisite (above) down to what it unlocks (below) */}
         {(() => {
           const links = concepts.flatMap((c) =>
@@ -324,6 +313,19 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
               })
               .filter((l): l is NonNullable<typeof l> => l !== null),
           );
+          // The starting topics are dug straight down from the mouth of the hole.
+          for (const c of concepts) {
+            const b = pos.get(c.id)!;
+            if (b.depth !== 0) continue;
+            const sx = width / 2 + (b.x - width / 2) * 0.82;
+            const sy = MOUTH_H / 2 + ry * 0.35;
+            links.unshift({
+              key: `mouth->${c.id}`,
+              d: `M${sx.toFixed(1)} ${sy.toFixed(1)} C${sx.toFixed(1)} ${(sy + b.y) / 2}, ${b.x} ${(sy + b.y) / 2 - 6}, ${b.x} ${b.y - R - 4}`,
+              state: sel?.id === c.id ? "is-on" : sel ? "is-dim" : "",
+              personal: false,
+            });
+          }
           return (
             <>
               <g filter={`url(#mud-${gid})`} aria-hidden="true">
@@ -337,6 +339,17 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
             </>
           );
         })()}
+
+        {/* ledges */}
+        {ledges.map((l) => (
+          <g key={l.depth} aria-hidden="true">
+            {l.depth > 0 && <line x1={SIDE + 4} x2={width - SIDE - 4} y1={l.y + 8} y2={l.y + 8} className="rh-ledge" />}
+            <text x={width / 2} y={l.y + 30} textAnchor="middle" className="rh-ledge-label">
+              {l.depth === 0 ? "" : `${l.depth} ${l.depth === 1 ? "step" : "steps"} down · `}
+              {l.label}
+            </text>
+          </g>
+        ))}
 
         {/* topics */}
         {concepts.map((c) => {
