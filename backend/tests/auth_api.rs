@@ -1,13 +1,5 @@
-//! Integration tests for the `/api/auth/signup` and `/api/auth/login` endpoints.
-//!
-//! These exercise the real HTTP router against a real Postgres database using the
-//! production `Config` from `config.rs`: variables are loaded from the environment,
-//! with `backend`'s repository-root `.env` loaded first (like `main.rs` does), so
-//! running `cargo test` locally just works when the app can run. In CI the
-//! ephemeral PostgreSQL service provides `DATABASE_URL`. If no `DATABASE_URL` is
-//! available at all, the tests are skipped (treated as passing).
-//!
-//! Every test uses a freshly-generated username so runs never collide, even in parallel.
+//! Integration tests for the auth endpoints. If a database url is not present in the environment,
+//! these tests will do nothing.
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
@@ -18,27 +10,16 @@ use socra::routes::api_router;
 use socra::state::AppState;
 use tower::ServiceExt;
 
-/// A long-enough, valid demo password (8–72 chars).
 const PASSWORD: &str = "correct-horse-battery";
-
-/// A second, distinct valid password (to prove a wrong one is rejected).
 const OTHER_PASSWORD: &str = "wonderland-42";
 
 static ROUTER: tokio::sync::OnceCell<Router> = tokio::sync::OnceCell::const_new();
-
-/// Serializes the test bodies so parallel threads don't hammer the shared database
-/// (and the 10-connection pool) at once, which otherwise flakes under load.
 static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Build (once) the stateful router, or `None` if there is no database to test against.
+/// Build the router, or `None` if there is no database to test against.
 ///
-/// The production `Config::from_env` is reused, with `.env` loaded first (dotenvy, like
-/// `main.rs` does) so the same variables used to run the server are used here. Real
-/// environment variables (e.g. the CI-provided `DATABASE_URL`) always win over `.env`
-/// because dotenvy does not override them.
-///
-/// `get_or_init` serializes initialization even though many test threads call this at
-/// once, so the pool is opened and migrations run exactly once.
+/// Since `cargo test` will not have a DATABASE_URL, this mechanism short-circuits the tests in
+/// this file unless a proper DATABASE_URL is available (i.e. production and CI).
 async fn router() -> Option<&'static Router> {
     let _ = dotenvy::dotenv();
     if std::env::var("DATABASE_URL").is_err() {
@@ -59,13 +40,13 @@ async fn router() -> Option<&'static Router> {
     )
 }
 
-/// A username guaranteed to be fresh within the valid charset/length rules.
+/// A username guaranteed to be fresh and valid
 fn new_username() -> String {
     let hex = uuid::Uuid::new_v4().to_string().replace('-', "");
     format!("usr{}", &hex[..12])
 }
 
-/// Issue a request against the router; returns (status, parsed JSON body, set-cookie header).
+/// Send a request to the router. Returns in the form (status, parsed JSON body, set-cookie header).
 async fn call(
     r: &Router,
     method: &str,
@@ -97,12 +78,11 @@ async fn call(
     (status, body, set_cookie)
 }
 
-/// Reduce a `Set-Cookie` header to its `name=value` portion (drops `; Path=...; ...`).
+/// Split a raw cookie pair
 fn cookie_pair(set_cookie: &str) -> String {
     set_cookie.split(';').next().unwrap().trim().to_string()
 }
 
-/// A fresh, signed-up account. Returns (username, set-cookie from the signup response).
 async fn signup_fresh(r: &Router) -> (String, String) {
     let username = new_username();
     let (status, body, set_cookie) = call(

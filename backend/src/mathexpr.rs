@@ -1,7 +1,6 @@
-//! Small, safe math expression parser/evaluator (the symbolic engine; replaces mathjs).
-//! Supports numbers, + - * / ^, unary minus, parentheses, implicit multiplication
-//! (`21x^2`, `2(x+1)`), functions sqrt/sin/cos/tan/exp/log/ln/abs, constants pi/e,
-//! and at most one named variable. Anything else is rejected.
+//! A very simple math expression parser/evaluator
+//!
+//! Don't expect much.
 
 pub const TARGET_PRECISION: f64 = 1e-12;
 
@@ -48,33 +47,69 @@ pub fn normalize_math(input: &str) -> String {
         }
     }
     let s = s.replace("**", "^");
+
     // "sqrt9" / "sqrt 9" → "sqrt(9)"
     let mut out = String::new();
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
+    let match_patterns = ["sqrt", "sin", "cos", "tan", "ln", "exp", "abs"];
     while i < chars.len() {
-        if chars[i..].starts_with(&['s', 'q', 'r', 't']) {
-            out.push_str("sqrt");
-            i += 4;
+        // Not pretty but it works
+        let matching_pattern: Option<&&str> = match_patterns
+            .iter()
+            .filter(|pattern| {
+                chars[i..].starts_with(pattern.chars().collect::<Vec<char>>().as_slice())
+            })
+            .take(1)
+            .next();
+
+        if let Some(pattern) = matching_pattern {
+            // Skip to the end of the pattern
+            i += pattern.len();
+
+            // Attempt to find the end of the function call. We're limited in the amount of fixing
+            // that can be done. If things are too messed up, just give up and leave the original.
+            let mut replacement = pattern.to_string();
             let mut j = i;
-            while j < chars.len() && chars[j] == ' ' {
+            let mut seen_first_dot = false;
+            let mut seen_first_minus = false;
+
+            let is_valid_char = |c: char, seen_first_dot: bool, seen_first_minus: bool| {
+                c.is_ascii_digit()
+                    || c == ' '
+                    || (c == '.' && !seen_first_dot)
+                    || (c == '-' && !seen_first_minus)
+            };
+            while j < chars.len() && is_valid_char(chars[j], seen_first_dot, seen_first_minus) {
+                seen_first_dot = seen_first_dot || chars[j] == '.';
+                seen_first_minus = seen_first_minus || chars[j] == '-';
                 j += 1;
             }
-            if j < chars.len() && (chars[j].is_ascii_digit() || chars[j] == '.') {
-                let start = j;
-                while j < chars.len() && (chars[j].is_ascii_digit() || chars[j] == '.') {
-                    j += 1;
+
+            match j - i {
+                // Can't be fixed
+                0 => {
+                    out.extend(pattern.chars());
                 }
-                out.push('(');
-                out.extend(&chars[start..j]);
-                out.push(')');
-                i = j;
+                1 if chars[i] == '-' => {
+                    out.extend(pattern.chars());
+                }
+
+                // Insert parenthesis
+                _ => {
+                    replacement.push('(');
+                    replacement.extend(chars[i..j].iter());
+                    replacement.push(')');
+                    out.extend(replacement.chars());
+                    i += j - i;
+                }
             }
-            continue;
+        } else {
+            out.push(chars[i]);
+            i += 1;
         }
-        out.push(chars[i]);
-        i += 1;
     }
+
     out.trim().to_string()
 }
 
@@ -237,7 +272,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Parse an expression; `var` is the only identifier allowed besides functions/constants.
+/// Parse an expression
 pub fn parse(input: &str, var: Option<&str>) -> Option<Expr> {
     if input.len() > 300 {
         return None;
@@ -303,6 +338,25 @@ mod tests {
 
     fn n(s: &str) -> Option<f64> {
         eval_number(s)
+    }
+
+    #[test]
+    fn normalize_input() {
+        // Can fix implicit parenthesis
+        assert_eq!(normalize_math("9"), "9");
+        assert_eq!(normalize_math("sqrt(12)"), "sqrt(12)");
+        assert_eq!(normalize_math("sin 15"), "sin( 15)");
+        assert_eq!(normalize_math("cos-9.5"), "cos(-9.5)");
+
+        // Standalone negatives cannot be normalized
+        assert_eq!(normalize_math("cos-"), "cos-");
+
+        // Fix parenthesis on more complex expressions
+        assert_eq!(normalize_math("cos(cos9)"), "cos(cos(9))");
+        assert_eq!(normalize_math("cos9+ln12"), "cos(9)+ln(12)");
+
+        // Can normalize symbols into their name
+        assert_eq!(normalize_math("π"), "pi");
     }
 
     #[test]

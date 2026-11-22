@@ -2,7 +2,7 @@ import katex from "katex";
 import { useMemo } from "react";
 
 /** Keys for the answer box. `insert` is what goes in; `caret` is where the cursor lands inside it. */
-export const MATH_KEYS: { label: string; insert: string; caret?: number; title: string }[] = [
+const MATH_KEYS: { label: string; insert: string; caret?: number; title: string }[] = [
   { label: "√", insert: "sqrt()", caret: 5, title: "Square root: sqrt(…)" },
   { label: "π", insert: "pi", title: "Pi" },
   { label: "a⁄b", insert: "/", title: "Fraction (divide)" },
@@ -25,8 +25,9 @@ function matching(s: string, open: number) {
 const ATOM = String.raw`(?:\d+(?:\.\d+)?|\\pi|\\sqrt\{[^{}]*\}|\([^()]*\))`;
 
 /** Turn a typed answer like `-3/4`, `sqrt(2)/2` or `2*pi` into LaTeX for the preview. */
-export function answerToLatex(raw: string): string {
-  let s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/\s+/g, "");
+function answerToLatex(raw: string): string {
+  // Like the server's checker: "sqrt 5" / "sqrt5" mean sqrt(5).
+  let s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/sqrt\s*(\d+(?:\.\d+)?)/g, "sqrt($1)").replace(/\s+/g, "");
   // sqrt(...) → \sqrt{...}, innermost first via recursion
   const sqrt = (str: string): string => {
     let out = "";
@@ -51,17 +52,33 @@ export function answerToLatex(raw: string): string {
   return s.replace(/\*/g, " \\cdot ").replace(/\^(\d+|\([^()]*\))/g, (_, e: string) => `^{${e.replace(/^\((.*)\)$/, "$1")}}`);
 }
 
+/** Answers the checker can't read, with a hint instead of a garbled preview. */
+function answerHint(raw: string): string | null {
+  const s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/\s+/g, "");
+  if (/sqrt\(?-/.test(s)) return "A square root of a negative number isn't a real number. Check your sign.";
+  if (/sqrt(?![(\d.])/.test(s)) return "Write square roots with brackets, like sqrt(5).";
+  return null;
+}
+
 /** Live "reads as" preview of the answer, rendered with KaTeX. Renders nothing for empty or unreadable input. */
 export function AnswerPreview({ value }: { value: string }) {
+  const hint = useMemo(() => answerHint(value), [value]);
   const html = useMemo(() => {
     const v = value.trim();
-    if (!v) return null;
+    if (!v || answerHint(v)) return null;
     try {
       return katex.renderToString(answerToLatex(v), { throwOnError: true, displayMode: false, strict: "ignore", maxExpand: 50 });
     } catch {
       return null;
     }
   }, [value]);
+  if (hint) {
+    return (
+      <p className="answer-preview" aria-live="polite">
+        <span className="text-[var(--heart)]">{hint}</span>
+      </p>
+    );
+  }
   if (!html) return null;
   return (
     <p className="answer-preview" aria-live="polite">

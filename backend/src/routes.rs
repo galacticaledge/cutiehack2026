@@ -1,4 +1,3 @@
-//! HTTP API (SPEC §13). JSON everywhere. No response ever includes the answer.
 use crate::answers::{is_correct, is_locked, parse_answer};
 use crate::auth::{
     AuthUser, COOKIE, hash_password, session_cookie, valid_password, valid_username,
@@ -60,6 +59,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/tarts", get(crate::treasury::treasury))
         .route("/api/tarts/estimate", get(crate::treasury::estimate_route))
         .route("/api/features", get(features))
+        .route("/api/stats", get(stats))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
         .route("/api/sessions/{id}", get(get_session))
@@ -83,7 +83,7 @@ struct AuthBody {
     password: Option<String>,
 }
 
-/// Shared username/password validation used by both signup and login.
+/// Easy combined error checking and message generation helper.
 fn auth_input_error(username: &str, password: &str) -> Option<AppError> {
     if !valid_username(username) {
         return Some(AppError::bad(
@@ -96,7 +96,6 @@ fn auth_input_error(username: &str, password: &str) -> Option<AppError> {
     None
 }
 
-/// Create a new account and immediately start a session.
 async fn signup(
     State(st): State<AppState>,
     jar: CookieJar,
@@ -133,7 +132,6 @@ async fn signup(
     ))
 }
 
-/// Log in with username + password and start a session.
 async fn login(
     State(st): State<AppState>,
     jar: CookieJar,
@@ -144,6 +142,7 @@ async fn login(
     if let Some(e) = auth_input_error(&username, &password) {
         return Err(e);
     }
+
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(&username)
         .fetch_optional(&st.pool)
@@ -152,9 +151,11 @@ async fn login(
         Some(u) => u,
         None => return Err(AppError::unauthorized("Unknown username or password.")),
     };
+
     if !verify_password(&password, &user.password_hash) {
         return Err(AppError::unauthorized("Unknown username or password."));
     }
+
     let jar = jar.add(session_cookie(&st, &user.id));
     Ok((
         jar,
@@ -186,6 +187,7 @@ async fn me(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiResult<J
             (st.cfg.from_base_units(sum.unwrap_or(0)), "db")
         }
     };
+
     Ok(Json(json!({
         "username": user.username,
         "walletPubkey": user.wallet_pubkey,
@@ -221,6 +223,7 @@ async fn problems(State(st): State<AppState>, AuthUser(user): AuthUser) -> ApiRe
             })
         })
         .collect();
+
     Ok(Json(Value::Array(list)))
 }
 
@@ -269,7 +272,36 @@ async fn features(State(st): State<AppState>) -> J {
         "llmProvider": st.cfg.active_llm_provider(),
         "solana": st.solana.is_some(),
         "codeRunner": st.cfg.code_runner_enabled(),
+        "personalizedConcepts": st.cfg.personalized_concepts_enabled,
     }))
+}
+
+/// Public, aggregate-only numbers for the landing page: proof the learn-it-yourself path is used.
+/// Counts only; no user, session or problem details leave the server.
+async fn stats(State(st): State<AppState>) -> ApiResult<Json<Value>> {
+    let (solves, testimonies): (i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*) FILTER (WHERE status IN ('solved', 'done')),
+                COUNT(*) FILTER (WHERE explain_passed)
+         FROM problem_sessions",
+    )
+    .fetch_one(&st.pool)
+    .await?;
+    let pastes_caught: i64 =
+        sqlx::query_scalar("SELECT COUNT(DISTINCT session_id) FROM events WHERE type = 'paste'")
+            .fetch_one(&st.pool)
+            .await?;
+    let paid: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount), 0)::BIGINT FROM rewards WHERE status = 'paid'",
+    )
+    .fetch_one(&st.pool)
+    .await?;
+    Ok(Json(json!({
+        "verifiedSolves": solves,
+        "convincingTestimonies": testimonies,
+        "pastesCaught": pastes_caught,
+        "tartsPaid": st.cfg.from_base_units(paid),
+        "onChain": st.solana.is_some(),
+    })))
 }
 
 // ---------- sessions ----------
