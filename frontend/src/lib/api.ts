@@ -191,6 +191,32 @@ export function isGuestName(username: string) {
 }
 
 
+/* ---------------- Accounts (username + password) ---------------- */
+
+export const USERNAME_RE = /^[a-z0-9_-]{2,24}$/;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 72;
+
+/** A random, strong password for throwaway demo accounts (guest pass, judge mode). */
+function randomPassword() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "x");
+}
+
+/** Creates and signs in a throwaway account like guest-ab12cd. Its password is random and never shown. */
+export async function signUpThrowaway(prefix: "guest" | "copycat") {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const username = `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      return await api<{ username: string; walletPubkey: string }>("/api/auth/signup", { username, password: randomPassword() });
+    } catch (e) {
+      if ((e as ApiError).status !== 409) throw e; // name taken: try another
+    }
+  }
+  throw new ApiError(409, "Couldn't find a free guest name. Please try again.");
+}
+
 export interface TartsLedgerEntry extends RewardView {
   sessionId: string;
   kind: "problem" | "topic";

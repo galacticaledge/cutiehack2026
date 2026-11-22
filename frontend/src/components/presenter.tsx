@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, signUpThrowaway } from "@/lib/api";
 
 /**
  * Judge mode: a presenter panel for the 3-minute pitch. Hidden unless opened with
@@ -45,7 +45,7 @@ function writeEnabled(on: boolean) {
 }
 
 /** Ask the problem page to put text in the chat box (it isn't sent; the presenter presses Enter). */
-export function prefillChat(text: string) {
+function prefillChat(text: string) {
   window.dispatchEvent(new CustomEvent("socra:prefill-chat", { detail: text }));
 }
 
@@ -103,7 +103,7 @@ export function PresenterPanel() {
   async function freshDoor(prefix: string, templateId: string, key: string) {
     setBusy(key);
     try {
-      await api("/api/auth/login", { username: `${prefix}-${Math.random().toString(36).slice(2, 7)}` });
+      await signUpThrowaway(prefix as "guest" | "copycat");
       try {
         localStorage.setItem("socra:toured", "1"); // no tour popping up mid-pitch
       } catch {
