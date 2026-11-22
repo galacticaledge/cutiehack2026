@@ -1,4 +1,4 @@
-//! Environment configuration. All secrets are server-only.
+//! Environment configuration
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -82,6 +82,7 @@ impl Config {
     pub fn tts_enabled(&self) -> bool {
         self.elevenlabs_api_key.is_some() && self.elevenlabs_voice_id.is_some()
     }
+
     /// Solari sandboxes run generated code-tracing problems to get their answers.
     pub fn code_runner_enabled(&self) -> bool {
         self.solari_api_key.is_some()

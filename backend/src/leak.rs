@@ -1,5 +1,3 @@
-//! Deterministic leak check (SPEC §8.3 step 1). Pure.
-
 pub const LEAK_FALLBACK: &str = "Curiouser and curiouser! You're getting somewhere. What do you think the next step is, and why?";
 
 fn is_word(c: char) -> bool {
@@ -30,7 +28,7 @@ fn scan_number(chars: &[char], mut i: usize) -> (f64, usize) {
     (text.parse().unwrap_or(f64::NAN), i)
 }
 
-/// Extract numbers: plain numbers, negatives, decimals, `a/b` and `\frac{a}{b}`.
+/// plain numbers, negatives, decimals, `a/b` and `\frac{a}{b}`.
 pub fn extract_numbers(text: &str) -> Vec<f64> {
     let normalized = text.replace(['−', '–'], "-");
     // \frac{a}{b} → a/b
@@ -95,7 +93,7 @@ fn near(a: f64, b: f64, tol: f64) -> bool {
 pub fn deterministic_leak(reply: &str, answer: f64, tolerance: f64, prompt: &str) -> bool {
     let prompt_nums = extract_numbers(prompt);
     // A number is "from the prompt" only if it matches one exactly. Matching within the answer's
-    // tolerance would let e.g. "t ≈ 2.02" through when the prompt merely mentions "2 decimal places".
+    // tolerance would let e.g. "t ~= 2.02" through when the prompt merely mentions "2 decimal places".
     let in_prompt = |n: f64| prompt_nums.iter().any(|p| near(*p, n, 1e-9));
     extract_numbers(reply).into_iter().any(|n| {
         let hit = near(n, answer, tolerance) || (answer < 0.0 && near(n, -answer, tolerance));
