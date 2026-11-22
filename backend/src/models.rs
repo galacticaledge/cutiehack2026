@@ -18,6 +18,7 @@ pub struct ProblemSession {
     pub user_id: String,
     pub source: String,
     pub template_id: Option<String>,
+    pub concept_id: Option<String>,
     pub seed: i64,
     pub custom_text: Option<String>,
     pub custom_ref: Option<Value>, // SERVER ONLY

@@ -1,5 +1,4 @@
 //! SERVER ONLY view of a session's problem (includes the answer).
-use crate::concepts::get_concept;
 use crate::models::ProblemSession;
 use crate::problems::{Checkpoint, CheckpointKind, GeneratedProblem, Template, get_template};
 use crate::quest::{QUEST_MIN_SOLVE_SECONDS, Quest};
@@ -92,12 +91,9 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             .quest
             .clone()
             .ok_or_else(|| anyhow::anyhow!("quest session {} has no quest", s.id))?;
-        let title = get_concept(&q.concept_id)
-            .map(|c| c.title)
-            .unwrap_or("New topic");
         return Ok(ProblemContext {
             source: "quest".into(),
-            title: format!("New topic: {title}"),
+            title: "New topic".into(),
             display_prompt: q.prompt.clone(),
             steps: q.steps.clone(),
             hints: vec![],
