@@ -45,7 +45,7 @@ function writeEnabled(on: boolean) {
 }
 
 /** Ask the problem page to put text in the chat box (it isn't sent; the presenter presses Enter). */
-export function prefillChat(text: string) {
+function prefillChat(text: string) {
   window.dispatchEvent(new CustomEvent("socra:prefill-chat", { detail: text }));
 }
 

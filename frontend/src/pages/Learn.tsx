@@ -8,10 +8,12 @@ import { TartRecipePanel, YourDreamPanel } from "@/components/guides";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { flavorFor, suitColor, Tart } from "@/components/wonder";
+import { Tart } from "@/components/wonder";
+import { flavorFor, suitColor } from "@/lib/flavor";
 import { DoorArt } from "@/components/doors";
 import { DealtCards, LostInWonderland } from "@/components/skeletons";
-import { conceptForTemplate, LevelBadge, LevelSteps, SuggestionCards, suggestFrom, useConceptMap } from "@/components/proficiency";
+import { LevelBadge, LevelSteps, SuggestionCards } from "@/components/proficiency";
+import { conceptForTemplate, suggestFrom, useConceptMap } from "@/lib/proficiency";
 import { api, mapAvailable, startConcept, type ConceptNode, type Problem } from "@/lib/api";
 
 function Difficulty({ n }: { n: number }) {

@@ -2,7 +2,7 @@ import katex from "katex";
 import { useMemo } from "react";
 
 /** Keys for the answer box. `insert` is what goes in; `caret` is where the cursor lands inside it. */
-export const MATH_KEYS: { label: string; insert: string; caret?: number; title: string }[] = [
+const MATH_KEYS: { label: string; insert: string; caret?: number; title: string }[] = [
   { label: "√", insert: "sqrt()", caret: 5, title: "Square root: sqrt(…)" },
   { label: "π", insert: "pi", title: "Pi" },
   { label: "a⁄b", insert: "/", title: "Fraction (divide)" },
@@ -25,7 +25,7 @@ function matching(s: string, open: number) {
 const ATOM = String.raw`(?:\d+(?:\.\d+)?|\\pi|\\sqrt\{[^{}]*\}|\([^()]*\))`;
 
 /** Turn a typed answer like `-3/4`, `sqrt(2)/2` or `2*pi` into LaTeX for the preview. */
-export function answerToLatex(raw: string): string {
+function answerToLatex(raw: string): string {
   let s = raw.replace(/[−–]/g, "-").replace(/√/g, "sqrt").replace(/\s+/g, "");
   // sqrt(...) → \sqrt{...}, innermost first via recursion
   const sqrt = (str: string): string => {

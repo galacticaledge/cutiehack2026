@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { LEVELS } from "@/components/proficiency";
+import { LEVELS } from "@/lib/proficiency";
 import type { ConceptNode } from "@/lib/api";
 
 /**

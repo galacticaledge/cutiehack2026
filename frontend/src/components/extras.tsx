@@ -2,8 +2,9 @@ import { BookOpen, Clock, Coffee, Crown, Download, FlaskConical, Heart, KeyRound
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { flavorFor, suitColor } from "@/components/wonder";
+import { flavorFor, suitColor } from "@/lib/flavor";
 import { type Problem } from "@/lib/api";
+import { markToured } from "@/lib/tour";
 
 function reducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -47,23 +48,6 @@ export interface TourStep {
   body: string;
 }
 
-const TOUR_KEY = "socra:toured";
-
-export function hasToured() {
-  try {
-    return localStorage.getItem(TOUR_KEY) === "1";
-  } catch {
-    return true; // no storage: don't nag every time
-  }
-}
-
-function markToured() {
-  try {
-    localStorage.setItem(TOUR_KEY, "1");
-  } catch {
-    /* ignore */
-  }
-}
 
 export function RabbitTour({ steps, onClose }: { steps: TourStep[]; onClose: () => void }) {
   const available = steps.filter((s) => {
@@ -164,7 +148,7 @@ export function RabbitTour({ steps, onClose }: { steps: TourStep[]; onClose: () 
 
 /* ---------------- Keyboard shortcuts ---------------- */
 
-export const SHORTCUTS: [string, string][] = [
+const SHORTCUTS: [string, string][] = [
   ["/", "Talk to the Cat (focus the chat)"],
   ["A", "Jump to the answer box"],
   ["H", "Drink the next bottle (hint)"],
@@ -196,11 +180,6 @@ export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenC
   );
 }
 
-export function isTypingTarget(t: EventTarget | null) {
-  const el = t as HTMLElement | null;
-  if (!el) return false;
-  return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
-}
 
 /* ---------------- Shareable "I woke up" card ---------------- */
 
@@ -433,5 +412,5 @@ export function DeckPanel({ problems }: { problems: Problem[] }) {
 }
 
 // Hearts burst lives in celebrations.tsx (kept out of the first download).
-export { heartsBurst, HeartsBurst, SparkleTrail } from "@/components/celebrations";
+export { HeartsBurst, SparkleTrail } from "@/components/celebrations";
 export { SoundToggle } from "@/components/sound";
