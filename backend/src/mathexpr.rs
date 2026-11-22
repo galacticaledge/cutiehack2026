@@ -71,18 +71,20 @@ pub fn normalize_math(input: &str) -> String {
             // that can be done. If things are too messed up, just give up and leave the original.
             let mut replacement = pattern.to_string();
             let mut j = i;
-            let mut seen_first_dot = false;
-            let mut seen_first_minus = false;
+            let mut first_dot = false;
+            let mut first_minus = false;
+            let mut first_char = true;
 
-            let is_valid_char = |c: char, seen_first_dot: bool, seen_first_minus: bool| {
+            let is_valid_char = |c: char, first_dot: bool, first_minus: bool, first_char: bool| {
                 c.is_ascii_digit()
                     || c == ' '
-                    || (c == '.' && !seen_first_dot)
-                    || (c == '-' && !seen_first_minus)
+                    || (c == '.' && !first_dot)
+                    || (c == '-' && !first_minus && first_char)
             };
-            while j < chars.len() && is_valid_char(chars[j], seen_first_dot, seen_first_minus) {
-                seen_first_dot = seen_first_dot || chars[j] == '.';
-                seen_first_minus = seen_first_minus || chars[j] == '-';
+            while j < chars.len() && is_valid_char(chars[j], first_dot, first_minus, first_char) {
+                first_dot = first_dot || chars[j] == '.';
+                first_minus = first_minus || chars[j] == '-';
+                first_char = false;
                 j += 1;
             }
 
@@ -347,6 +349,7 @@ mod tests {
         assert_eq!(normalize_math("sqrt(12)"), "sqrt(12)");
         assert_eq!(normalize_math("sin 15"), "sin( 15)");
         assert_eq!(normalize_math("cos-9.5"), "cos(-9.5)");
+        assert_eq!(normalize_math("cos-9-5"), "cos(-9)-5");
 
         // Standalone negatives cannot be normalized
         assert_eq!(normalize_math("cos-"), "cos-");
