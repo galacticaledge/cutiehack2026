@@ -11,24 +11,19 @@ function Bottle({ full, color, gulp }: { full: boolean; color: string; gulp: boo
           <path d="M10 13h8v5c4.5 2 7 5.5 7 10.5C25 36 20 41 14 41S3 36 3 28.5C3 23.5 5.5 20 10 18z" />
         </clipPath>
       </defs>
-      {/* liquid (drains by sliding down out of the clipped body) */}
       <g clipPath={`url(#body-${id})`}>
         <rect className="potion-liquid" x="0" y="20" width="28" height="24" fill={color} style={{ transform: full ? "translateY(0)" : "translateY(24px)" }} />
         <rect className="potion-liquid" x="0" y="19" width="28" height="2.4" fill="#fff" opacity=".35" style={{ transform: full ? "translateY(0)" : "translateY(26px)" }} />
       </g>
-      {/* glass */}
       <path d="M10 13h8v5c4.5 2 7 5.5 7 10.5C25 36 20 41 14 41S3 36 3 28.5C3 23.5 5.5 20 10 18z" fill="#ffffff" fillOpacity=".18" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M6.5 25c.5-2 1.6-3.4 3-4.3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity=".8" />
-      {/* label */}
       <rect x="7" y="27" width="14" height="7" rx="1" fill="#faf8f1" stroke="#8d7350" strokeWidth=".6" />
       <path d="M9 30.5h10" stroke="#8d7350" strokeWidth=".8" strokeDasharray="1.4 .8" />
-      {/* cork */}
       <rect className="potion-cork" x="9.5" y="6" width="9" height="7.5" rx="1.5" fill="#c9a26b" stroke="#7a5a2e" strokeWidth="1" />
     </svg>
   );
 }
 
-/** Three "Drink Me" bottles: one drains for every hint taken. */
 export function DrinkMeBottles({ drunk }: { drunk: number }) {
   const prev = useRef(drunk);
   const [gulping, setGulping] = useState<number | null>(null);

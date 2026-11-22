@@ -1,4 +1,3 @@
-//! Bring-your-own problem/topic intake (SPEC §8.6) and generated topic problems. Results are SERVER ONLY.
 use crate::answers::parse_answer;
 use crate::concepts::{Concept, match_name};
 use crate::context::CustomRef;
@@ -27,7 +26,6 @@ fn fallback() -> CustomRef {
     }
 }
 
-/// Hidden reference-solution call. Never fails.
 pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
     let v = match complete_json(
         state,
@@ -48,7 +46,7 @@ pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
         .as_str()
         .map(|s| s.chars().take(500).collect::<String>());
     let mut numeric = v["numericAnswer"].as_f64().filter(|n| n.is_finite());
-    // Cross-check numericAnswer against finalAnswer with the math engine.
+
     if let Some(fa) = &final_answer {
         if let Ok(parsed) = parse_answer(fa) {
             match numeric {
@@ -58,6 +56,7 @@ pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
             }
         }
     }
+
     CustomRef {
         academic: Some(v["academic"].as_bool() != Some(false)),
         solvable: Some(v["solvable"].as_bool().unwrap_or(false)),
@@ -89,7 +88,6 @@ pub struct TopicClass<'a> {
     pub concept: Option<&'a Concept>,
 }
 
-/// Keep free-text/reward topic classification on the public catalog. Private practice uses IDs.
 pub async fn classify_topic<'a>(
     state: &AppState,
     text: &str,
@@ -161,8 +159,11 @@ async fn independent_answer(state: &AppState, prompt: &str, private: bool) -> Op
     })
 }
 
-/// Generate a checked problem for a concept: LLM template → server-picked numbers →
-/// math-engine answer → independent LLM solve must agree. None if any step fails.
+/// Generate a checked problem for a concept:
+/// - LLM template
+/// - server-picked numbers
+/// - math-engine answer
+/// - independent LLM solve
 pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> Option<Quest> {
     if concept.is_code() && state.cfg.code_runner_enabled() {
         return generate_code_quest(state, concept, seed).await;
@@ -198,8 +199,11 @@ pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> O
     None
 }
 
-/// Code-tracing problem: LLM writes a program template → server picks the numbers →
-/// a Solari sandbox runs the exact program shown → its printed number is the answer.
+/// Code-tracing problem:
+/// - LLM writes a program template
+/// - server picks the numbers
+/// - a Solari sandbox runs the exact program shown
+/// - its printed number is the answer
 async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> Option<Quest> {
     for attempt in 0..2 {
         let v = match complete_json(

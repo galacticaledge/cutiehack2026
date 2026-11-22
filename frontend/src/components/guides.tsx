@@ -15,8 +15,6 @@ function Panel({ title, children, className = "" }: { title: string; children: R
   );
 }
 
-/* ---------------- Hall of Doors: left column ---------------- */
-
 export function YourDreamPanel({ problems, concepts }: { problems: Problem[] | null; concepts?: ConceptMap | null }) {
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
@@ -25,7 +23,6 @@ export function YourDreamPanel({ problems, concepts }: { problems: Problem[] | n
     window.addEventListener("socra:balance", load);
     return () => window.removeEventListener("socra:balance", load);
   }, []);
-  // A door counts as opened once you've finished its trial (paid, pending delivery or forfeited).
   const eaten = problems?.filter((p) => p.rewardStatus !== null || (conceptForTemplate(concepts ?? null, p.id)?.proficiency ?? "new") !== "new").length ?? 0;
   const proficientCount = concepts?.concepts.filter((c) => c.proficiency === "proficient").length ?? 0;
   const demonstratedCount = concepts?.concepts.filter((c) => c.proficiency === "demonstrated").length ?? 0;
@@ -99,8 +96,6 @@ export function YourDreamPanel({ problems, concepts }: { problems: Problem[] | n
   );
 }
 
-/* ---------------- Hall of Doors: right column ---------------- */
-
 const RECIPE: { icon: typeof Tart | typeof FlaskConical; label: string; value: string; note: string }[] = [
   { icon: Sparkles, label: "Base", value: "100 × ♥", note: "per heart of difficulty" },
   { icon: FlaskConical, label: "Drink Me", value: "×1 · .75 · .5 · .3", note: "for 0–3 hints" },
@@ -161,12 +156,10 @@ export function TartRecipePanel() {
   );
 }
 
-/* ---------------- Workspace: the dream map ---------------- */
-
 type Stop = { label: string; done: boolean; current?: boolean; icon: typeof Rabbit; detail?: string };
 
 export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: string[] }) {
-  const isBank = s.source === "bank" || s.source === "quest"; // both have a verified answer and a trial
+  const isBank = s.source === "bank" || s.source === "quest";
   const solved = s.status !== "active";
   const done = s.status === "done";
   const stops: Stop[] = [{ label: "Fell down the rabbit hole", done: true, icon: Rabbit }];
@@ -251,8 +244,6 @@ export function DreamMap({ s, correctLabels }: { s: SessionView; correctLabels: 
     </div>
   );
 }
-
-/* ---------------- Landing: side columns ---------------- */
 
 const CAST = [
   { icon: CheshireGrin, name: "The Cheshire Cat", role: "Your tutor. Answers questions with questions and never gives the answer away." },

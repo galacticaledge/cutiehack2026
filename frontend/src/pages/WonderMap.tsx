@@ -11,7 +11,6 @@ import { Tart } from "@/components/wonder";
 import { LevelBadge } from "@/components/proficiency";
 import { acceptProposal, api, ApiError, nextStep, startConcept, type ConceptMap, type ConceptNode, type Features, type Proposal } from "@/lib/api";
 
-/** Each subject is a region of Wonderland. */
 const REGIONS: Record<string, { name: string; suit: string }> = {
   Algebra: { name: "The White Rabbit's Lane", suit: "♥" },
   Geometry: { name: "The Queen's Croquet Ground", suit: "♦" },
@@ -24,13 +23,12 @@ const REGIONS: Record<string, { name: string; suit: string }> = {
 const OWN_REGION = "__own__";
 const VIEW_KEY = "socra:mapView";
 
-/** Longest prerequisite chain, so each region's path runs from basics to advanced. */
 function depths(concepts: ConceptNode[]) {
   const byId = new Map(concepts.map((c) => [c.id, c]));
   const memo = new Map<string, number>();
   const depth = (id: string, seen = new Set<string>()): number => {
     if (memo.has(id)) return memo.get(id)!;
-    if (seen.has(id)) return 0; // guard against a cycle in the data
+    if (seen.has(id)) return 0;
     seen.add(id);
     const c = byId.get(id);
     const d = c && c.prereqs.length ? 1 + Math.max(...c.prereqs.map((p) => depth(p, seen))) : 0;
@@ -62,7 +60,6 @@ type NextState =
   | { anchor: string; kind: "proposal"; proposal: Proposal }
   | { anchor: string; kind: "error"; message: string };
 
-/** Friendly words for the graph endpoints' errors. */
 function nextStepMessage(e: unknown) {
   const err = e as ApiError;
   if (err.status === 429) return err.message || "That's enough new topics for today. Come back tomorrow.";
@@ -81,13 +78,11 @@ export function WonderMap() {
   const [view, setView] = useState<"regions" | "graph">(readView);
   const [next, setNext] = useState<NextState | null>(null);
   const [accepting, setAccepting] = useState(false);
-  /** Set once the server says personal topics are switched off, to hide "What's next?". */
   const [graphOff, setGraphOff] = useState(false);
   const navigate = useNavigate();
   const loaded = useRef(false);
   const detailRef = useRef<HTMLElement>(null);
 
-  // On narrow screens the details sit below the tunnel: bring them into view when a topic is picked.
   useEffect(() => {
     if (!selected || view !== "graph" || !window.matchMedia?.("(max-width: 1023px)").matches) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -96,7 +91,6 @@ export function WonderMap() {
   }, [selected, view]);
 
   useEffect(() => {
-    // Refreshes after accepting a topic keep the map on screen instead of flashing a skeleton.
     if (!loaded.current) setState("loading");
     api<ConceptMap>("/api/concepts")
       .then((m) => {
@@ -166,7 +160,6 @@ export function WonderMap() {
     try {
       const r = await nextStep(c.id);
       if (r.kind === "existing") {
-        // The step may be a topic the map doesn't list yet (e.g. made on another tab): refresh.
         if (!map?.concepts.some((x) => x.id === r.concept.id)) setAttempt((n) => n + 1);
         setNext({ anchor: c.id, kind: "existing", conceptId: r.concept.id, title: r.concept.title });
       } else {

@@ -11,7 +11,6 @@ export interface Flavor {
   emblem: Emblem;
 }
 
-/** Story framing for each verified problem (the math itself lives on the server). */
 export const FLAVOR: Record<string, Flavor> = {
   "alg-linear-1": { character: "The White Rabbit", blurb: "Solve the riddle stuck on a very late rabbit's pocket watch.", icon: Clock, suit: "♥", concept: "Linear equations", practice: ["Undo operations in reverse order", "Keep both sides balanced", "Check by substituting back"], emblem: "watch" },
   "cs-trace-loop-1": { character: "The Mad Hatter", blurb: "It's always six o'clock. Trace the tea-party loop.", icon: Coffee, suit: "♣", concept: "Tracing loops (CS1)", practice: ["What range(a, b) really visits", "The % (remainder) operator", "Tracking a running total"], emblem: "hat" },

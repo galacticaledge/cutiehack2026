@@ -1,4 +1,3 @@
-//! The public and accepted private graph. Migration 0004 owns the public catalog.
 use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashSet;
 
@@ -66,7 +65,6 @@ pub(crate) async fn visible_concept(
     Ok(read_graph(pool, Some(user_id), Some(id)).await?.pop())
 }
 
-/// Reward keys stay stable for the public graph and the problem bank.
 pub(crate) fn reward_key(concept_id: &str) -> String {
     format!("concept:{concept_id}")
 }
@@ -97,7 +95,6 @@ fn contains_phrase(haystack: &str, phrase: &str) -> bool {
     !phrase.is_empty() && format!(" {haystack} ").contains(&format!(" {phrase} "))
 }
 
-/// Match title, alias or ID. Prefer the more specific phrase; unrelated matches defer to classification.
 pub(crate) fn match_alias<'a>(concepts: &'a [Concept], text: &str) -> Option<&'a Concept> {
     let t = normalize(text);
     let best: Vec<_> = concepts

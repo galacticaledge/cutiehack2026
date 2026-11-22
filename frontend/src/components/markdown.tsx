@@ -1,4 +1,4 @@
-import "katex/dist/katex.min.css"; // math styles + fonts load with the pages that render math
+import "katex/dist/katex.min.css";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";

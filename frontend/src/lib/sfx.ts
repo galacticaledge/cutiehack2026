@@ -1,4 +1,3 @@
-/** Tiny synthesized Wonderland sound effects (Web Audio, no files). Off by default. */
 
 const KEY = "socra:sfx";
 export type Sound = "clink" | "pop" | "gavel" | "chime" | "boing";
@@ -52,21 +51,21 @@ export function play(sound: Sound) {
   if (!a) return;
   const t = a.currentTime;
   switch (sound) {
-    case "clink": // teacup on saucer
+    case "clink":
       tone(a, 2093, t, 0.25, "sine", 0.12);
       tone(a, 3136, t + 0.06, 0.3, "sine", 0.08);
       break;
-    case "pop": // a cork leaving a Drink Me bottle
+    case "pop":
       tone(a, 600, t, 0.12, "triangle", 0.2, 120);
       break;
-    case "gavel": // the Queen's court
+    case "gavel":
       tone(a, 140, t, 0.12, "square", 0.08, 70);
       tone(a, 140, t + 0.18, 0.14, "square", 0.08, 60);
       break;
-    case "chime": // waking up with tarts
+    case "chime":
       [523, 659, 784, 1047].forEach((f, i) => tone(a, f, t + i * 0.09, 0.45, "sine", 0.1));
       break;
-    case "boing": // a wrong turn
+    case "boing":
       tone(a, 220, t, 0.3, "sine", 0.12, 110);
       break;
   }

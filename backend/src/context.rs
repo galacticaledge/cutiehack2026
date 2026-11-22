@@ -1,10 +1,9 @@
-//! SERVER ONLY view of a session's problem (includes the answer).
 use crate::models::ProblemSession;
 use crate::problems::{Checkpoint, CheckpointKind, GeneratedProblem, Template, get_template};
 use crate::quest::{QUEST_MIN_SOLVE_SECONDS, Quest};
 use serde::{Deserialize, Serialize};
 
-/// AI reference solution for custom sessions. NEVER sent to the client.
+/// AI reference solution for custom sessions.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomRef {
@@ -15,26 +14,26 @@ pub struct CustomRef {
     #[serde(default)]
     pub steps: Vec<String>,
     pub matched_template_id: Option<String>,
-    /// Knowledge-graph node this topic mapped to.
+    /// Knowledge-graph node this topic mapped to
     #[serde(default)]
     pub concept_id: Option<String>,
-    /// Why this session can't earn (shown to the student; written by the server).
+    /// Why this session can't earn
     #[serde(default)]
     pub practice_reason: Option<String>,
-    /// Generated problem for source = "quest". The answer is SERVER ONLY.
+    /// Generated problem for source = "quest"
     #[serde(default)]
     pub quest: Option<Quest>,
 }
 
 pub struct ProblemContext {
-    pub source: String, // bank | quest | custom_problem | custom_topic
+    pub source: String, // One of bank, quest, custom_problem, or custom_topic
     pub title: String,
-    pub display_prompt: String, // safe for the client
+    pub display_prompt: String,
     pub steps: Vec<String>,
     pub hints: Vec<String>,
-    pub answer: Option<f64>, // SERVER ONLY
+    pub answer: Option<f64>,
     pub tolerance: f64,
-    pub checkpoints: Vec<Checkpoint>, // SERVER ONLY
+    pub checkpoints: Vec<Checkpoint>,
     pub difficulty: i32,
     pub min_solve_seconds: i64,
     pub template: Option<&'static Template>,
@@ -48,10 +47,11 @@ impl ProblemContext {
     pub fn is_bank(&self) -> bool {
         self.source == "bank"
     }
+
     pub fn is_quest(&self) -> bool {
         self.source == "quest"
     }
-    /// Server-verified answer, telemetry, explain-back and a possible payout.
+
     pub fn earns(&self) -> bool {
         self.is_bank() || self.is_quest()
     }
@@ -99,7 +99,6 @@ pub fn problem_context(s: &ProblemSession) -> anyhow::Result<ProblemContext> {
             hints: vec![],
             answer: Some(q.answer),
             tolerance: q.tolerance,
-            // Only "final": lets chat notice an answer stated outright (never judged in chat).
             checkpoints: vec![Checkpoint {
                 id: "final",
                 label: "the final answer to the problem".into(),

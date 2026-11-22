@@ -1,4 +1,3 @@
-//! API errors: always friendly JSON `{ error }`, never a stack trace.
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};

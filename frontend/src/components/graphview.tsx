@@ -2,20 +2,12 @@ import { useEffect, useId, useMemo, useRef } from "react";
 import { LEVELS } from "@/lib/proficiency";
 import type { ConceptNode } from "@/lib/api";
 
-/**
- * The Rabbit hole (the knowledge graph): the basics sit at the mouth of the hole and every
- * step of prerequisites is a ledge further down the tunnel. Lines run from a topic down to
- * what it unlocks. Picking a topic lights up what it builds on and what it opens; links
- * between subjects show only then, so the tunnel stays readable. Your own topics have a
- * dashed ring.
- */
-
-const COLS = 6; // topics per row before a ledge wraps
+const COLS = 6;
 const COL_W = 158;
 const ROW_H = 92;
 const LEDGE_HEAD = 46;
 const MOUTH_H = 70;
-const SIDE = 56; // room for the walls and the things tumbling past them
+const SIDE = 56;
 const R = 12;
 
 const SUBJECT_ORDER = ["Algebra", "Geometry", "Statistics", "Computer science", "Calculus", "Physics", "Chemistry"];
@@ -47,7 +39,7 @@ function layout(concepts: ConceptNode[]) {
   const depth = new Map<string, number>();
   const visit = (id: string, seen: Set<string>): number => {
     if (depth.has(id)) return depth.get(id)!;
-    if (seen.has(id)) return 0; // guard against a cycle in the data
+    if (seen.has(id)) return 0;
     seen.add(id);
     const known = (byId.get(id)?.prereqs ?? []).filter((p) => byId.has(p));
     const d = known.length ? 1 + Math.max(...known.map((p) => visit(p, seen))) : 0;
@@ -73,7 +65,6 @@ function layout(concepts: ConceptNode[]) {
     y += LEDGE_HEAD;
     for (let row = 0; row * COLS < list.length; row++) {
       const chunk = list.slice(row * COLS, row * COLS + COLS);
-      // Center each row; on wide ledges every other row shifts sideways, like a tumble.
       const nudge = list.length > COLS ? (row % 2 ? COL_W / 4 : -COL_W / 4) : 0;
       const left = SIDE + ((COLS - chunk.length) * COL_W) / 2 + nudge;
       chunk.forEach((c, i) => pos.set(c.id, { x: left + COL_W / 2 + i * COL_W, y: y + R + 4, depth: d }));
@@ -83,7 +74,6 @@ function layout(concepts: ConceptNode[]) {
   return { pos, ledges, width, height: y + 30 };
 }
 
-/** Things Alice saw on the way down, drifting past the tunnel walls. */
 function Clutter({ height, width }: { height: number; width: number }) {
   const glyphs = ["♥", "◷", "♠", "⚿", "♦", "☕", "♣", "♥"];
   const items = [];
@@ -98,13 +88,12 @@ function Clutter({ height, width }: { height: number; width: number }) {
   return <g aria-hidden="true">{items}</g>;
 }
 
-/** Rocks, bones and the odd skull lodged in the tunnel walls, so it feels dug out of the earth. */
 function WallDebris({ height, width }: { height: number; width: number }) {
   const items = [];
   for (let i = 0, y = MOUTH_H + 46; y < height - 24; i++) {
     const r = (k: number) => seed(`${i}:${k}`);
     for (const side of [0, 1] as const) {
-      const xIn = SIDE - 8 + r(side + 1) * 22; // just inside the tunnel wall, embedded in the earth
+      const xIn = SIDE - 8 + r(side + 1) * 22;
       const x = side === 0 ? xIn : width - xIn;
       const yy = y + (r(side + 3) - 0.5) * 26;
       const rot = Math.round(r(side + 5) * 360);
@@ -151,14 +140,12 @@ function WallDebris({ height, width }: { height: number; width: number }) {
   return <g aria-hidden="true">{items}</g>;
 }
 
-/** A small stable number from a string, so each pebble keeps its own shape between renders. */
 function seed(str: string) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967295;
 }
 
-/** A lumpy pebble of about radius r: a circle with a few soft bumps, smoothed with quadratic curves. */
 function pebble(r: number, s: number) {
   const n = 12;
   const pts = Array.from({ length: n }, (_, i) => {
@@ -176,7 +163,6 @@ function pebble(r: number, s: number) {
   return d + "Z";
 }
 
-/** One earthen wall from the mouth to the bottom, with lumps of rock and roots. */
 function wallPoints(x: number, top: number, bottom: number, dir: 1 | -1, salt: number) {
   const segs: { c: [number, number]; to: [number, number] }[] = [];
   let y = top;
@@ -189,7 +175,6 @@ function wallPoints(x: number, top: number, bottom: number, dir: 1 | -1, salt: n
   return segs;
 }
 
-/** The tunnel's outline: down the left wall, across the bottom, back up the right wall. */
 function tunnelPath(left: number, right: number, top: number, bottom: number) {
   const l = wallPoints(left, top, bottom, -1, 3);
   const r = wallPoints(right, top, bottom, 1, 11);
@@ -223,7 +208,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
     return s;
   }, [sel, concepts]);
 
-  // Bring the selected topic into view inside the scroll box (it may be chosen from the side panel).
   useEffect(() => {
     const at = selected ? pos.get(selected) : undefined;
     const el = box.current;
@@ -254,12 +238,10 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
             <stop offset="86%" className="rh-wall-clear" />
             <stop offset="100%" className="rh-wall-dark" />
           </linearGradient>
-          {/* lumpy, uneven edges for the mud tunnels */}
           <filter id={`mud-${gid}`} x="-5%" y="-5%" width="110%" height="110%">
             <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="7" />
             <feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="G" />
           </filter>
-          {/* each topic is a freshly dug pit: black at the bottom, earthy at the lip */}
           <radialGradient id={`pit-${gid}`} cx="50%" cy="58%" r="62%">
             <stop offset="0%" className="rh-pit-deep" />
             <stop offset="70%" className="rh-pit-mid" />
@@ -271,14 +253,12 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           </radialGradient>
         </defs>
 
-        {/* the tunnel with wobbly earthen walls */}
         <path
           d={tunnelPath(SIDE - 16, width - SIDE + 16, MOUTH_H / 2, height)}
           fill={`url(#shaft-${gid})`}
           className="rh-shaft"
         />
         <rect x={SIDE - 30} y={MOUTH_H / 2} width={width - 2 * SIDE + 60} height={height - MOUTH_H / 2} fill={`url(#walls-${gid})`} aria-hidden="true" />
-        {/* the starting topics are dug straight down out of the mouth (drawn underneath it, so they emerge from its shadow) */}
         {(() => {
           const shafts = concepts
             .filter((c) => pos.get(c.id)!.depth === 0)
@@ -306,7 +286,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
             </g>
           );
         })()}
-        {/* the mouth, ringed with grass */}
         <ellipse cx={width / 2} cy={MOUTH_H / 2} rx={rx} ry={ry} fill={`url(#mouth-${gid})`} className="rh-mouth" />
         <path
           d={Array.from({ length: 40 }, (_, i) => {
@@ -321,7 +300,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
         <WallDebris height={height} width={width} />
         <Clutter height={height} width={width} />
 
-        {/* links: tunnels of dug mud from a prerequisite (above) down to what it unlocks (below) */}
         {(() => {
           const links = concepts.flatMap((c) =>
             c.prereqs
@@ -355,7 +333,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           );
         })()}
 
-        {/* ledges */}
         {ledges.map((l) => (
           <g key={l.depth} aria-hidden="true">
             {l.depth > 0 && <line x1={SIDE + 4} x2={width - SIDE - 4} y1={l.y + 8} y2={l.y + 8} className="rh-ledge" />}
@@ -366,7 +343,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           </g>
         ))}
 
-        {/* topics */}
         {concepts.map((c) => {
           const p = pos.get(c.id)!;
           const dim = sel && !related.has(c.id);
@@ -384,7 +360,6 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
                 onClick={() => onSelect(c.id)}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(c.id))}
               >
-                {/* the mound of dug-out dirt around the pit, and a few crumbs kicked out of it */}
                 <path d={pebble(R + 9, seed(c.id) * 0.7 + 0.2)} className="rh-mound" />
                 {[0, 1, 2].map((k) => {
                   const a = seed(`${c.id}${k}`) * Math.PI * 2;

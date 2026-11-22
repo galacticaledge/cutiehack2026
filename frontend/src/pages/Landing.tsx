@@ -81,7 +81,6 @@ export function Landing() {
     } catch (err) {
       const status = (err as ApiError).status;
       setError((err as Error).message);
-      // "already taken" on sign-up, or "unknown" on log-in, usually means the other tab was meant
       setSuggestOther((mode === "signup" && status === 409) || (mode === "login" && status === 401));
     } finally {
       setLoading(false);
@@ -113,7 +112,6 @@ export function Landing() {
             <h1>
               <SocraLogo className="h-auto w-full" />
             </h1>
-            {/* The Cheshire Cat perches on the sign (and still vanishes when poked). */}
             <button
               type="button"
               onClick={poke}

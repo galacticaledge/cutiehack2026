@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 
-/* Through the Looking-Glass: dark mode state, shared by every toggle and the toaster. */
-
 const KEY = "socra:looking-glass";
 const THEME_EVENT = "socra:theme";
 
@@ -27,7 +25,6 @@ export function isDark() {
   return document.documentElement.classList.contains("dark");
 }
 
-/** Before first paint: the saved choice, or the device's setting until the student chooses. */
 export function initLookingGlass() {
   const pref = storedPref();
   document.documentElement.classList.toggle("dark", pref ? pref === "dark" : systemDark());
@@ -36,7 +33,6 @@ export function initLookingGlass() {
   });
 }
 
-// Easter egg: 10 clicks on the toggle within 6.5 seconds sets off the Cheshire flashbang.
 const SPAM_CLICKS = 10;
 const SPAM_WINDOW_MS = 6500;
 let recentClicks: number[] = [];
@@ -49,7 +45,6 @@ function countClick() {
   }
 }
 
-/** Shared dark-mode state: every toggle (and the toaster) stays in sync. */
 export function useLookingGlass() {
   const [on, setOn] = useState(isDark);
   useEffect(() => {
@@ -58,9 +53,9 @@ export function useLookingGlass() {
     return () => window.removeEventListener(THEME_EVENT, sync);
   }, []);
   function toggle() {
-    countClick(); // every click counts toward the Easter egg, even mid-flip
+    countClick();
     const root = document.documentElement;
-    if (root.classList.contains("through-glass")) return; // mid-flip: ignore double clicks
+    if (root.classList.contains("through-glass")) return;
     const next = !isDark();
     try {
       localStorage.setItem(KEY, next ? "1" : "0");
@@ -72,7 +67,6 @@ export function useLookingGlass() {
       applyDark(next);
       return;
     }
-    // A quick flip: colours swap at the narrowest point, and the next click is accepted right after.
     root.classList.add("through-glass");
     setTimeout(() => applyDark(next), 140);
     setTimeout(() => root.classList.remove("through-glass"), 330);

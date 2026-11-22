@@ -277,8 +277,6 @@ async fn features(State(st): State<AppState>) -> J {
     }))
 }
 
-/// Public, aggregate-only numbers for the landing page: proof the learn-it-yourself path is used.
-/// Counts only; no user, session or problem details leave the server.
 async fn stats(State(st): State<AppState>) -> ApiResult<Json<Value>> {
     let (solves, testimonies): (i64, i64) = sqlx::query_as(
         "SELECT COUNT(*) FILTER (WHERE status IN ('solved', 'done')),
