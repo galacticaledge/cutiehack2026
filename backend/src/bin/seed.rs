@@ -152,8 +152,8 @@ async fn seed_history(
         }
         let sid = new_id();
         sqlx::query(
-            "INSERT INTO problem_sessions (id, user_id, source, template_id, seed, hints_used, status, explain_passed, explanation, explain_feedback, started_at, solved_at)
-             VALUES ($1, $2, 'bank', $3, $4, $5, 'done', true, $6, 'Clear explanation of the key idea. Nice work!', now() - interval '1 day', now() - interval '1 day' + interval '4 minutes')",
+            "INSERT INTO problem_sessions (id, user_id, source, template_id, concept_id, seed, hints_used, status, explain_passed, explanation, explain_feedback, started_at, solved_at)
+             VALUES ($1, $2, 'bank', $3, (SELECT id FROM concepts WHERE bank_template_id = $3), $4, $5, 'done', true, $6, 'Clear explanation of the key idea. Nice work!', now() - interval '1 day', now() - interval '1 day' + interval '4 minutes')",
         )
         .bind(&sid)
         .bind(&user.id)

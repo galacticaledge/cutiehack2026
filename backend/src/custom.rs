@@ -1,8 +1,8 @@
 //! Bring-your-own problem/topic intake (SPEC §8.6) and generated topic problems. Results are SERVER ONLY.
 use crate::answers::parse_answer;
-use crate::concepts::{Concept, get_concept, is_code, match_alias};
+use crate::concepts::{Concept, match_alias};
 use crate::context::CustomRef;
-use crate::llm::{Kind, complete_json};
+use crate::llm::{BoundedJson, Kind, Msg, complete_bounded, complete_json};
 use crate::problems::get_template;
 use crate::prompts;
 use crate::quest::{Quest, agrees, draw_code, finish_code, instantiate, parse_code_template};
@@ -84,26 +84,38 @@ pub async fn intake_problem(state: &AppState, text: &str) -> CustomRef {
     }
 }
 
-pub struct TopicClass {
+pub struct TopicClass<'a> {
     pub academic: bool,
-    pub concept: Option<&'static Concept>,
+    pub concept: Option<&'a Concept>,
 }
 
-/// Map a named topic onto ONE knowledge-graph node. Deterministic alias match first
-/// (short topics only), then an LLM restricted to the closed node list.
-pub async fn classify_topic(state: &AppState, text: &str) -> TopicClass {
+/// Keep free-text/reward topic classification on the public catalog. Private practice uses IDs.
+pub async fn classify_topic<'a>(
+    state: &AppState,
+    text: &str,
+    public: &'a [Concept],
+) -> TopicClass<'a> {
     if text.chars().count() <= 80
-        && let Some(c) = match_alias(text)
+        && let Some(c) = match_alias(public, text)
     {
         return TopicClass {
             academic: true,
             concept: Some(c),
         };
     }
-    match complete_json(state, Kind::Check, &prompts::intake_topic(text), None).await {
+    match complete_json(
+        state,
+        Kind::Check,
+        &prompts::intake_topic(text, public),
+        None,
+    )
+    .await
+    {
         Ok(Some(v)) => TopicClass {
             academic: v["academic"].as_bool() != Some(false),
-            concept: v["conceptId"].as_str().and_then(get_concept),
+            concept: v["conceptId"]
+                .as_str()
+                .and_then(|id| public.iter().find(|c| c.id == id)),
         },
         Ok(None) => TopicClass {
             academic: true,
@@ -119,12 +131,26 @@ pub async fn classify_topic(state: &AppState, text: &str) -> TopicClass {
     }
 }
 
-async fn independent_answer(state: &AppState, prompt: &str) -> Option<f64> {
-    let v = complete_json(
+async fn math_completion(
+    state: &AppState,
+    messages: &[Msg],
+    private: bool,
+    bound: BoundedJson,
+) -> anyhow::Result<Option<Value>> {
+    if private {
+        let text = complete_bounded(state, messages, bound).await?;
+        Ok(serde_json::from_str(&text).ok())
+    } else {
+        complete_json(state, Kind::Tutor, messages, Some("medium")).await
+    }
+}
+
+async fn independent_answer(state: &AppState, prompt: &str, private: bool) -> Option<f64> {
+    let v = math_completion(
         state,
-        Kind::Tutor,
         &prompts::quest_solve(prompt),
-        Some("medium"),
+        private,
+        BoundedJson::QuestAnswer,
     )
     .await
     .ok()??;
@@ -138,15 +164,15 @@ async fn independent_answer(state: &AppState, prompt: &str) -> Option<f64> {
 /// Generate a checked problem for a concept: LLM template → server-picked numbers →
 /// math-engine answer → independent LLM solve must agree. None if any step fails.
 pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> Option<Quest> {
-    if is_code(concept) && state.cfg.code_runner_enabled() {
+    if concept.is_code() && state.cfg.code_runner_enabled() {
         return generate_code_quest(state, concept, seed).await;
     }
     for attempt in 0..2 {
-        let v = match complete_json(
+        let v = match math_completion(
             state,
-            Kind::Tutor,
             &prompts::quest_template(concept),
-            Some("medium"),
+            concept.is_private(),
+            BoundedJson::QuestTemplate,
         )
         .await
         {
@@ -157,11 +183,11 @@ pub async fn generate_quest(state: &AppState, concept: &Concept, seed: i64) -> O
                 return None;
             }
         };
-        let Some(q) = instantiate(concept.id, &v, seed.wrapping_add(attempt)) else {
+        let Some(q) = instantiate(&concept.id, &v, seed.wrapping_add(attempt)) else {
             tracing::warn!("[quest] template for {} didn't validate", concept.id);
             continue;
         };
-        match independent_answer(state, &q.prompt).await {
+        match independent_answer(state, &q.prompt, concept.is_private()).await {
             Some(n) if agrees(q.answer, n) => return Some(q),
             other => tracing::warn!(
                 "[quest] cross-check failed for {} (independent: {other:?})",
@@ -211,7 +237,7 @@ async fn generate_code_quest(state: &AppState, concept: &Concept, seed: i64) -> 
             };
             match sbx.run_python(&d.code).await {
                 Ok(out) if out.exit_code == 0 => {
-                    if let Some(q) = finish_code(concept.id, d, &out.stdout) {
+                    if let Some(q) = finish_code(&concept.id, d, &out.stdout) {
                         found = Some(q);
                         break;
                     }

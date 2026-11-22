@@ -1,11 +1,12 @@
 //! Session services and the client-safe session view.
 use crate::answers::{attempts_allowed, is_locked};
 use crate::anticheat::{SKETCH_FAILED, TelemetryEvent, compute_flags};
-use crate::concepts::{Concept, concept_of_key, missing_prereqs, reward_key};
+use crate::concepts::{Concept, public_concepts, reward_key, visible_concept};
 use crate::config::Config;
 use crate::context::{ProblemContext, problem_context};
 use crate::error::{ApiResult, AppError};
 use crate::models::{Event, Message, ProblemSession, Reward, User, new_id};
+use crate::personalized::PRIVATE_PRACTICE_REASON;
 use crate::problems::get_template;
 use crate::proficiency::utc_day;
 use crate::prompts::opening_message;
@@ -17,7 +18,7 @@ use crate::verify::{Verdict, verdict_chips};
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
-use sqlx::PgPool;
+use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashSet;
 use std::ops::Range;
 
@@ -59,33 +60,46 @@ pub async fn reward_elsewhere(
 }
 
 /// Concepts the student has demonstrated: solved AND passed explain-back (paid or practice).
-pub async fn mastered_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<HashSet<String>> {
-    let keys: Vec<String> = sqlx::query_scalar(
-        "SELECT DISTINCT template_id FROM problem_sessions
-         WHERE user_id = $1 AND source IN ('bank','quest') AND status = 'done' AND explain_passed AND template_id IS NOT NULL",
+pub async fn mastered_concepts<'e>(
+    db: impl Executor<'e, Database = Postgres>,
+    user_id: &str,
+) -> sqlx::Result<HashSet<String>> {
+    let ids = sqlx::query_scalar(
+        "SELECT DISTINCT s.concept_id FROM problem_sessions s JOIN concepts c ON c.id = s.concept_id
+         WHERE s.user_id = $1 AND (c.owner_id IS NULL OR c.owner_id = s.user_id)
+           AND s.source IN ('bank','quest') AND s.status = 'done' AND s.explain_passed",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(db)
     .await?;
-    Ok(keys
-        .iter()
-        .filter_map(|k| concept_of_key(k))
-        .map(String::from)
-        .collect())
+    Ok(ids.into_iter().collect())
 }
 
 /// Concepts with any reward record (paid, minting, failed or forfeited).
 pub async fn rewarded_concepts(pool: &PgPool, user_id: &str) -> anyhow::Result<HashSet<String>> {
-    let keys: Vec<String> =
-        sqlx::query_scalar("SELECT template_id FROM rewards WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_all(pool)
-            .await?;
-    Ok(keys
-        .iter()
-        .filter_map(|k| concept_of_key(k))
-        .map(String::from)
-        .collect())
+    let ids = sqlx::query_scalar(
+        "SELECT c.id FROM rewards r JOIN concepts c
+           ON (r.template_id = c.bank_template_id OR r.template_id = 'concept:' || c.id)
+         WHERE r.user_id = $1 AND c.owner_id IS NULL",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(ids.into_iter().collect())
+}
+
+/// A stored public concept and matching bank/quest key are required for any payout, even on retry.
+pub(crate) async fn has_public_reward_key(pool: &PgPool, s: &ProblemSession) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT FROM concepts c WHERE c.id = $1 AND c.owner_id IS NULL AND
+           (($2 = 'bank' AND c.bank_template_id = $3) OR
+            ($2 = 'quest' AND c.bank_template_id IS NULL AND 'concept:' || c.id = $3)))",
+    )
+    .bind(&s.concept_id)
+    .bind(&s.source)
+    .bind(&s.template_id)
+    .fetch_one(pool)
+    .await
 }
 
 /// New-topic rewards recorded today.
@@ -104,17 +118,28 @@ pub async fn topic_block_reason(
     user_id: &str,
     c: &Concept,
 ) -> anyhow::Result<Option<String>> {
-    if reward_elsewhere(&state.pool, user_id, &reward_key(c.id), "").await? {
+    if c.is_private() {
+        return Ok(Some(PRIVATE_PRACTICE_REASON.into()));
+    }
+    if reward_elsewhere(&state.pool, user_id, &reward_key(&c.id), "").await? {
         return Ok(Some(format!(
             "You've already earned on {}. This one is practice.",
             c.title
         )));
     }
-    let missing = missing_prereqs(c.id, &mastered_concepts(&state.pool, user_id).await?);
-    if !missing.is_empty() {
-        let names = missing
+    let mastered = mastered_concepts(&state.pool, user_id).await?;
+    if !c.ready(&mastered) {
+        let graph = public_concepts(&state.pool).await?;
+        let names = c
+            .prereqs
             .iter()
-            .map(|m| m.title)
+            .filter(|id| !mastered.contains(*id))
+            .map(|id| {
+                graph
+                    .iter()
+                    .find(|c| &c.id == id)
+                    .map_or(id.as_str(), |prereq| prereq.title.as_str())
+            })
             .collect::<Vec<_>>()
             .join(" and ");
         return Ok(Some(format!(
@@ -131,25 +156,28 @@ pub async fn topic_block_reason(
     Ok(None)
 }
 
-/// An unfinished generated problem on this concept. Reused instead of generating a new one,
-/// so a student can't reroll until they get an easy problem.
-pub async fn active_quest(
-    pool: &PgPool,
+/// Public quests never reroll. A private quest can be replaced once it has no attempts left;
+/// the exhausted row, its attempts, and its messages remain available as history.
+pub async fn active_quest<'e>(
+    db: impl Executor<'e, Database = Postgres>,
     user_id: &str,
-    concept_id: &str,
+    concept: &Concept,
 ) -> anyhow::Result<Option<ProblemSession>> {
-    Ok(sqlx::query_as::<_, ProblemSession>(
-        "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'quest' AND template_id = $2 AND status IN ('active','solved')
-         ORDER BY started_at DESC LIMIT 1",
+    let latest = sqlx::query_as::<_, ProblemSession>(
+        "SELECT * FROM problem_sessions WHERE user_id = $1 AND source = 'quest' AND concept_id = $2 AND status IN ('active','solved')
+         ORDER BY started_at DESC, id DESC LIMIT 1",
     )
     .bind(user_id)
-    .bind(reward_key(concept_id))
-    .fetch_optional(pool)
-    .await?)
+    .bind(&concept.id)
+    .fetch_optional(db)
+    .await?;
+    Ok(latest.filter(|s| {
+        !concept.is_private() || s.status != "active" || !is_locked(s.wrong_attempts, s.hints_used)
+    }))
 }
 
-pub async fn insert_message(
-    pool: &PgPool,
+pub async fn insert_message<'e>(
+    db: impl Executor<'e, Database = Postgres>,
     session_id: &str,
     role: &str,
     content: &str,
@@ -161,7 +189,7 @@ pub async fn insert_message(
         .bind(role)
         .bind(content)
         .bind(verdicts)
-        .fetch_one(pool)
+        .fetch_one(db)
         .await?)
 }
 
@@ -174,15 +202,17 @@ pub async fn history(pool: &PgPool, session_id: &str) -> anyhow::Result<Vec<Mess
     .await?)
 }
 
-pub async fn load_session(pool: &PgPool, id: &str, user_id: &str) -> ApiResult<ProblemSession> {
-    let s = sqlx::query_as::<_, ProblemSession>("SELECT * FROM problem_sessions WHERE id = $1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
-    match s {
-        Some(s) if s.user_id == user_id => Ok(s),
-        _ => Err(AppError::not_found("Session not found.")),
-    }
+pub async fn load_session(state: &AppState, id: &str, user_id: &str) -> ApiResult<ProblemSession> {
+    sqlx::query_as(
+        "SELECT s.* FROM problem_sessions s LEFT JOIN concepts c ON c.id = s.concept_id
+         WHERE s.id = $1 AND s.user_id = $2 AND (c.owner_id IS NULL OR ($3 AND c.owner_id = s.user_id))",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(state.cfg.personalized_concepts_enabled)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Session not found."))
 }
 
 pub(crate) fn ensure_answer_unlocked(s: &ProblemSession) -> ApiResult<()> {
@@ -209,15 +239,12 @@ pub(crate) async fn record_checked_answer(
     ctx: &ProblemContext,
     correct: bool,
 ) -> ApiResult<CheckedAnswer> {
-    let concept_id = s
-        .template_id
-        .as_deref()
-        .and_then(concept_of_key)
-        .ok_or_else(|| anyhow::anyhow!("checked session {} has no concept", s.id))?;
     let mut tx = pool.begin().await?;
     // Serialize accepted answers and hints for this session, never tutor or grader calls.
     let current = sqlx::query_as::<_, ProblemSession>(
-        "SELECT * FROM problem_sessions WHERE id = $1 AND user_id = $2 FOR NO KEY UPDATE",
+        "SELECT s.* FROM problem_sessions s JOIN concepts c ON c.id = s.concept_id
+         WHERE s.id = $1 AND s.user_id = $2 AND (c.owner_id IS NULL OR c.owner_id = s.user_id)
+         FOR NO KEY UPDATE OF s",
     )
     .bind(&s.id)
     .bind(&s.user_id)
@@ -235,7 +262,7 @@ pub(crate) async fn record_checked_answer(
     )
     .bind(new_id())
     .bind(&current.user_id)
-    .bind(concept_id)
+    .bind(&current.concept_id)
     .bind(&current.id)
     .bind(correct)
     .bind(current.hints_used)
@@ -307,16 +334,15 @@ pub async fn create_bank_session(
     template_id: &str,
     from_session_id: Option<&str>,
 ) -> ApiResult<ProblemSession> {
-    if get_template(template_id).is_none() {
-        return Err(AppError::bad("Unknown problem."));
-    }
+    let t = get_template(template_id).ok_or_else(|| AppError::bad("Unknown problem."))?;
     let s = sqlx::query_as::<_, ProblemSession>(
-        "INSERT INTO problem_sessions (id, user_id, source, template_id, seed, from_session_id) VALUES ($1, $2, 'bank', $3, $4, $5) RETURNING *",
+        "INSERT INTO problem_sessions (id, user_id, source, template_id, seed, from_session_id, concept_id)
+         VALUES ($1, $2, 'bank', $3, $4, $5, (SELECT id FROM concepts WHERE bank_template_id = $3)) RETURNING *",
     )
     .bind(new_id())
     .bind(&user.id)
-    .bind(template_id)
-    .bind(seed_for(&state.cfg, &user.username, template_id))
+    .bind(t.id)
+    .bind(seed_for(&state.cfg, &user.username, t.id))
     .bind(from_session_id)
     .fetch_one(&state.pool)
     .await?;
@@ -348,17 +374,20 @@ async fn load_session_with_attempts(
     id: &str,
     user_id: &str,
     today: &Range<DateTime<Utc>>,
+    allow_private: bool,
 ) -> ApiResult<SessionWithAttempts> {
     sqlx::query_as(
         "SELECT s.*, (SELECT COUNT(*) FROM answer_attempts a
                       WHERE a.session_id = s.id AND a.attempted_at >= $3 AND a.attempted_at < $4)
                       AS attempts_today
-         FROM problem_sessions s WHERE s.id = $1 AND s.user_id = $2",
+         FROM problem_sessions s LEFT JOIN concepts c ON c.id = s.concept_id
+         WHERE s.id = $1 AND s.user_id = $2 AND (c.owner_id IS NULL OR ($5 AND c.owner_id = s.user_id))",
     )
     .bind(id)
     .bind(user_id)
     .bind(today.start)
     .bind(today.end)
+    .bind(allow_private)
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| AppError::not_found("Session not found."))
@@ -370,27 +399,50 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
     let SessionWithAttempts {
         session: s,
         attempts_today,
-    } = load_session_with_attempts(&state.pool, id, user_id, &today).await?;
+    } = load_session_with_attempts(
+        &state.pool,
+        id,
+        user_id,
+        &today,
+        state.cfg.personalized_concepts_enabled,
+    )
+    .await?;
     let ctx = problem_context(&s)?;
+    let concept = if let Some(concept_id) = &s.concept_id {
+        visible_concept(&state.pool, user_id, concept_id).await?
+    } else {
+        None
+    };
     let messages = history(&state.pool, &s.id).await?;
-    let reward = sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
-        .bind(&s.id)
-        .fetch_optional(&state.pool)
-        .await?;
     let is_bank = ctx.is_bank();
     let earns = ctx.earns();
-    let practice_reason = ctx.custom_ref.practice_reason.clone();
-    let practice = if earns {
-        practice_reason.is_some()
-            || reward_elsewhere(
-                &state.pool,
-                &s.user_id,
-                s.template_id.as_deref().unwrap_or_default(),
-                &s.id,
-            )
+    let public_reward = earns && has_public_reward_key(&state.pool, &s).await?;
+    let reward = if public_reward {
+        sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE session_id = $1")
+            .bind(&s.id)
+            .fetch_optional(&state.pool)
             .await?
     } else {
-        true
+        None
+    };
+    let practice_reason = if concept.as_ref().is_some_and(Concept::is_private) {
+        Some(PRIVATE_PRACTICE_REASON.to_owned())
+    } else {
+        ctx.custom_ref.practice_reason.clone()
+    };
+    let practice = !public_reward
+        || practice_reason.is_some()
+        || reward_elsewhere(
+            &state.pool,
+            user_id,
+            s.template_id.as_deref().unwrap_or_default(),
+            &s.id,
+        )
+        .await?;
+    let title = if let Some(c) = concept.as_ref().filter(|_| ctx.is_quest()) {
+        format!("New topic: {}", c.title)
+    } else {
+        ctx.title.clone()
     };
     let base = if ctx.is_quest() {
         QUEST_BASE
@@ -421,9 +473,9 @@ pub async fn session_view(state: &AppState, id: &str, user_id: &str) -> ApiResul
         "id": s.id,
         "source": s.source,
         "templateId": if is_bank { s.template_id.clone() } else { None },
-        "conceptId": ctx.custom_ref.concept_id,
+        "conceptId": concept.as_ref().map(|c| &c.id),
         "checkedBy": ctx.custom_ref.quest.as_ref().map(|q| if q.ran_in_sandbox { "sandbox" } else { "engine" }),
-        "title": ctx.title,
+        "title": title,
         "prompt": ctx.display_prompt,
         "difficulty": ctx.difficulty,
         // Number of machine-checkable steps (never their values): drives the Cheshire grin's progress.
@@ -479,7 +531,7 @@ mod tests {
                     ('other', 'v', 'other', 'linear-equations', '2026-03-09 00:00:00+00', true, 0)",
         ).execute(&pool).await.unwrap();
         let today = utc_day("2026-03-09T09:00:00Z".parse().unwrap());
-        let view = load_session_with_attempts(&pool, "s", "u", &today)
+        let view = load_session_with_attempts(&pool, "s", "u", &today, false)
             .await
             .unwrap();
         assert_eq!(view.attempts_today, 1);
@@ -493,8 +545,8 @@ mod tests {
         sqlx::query("INSERT INTO users (id, username, wallet_pubkey, wallet_secret) VALUES ('u', 'u', 'pub', 'test')")
             .execute(&pool).await.unwrap();
         let s = sqlx::query_as::<_, ProblemSession>(
-            "INSERT INTO problem_sessions (id, user_id, template_id, wrong_attempts)
-             VALUES ('s', 'u', 'alg-linear-1', 4) RETURNING *",
+            "INSERT INTO problem_sessions (id, user_id, template_id, concept_id, wrong_attempts)
+             VALUES ('s', 'u', 'alg-linear-1', 'linear-equations', 4) RETURNING *",
         )
         .fetch_one(&pool)
         .await
@@ -503,7 +555,7 @@ mod tests {
         // Keep a fixed counting window even if the test straddles UTC midnight.
         let window =
             Utc::now() - chrono::Duration::minutes(1)..Utc::now() + chrono::Duration::minutes(1);
-        let view = || load_session_with_attempts(&pool, &s.id, &s.user_id, &window);
+        let view = || load_session_with_attempts(&pool, &s.id, &s.user_id, &window, false);
         assert_eq!(view().await.unwrap().attempts_today, 0);
         let (a, b) = tokio::join!(
             record_checked_answer(&pool, &s, &ctx, false),
@@ -531,10 +583,7 @@ mod tests {
             .err()
             .unwrap();
         assert_eq!(err.status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(
-            load_session(&pool, &s.id, &s.user_id).await.unwrap().status,
-            "active"
-        );
+        assert_eq!(view().await.unwrap().session.status, "active");
         assert_eq!(view().await.unwrap().attempts_today, 1);
         sqlx::query("ALTER TABLE events DROP CONSTRAINT test_reject_solve")
             .execute(&pool)

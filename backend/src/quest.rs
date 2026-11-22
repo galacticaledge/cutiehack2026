@@ -49,7 +49,7 @@ fn parse_params(v: &Value, texts: &[&str]) -> Option<Ranges> {
         }
         let arr = r.as_array()?;
         let (lo, hi) = (arr.first()?.as_i64()?, arr.get(1)?.as_i64()?);
-        if lo > hi || lo.abs() > 10_000 || hi.abs() > 10_000 || hi - lo < 2 {
+        if !(-10_000..=10_000).contains(&lo) || !(-10_000..=10_000).contains(&hi) || hi - lo < 2 {
             return None;
         }
         let ph = format!("[[{ch}]]");
@@ -302,6 +302,9 @@ mod tests {
         let mut v = tpl();
         v["params"] = json!({ "a": [100, 400], "b": [2, 5], "zz": [1, 9] });
         assert!(instantiate("x", &v, 1).is_none(), "bad placeholder name");
+        let mut v = tpl();
+        v["params"]["a"][0] = json!(i64::MIN);
+        assert!(instantiate("x", &v, 1).is_none(), "out-of-range bound");
         let mut v = tpl();
         v["params"] = json!({ "a": [100, 400], "b": [3, 3] });
         assert!(instantiate("x", &v, 1).is_none(), "fixed number");
