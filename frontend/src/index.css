@@ -718,3 +718,9 @@ main { position: relative; z-index: 1; }
 .live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 0.35rem; border-radius: 999px; background: var(--potion); vertical-align: middle; animation: live-pulse 1.8s ease-in-out infinite; }
 @keyframes live-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* ---------- Header: which tab you're on ---------- */
+.header-tab.is-active::after {
+  content: ""; position: absolute; left: 50%; bottom: -7px; width: 18px; height: 3px; border-radius: 999px;
+  transform: translateX(-50%); background: var(--gold-soft); box-shadow: 0 0 8px var(--gold-soft);
+}
