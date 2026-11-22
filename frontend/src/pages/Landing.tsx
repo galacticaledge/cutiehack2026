@@ -1,4 +1,4 @@
-import { Clock, Coffee, FlaskConical, KeyRound, Rabbit } from "lucide-react";
+import { Clock, Coffee, Eye, EyeOff, FlaskConical, KeyRound, Rabbit } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { SocraLogo } from "@/components/logo";
 import { DreamFooter, LookingGlassToggle } from "@/components/scenery";
 import { CastPanel, WhyPanel } from "@/components/guides";
 import { SparkleTrail } from "@/components/celebrations";
-import { api } from "@/lib/api";
+import { api, ApiError, PASSWORD_MAX, PASSWORD_MIN, signUpThrowaway, USERNAME_RE } from "@/lib/api";
 
 const FLOATERS = [
   { Icon: Clock, cls: "left-[6%] top-[14%] size-10", r: "-12deg", delay: "0s" },
@@ -25,7 +25,11 @@ const STEPS = [
 ];
 
 export function Landing() {
+  const [mode, setMode] = useState<"signup" | "login">("signup");
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [suggestOther, setSuggestOther] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vanishes, setVanishes] = useState(0);
@@ -35,8 +39,7 @@ export function Landing() {
     setLoading(true);
     setError(null);
     try {
-      const name = `guest-${Math.random().toString(36).slice(2, 8)}`;
-      await api("/api/auth/login", { username: name });
+      await signUpThrowaway("guest");
       const { sessionId } = await api<{ sessionId: string }>("/api/sessions", { templateId: "cs-trace-loop-1" });
       navigate(`/learn/${sessionId}`, { state: { fresh: true } });
     } catch (err) {
@@ -53,15 +56,32 @@ export function Landing() {
   }
   const navigate = useNavigate();
 
+  const name = username.trim().toLowerCase();
+  const nameProblem = name && !USERNAME_RE.test(name) ? "2–24 characters: letters, numbers, - and _." : null;
+  const passwordProblem =
+    password && (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) ? `${PASSWORD_MIN}–${PASSWORD_MAX} characters.` : null;
+  const canSubmit = !loading && USERNAME_RE.test(name) && password.length >= PASSWORD_MIN && password.length <= PASSWORD_MAX;
+
+  function switchMode(m: "signup" | "login") {
+    setMode(m);
+    setError(null);
+    setSuggestOther(false);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
     setLoading(true);
     setError(null);
+    setSuggestOther(false);
     try {
-      await api("/api/auth/login", { username });
+      await api(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", { username: name, password });
       navigate("/learn");
     } catch (err) {
+      const status = (err as ApiError).status;
       setError((err as Error).message);
+      // "already taken" on sign-up, or "unknown" on log-in, usually means the other tab was meant
+      setSuggestOther((mode === "signup" && status === 409) || (mode === "login" && status === 401));
     } finally {
       setLoading(false);
     }
@@ -117,18 +137,78 @@ export function Landing() {
           </p>
         </div>
 
-        <form onSubmit={submit} className="parchment mx-auto flex w-full max-w-md gap-2 rounded-2xl p-2">
-          <Input
-            autoFocus
-            placeholder="Who are YOU? (pick a username)"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="h-11 border-0 bg-transparent text-base shadow-none focus-visible:ring-0"
-            aria-label="Username"
-          />
-          <Button type="submit" size="lg" className="h-11 px-5" disabled={loading || !username.trim()}>
-            {loading ? "Falling…" : "Follow the rabbit"}
+        <form onSubmit={submit} className="parchment mx-auto w-full max-w-md space-y-3 rounded-2xl p-4" aria-label={mode === "signup" ? "Create an account" : "Log in"}>
+          <div className="grid grid-cols-2 gap-1 rounded-full border border-[var(--border)] bg-background/60 p-0.5" role="tablist" aria-label="Account">
+            {(
+              [
+                ["signup", "New here?"],
+                ["login", "Welcome back"],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => switchMode(m)}
+                className={`rounded-full py-1.5 text-sm font-semibold transition ${mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <Input
+              autoFocus
+              placeholder={mode === "signup" ? "Who are YOU? (pick a username)" : "Your username"}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="h-11 bg-background/60 text-base"
+              aria-label="Username"
+              aria-invalid={Boolean(nameProblem)}
+            />
+            {nameProblem && <p className="px-1 text-xs text-destructive">{nameProblem}</p>}
+          </div>
+          <div className="space-y-1">
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder={mode === "signup" ? `Choose a password (${PASSWORD_MIN}+ characters)` : "Your password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                maxLength={PASSWORD_MAX}
+                className="h-11 bg-background/60 pr-11 text-base"
+                aria-label="Password"
+                aria-invalid={Boolean(passwordProblem)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {passwordProblem && <p className="px-1 text-xs text-destructive">{passwordProblem}</p>}
+          </div>
+          <Button type="submit" size="lg" className="h-11 w-full" disabled={!canSubmit}>
+            {loading ? "Falling…" : mode === "signup" ? "Follow the rabbit" : "Back down the rabbit hole"}
           </Button>
+          {error && (
+            <p className="text-center text-sm text-destructive" role="alert">
+              {error}{" "}
+              {suggestOther && (
+                <button type="button" className="font-semibold underline" onClick={() => switchMode(mode === "signup" ? "login" : "signup")}>
+                  {mode === "signup" ? "Log in instead?" : "Create an account instead?"}
+                </button>
+              )}
+            </p>
+          )}
         </form>
         <p className="-mt-5 text-center text-sm text-muted-foreground">
           Just looking?{" "}
@@ -136,7 +216,6 @@ export function Landing() {
             Use a guest pass to the Mad Hatter's tea party →
           </button>
         </p>
-        {error && <p className="-mt-6 text-center text-sm text-destructive">{error}</p>}
 
         <ol className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((s, i) => (
