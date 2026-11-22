@@ -30,5 +30,6 @@ pub mod sessions;
 pub mod solana;
 pub mod solari;
 pub mod state;
+pub mod treasury;
 pub mod tts;
 pub mod tutor;

@@ -57,6 +57,8 @@ pub fn api_router() -> Router<AppState> {
             post(personalized::accept),
         )
         .route("/api/journal", get(journal))
+        .route("/api/tarts", get(crate::treasury::treasury))
+        .route("/api/tarts/estimate", get(crate::treasury::estimate_route))
         .route("/api/features", get(features))
         .route("/api/tts", post(tts))
         .route("/api/sessions", post(create_session))
