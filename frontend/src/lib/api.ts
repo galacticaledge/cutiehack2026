@@ -216,3 +216,39 @@ export async function signUpThrowaway(prefix: "guest" | "copycat") {
   }
   throw new ApiError(409, "Couldn't find a free guest name. Please try again.");
 }
+
+export interface TartsLedgerEntry extends RewardView {
+  sessionId: string;
+  kind: "problem" | "topic";
+  title: string;
+  createdAt: string;
+}
+
+export interface TartsRates {
+  bankBase: number[];
+  questBase: number;
+  hintMult: number[];
+  attemptStep: number;
+  attemptFloor: number;
+  testimonyMiss: number;
+  minimumShare: number;
+}
+
+export interface Treasury {
+  earnedToday: number;
+  dailyCap: number;
+  topicRewardsToday: number;
+  dailyTopicCap: number;
+  mintUrl: string | null;
+  totals: { paid: number; paidCount: number; forfeitedCount: number; pendingCount: number };
+  daily: { date: string; amount: number }[];
+  ledger: TartsLedgerEntry[];
+  rates: TartsRates;
+}
+
+export interface TartsEstimate {
+  amount: number;
+  uncapped: number;
+  summary: string;
+  note: string | null;
+}

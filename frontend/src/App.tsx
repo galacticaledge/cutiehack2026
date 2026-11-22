@@ -14,10 +14,12 @@ const loadLearn = () => import("@/pages/Learn").then((m) => ({ default: m.Learn 
 const loadWorkspace = () => import("@/pages/Workspace").then((m) => ({ default: m.Workspace }));
 const loadJournal = () => import("@/pages/Journal").then((m) => ({ default: m.Journal }));
 const loadMap = () => import("@/pages/WonderMap").then((m) => ({ default: m.WonderMap }));
+const loadTarts = () => import("@/pages/Tarts").then((m) => ({ default: m.Tarts }));
 const Learn = lazy(loadLearn);
 const Workspace = lazy(loadWorkspace);
 const Journal = lazy(loadJournal);
 const WonderMap = lazy(loadMap);
+const Tarts = lazy(loadTarts);
 
 /** Warm the likely next pages once the browser is idle, so moving on feels instant. */
 function usePrefetchPages() {
@@ -54,6 +56,7 @@ export default function App() {
           <Route path="/learn/:sessionId" element={<Workspace />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/map" element={<WonderMap />} />
+          <Route path="/tarts" element={<Tarts />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

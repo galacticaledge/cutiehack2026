@@ -55,13 +55,14 @@ export function Header() {
             </Link>
             <SoundToggle className="text-[#d6ecf7] hover:text-white" />
             <LookingGlassToggle className="text-[#d6ecf7] hover:text-white" />
-            <span
-              className="flex items-center gap-1.5 rounded-full bg-[#faf8f1] px-3 py-1 font-semibold text-[var(--night)]"
-              title={`Tarts earned today: ${me.earnedToday} / ${me.dailyCap}`}
+            <Link
+              to="/tarts"
+              className="flex items-center gap-1.5 rounded-full bg-[#faf8f1] px-3 py-1 font-semibold text-[var(--night)] ring-[var(--gold-soft)] transition hover:ring-2"
+              title={`The Tart Treasury · earned today: ${me.earnedToday} / ${me.dailyCap}`}
             >
               <Tart />
               {me.balance.toLocaleString()} <span className="hidden sm:inline">TARTS</span>
-            </span>
+            </Link>
             {/* The name is you: it opens your journal. The wallet is its own link, only when it holds real (devnet) tarts. */}
             <Link
               to="/journal"
