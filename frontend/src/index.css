@@ -573,11 +573,38 @@ main { position: relative; z-index: 1; }
 .graph-node:focus { outline: none; }
 .graph-node:focus-visible .graph-ring, .graph-node.is-selected .graph-ring { stroke: var(--gold-soft); stroke-width: 4; }
 .graph-node:hover .graph-label { text-decoration: underline; }
-.graph-label { font-size: 12.5px; fill: currentColor; paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
+.graph-label { font-size: 12.5px; fill: currentColor; paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
 .graph-node.is-selected .graph-label { font-weight: 700; }
-.graph-band { fill: color-mix(in oklab, var(--tan) 6%, transparent); stroke: color-mix(in oklab, var(--tan) 18%, transparent); }
-.graph-band.is-alt { fill: color-mix(in oklab, var(--potion) 5%, transparent); }
-.graph-band-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; fill: var(--tan); }
+.graph-sublabel { font-size: 10px; letter-spacing: 0.06em; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 3px; stroke-linejoin: round; }
+
+/* ---------- Down the rabbit hole (knowledge graph) ---------- */
+:root { --hole-open: #fff8e6; --hole-own: #efe2ff; --hole-halo: #f6efe0; --hole-top: #eadcbf; --hole-bottom: #c9b6e4; --hole-mouth-in: #2a1f17; --hole-mouth-out: #6b4e33; }
+.dark { --hole-open: #3a2e1a; --hole-own: #2d2140; --hole-halo: #1d1530; --hole-top: #3a2c24; --hole-bottom: #120b22; --hole-mouth-in: #05030a; --hole-mouth-out: #2a1d14; }
+.rabbit-hole { background: color-mix(in oklab, var(--card) 70%, transparent); border: 1px solid var(--border); }
+.rh-stop-top { stop-color: var(--hole-top); }
+.rh-stop-bottom { stop-color: var(--hole-bottom); }
+.rh-mouth-in { stop-color: var(--hole-mouth-in); }
+.rh-mouth-out { stop-color: var(--hole-mouth-out); }
+.rh-wall-dark { stop-color: #3b2a1a; stop-opacity: 0.32; }
+.rh-wall-clear { stop-color: #3b2a1a; stop-opacity: 0; }
+.dark .rh-wall-dark { stop-color: #000; stop-opacity: 0.55; }
+.dark .rh-wall-clear { stop-color: #000; stop-opacity: 0; }
+.rh-shaft { stroke: color-mix(in oklab, var(--tan) 55%, transparent); stroke-width: 3; stroke-dasharray: 2 7; stroke-linecap: round; }
+.rh-mouth { stroke: #6f8f3f; stroke-width: 4; }
+.rh-grass { stroke: #7da64a; stroke-width: 2; stroke-linecap: round; fill: none; }
+.dark .rh-grass, .dark .rh-mouth { stroke: #4c6b33; }
+.rh-ledge { stroke: color-mix(in oklab, var(--tan) 45%, transparent); stroke-width: 1.5; stroke-dasharray: 1 6; stroke-linecap: round; }
+.rh-ledge-label { font-family: var(--font-display, serif); font-size: 13px; font-style: italic; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 4px; stroke-linejoin: round; }
+.rh-suit { font-size: 12px; fill: var(--night); pointer-events: none; }
+.rh-suit.is-red { fill: var(--heart); }
+.rh-suit.is-own { fill: var(--cheshire); }
+.dark .rh-suit:not(.is-red):not(.is-own) { fill: #f1d79a; }
+.rh-clutter { font-size: 20px; fill: color-mix(in oklab, var(--tan) 70%, transparent); animation: rh-drift 7s ease-in-out infinite; }
+@keyframes rh-drift { 0%, 100% { transform: translateY(-6px) rotate(-14deg); } 50% { transform: translateY(8px) rotate(16deg); } }
+.rh-fall { animation: rh-fall 0.7s cubic-bezier(0.3, 0.7, 0.35, 1.15) backwards; }
+@keyframes rh-fall { from { opacity: 0; transform: translateY(-46px) rotate(-8deg); } }
+@media (prefers-reduced-motion: reduce) { .rh-clutter, .rh-fall { animation: none; } }
+.rabbit-hole .graph-edge:not(.is-on):not(.is-dim) { opacity: 0.45; }
 @media (prefers-reduced-motion: reduce) { .graph-edge, .graph-node { transition: none; } }
 
 /* ---------- Judge mode ---------- */
