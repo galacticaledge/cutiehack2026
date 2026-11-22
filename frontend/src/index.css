@@ -613,9 +613,14 @@ main { position: relative; z-index: 1; }
 .rh-fall { animation: rh-fall 0.7s cubic-bezier(0.3, 0.7, 0.35, 1.15) backwards; }
 @keyframes rh-fall { from { opacity: 0; transform: translateY(-46px) rotate(-8deg); } }
 @media (prefers-reduced-motion: reduce) { .rh-clutter, .rh-fall { animation: none; } }
-:root { --tunnel-line: #24170d; --rock: #7a6650; --rock-alt: #5e4c3a; --rock-edge: #2e2217; --bone: #ece2cb; --bone-edge: #6b5841; }
+:root { --tunnel-line: #170c05; --rock: #7a6650; --rock-alt: #5e4c3a; --rock-edge: #2e2217; --bone: #ece2cb; --bone-edge: #6b5841; }
 .dark { --tunnel-line: #0a0603; --rock: #4f3f30; --rock-alt: #3b2e22; --rock-edge: #140d08; --bone: #cfc3a8; --bone-edge: #3d3022; }
-.rabbit-hole .graph-edge { stroke: var(--tunnel-line); stroke-width: 2.6; stroke-linecap: round; opacity: 0.85; }
+:root { --mud: #4a2f1a; --mud-on: #6e4a22; }
+.dark { --mud: #22150a; --mud-on: #4a3416; }
+.rh-mud { fill: none; stroke: var(--mud); stroke-width: 11; stroke-linecap: round; transition: opacity 0.2s ease; }
+.rh-mud.is-on { stroke: var(--mud-on); stroke-width: 13; }
+.rh-mud.is-dim { opacity: 0.25; }
+.rabbit-hole .graph-edge { stroke: var(--tunnel-line); stroke-width: 3; stroke-linecap: round; opacity: 0.9; }
 .rabbit-hole .graph-edge.is-personal { stroke: color-mix(in oklab, var(--cheshire) 75%, black); stroke-dasharray: 6 4; }
 .rabbit-hole .graph-edge.is-on { stroke: var(--gold-soft); stroke-width: 3.2; opacity: 1; }
 .rabbit-hole .graph-edge.is-dim { opacity: 0.2; }

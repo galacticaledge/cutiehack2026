@@ -254,6 +254,11 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
             <stop offset="86%" className="rh-wall-clear" />
             <stop offset="100%" className="rh-wall-dark" />
           </linearGradient>
+          {/* lumpy, uneven edges for the mud tunnels */}
+          <filter id={`mud-${gid}`} x="-5%" y="-5%" width="110%" height="110%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="7" />
+            <feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
           {/* each topic is a freshly dug pit: black at the bottom, earthy at the lip */}
           <radialGradient id={`pit-${gid}`} cx="50%" cy="58%" r="62%">
             <stop offset="0%" className="rh-pit-deep" />
@@ -299,26 +304,39 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
           </g>
         ))}
 
-        {/* links: prerequisite (above) → what it unlocks (below) */}
-        {concepts.flatMap((c) =>
-          c.prereqs
-            .filter((p) => pos.has(p))
-            .map((p) => {
-              const a = pos.get(p)!;
-              const b = pos.get(c.id)!;
-              const on = sel && (c.id === sel.id || p === sel.id);
-              const cross = byId.get(p)?.subject !== c.subject;
-              if (cross && !on) return null;
-              const my = (a.y + b.y) / 2;
-              return (
-                <path
-                  key={`${p}->${c.id}`}
-                  d={`M${a.x} ${a.y + R + 38} C${a.x} ${my + 20}, ${b.x} ${my}, ${b.x} ${b.y - R - 4}`}
-                  className={`graph-edge ${on ? "is-on" : sel ? "is-dim" : ""} ${c.practiceOnly ? "is-personal" : ""}`}
-                />
-              );
-            }),
-        )}
+        {/* links: tunnels of dug mud from a prerequisite (above) down to what it unlocks (below) */}
+        {(() => {
+          const links = concepts.flatMap((c) =>
+            c.prereqs
+              .filter((p) => pos.has(p))
+              .map((p) => {
+                const a = pos.get(p)!;
+                const b = pos.get(c.id)!;
+                const on = !!sel && (c.id === sel.id || p === sel.id);
+                if (byId.get(p)?.subject !== c.subject && !on) return null;
+                const my = (a.y + b.y) / 2;
+                return {
+                  key: `${p}->${c.id}`,
+                  d: `M${a.x} ${a.y + R + 38} C${a.x} ${my + 20}, ${b.x} ${my}, ${b.x} ${b.y - R - 4}`,
+                  state: on ? "is-on" : sel ? "is-dim" : "",
+                  personal: !!c.practiceOnly,
+                };
+              })
+              .filter((l): l is NonNullable<typeof l> => l !== null),
+          );
+          return (
+            <>
+              <g filter={`url(#mud-${gid})`} aria-hidden="true">
+                {links.map((l) => (
+                  <path key={l.key} d={l.d} className={`rh-mud ${l.state}`} />
+                ))}
+              </g>
+              {links.map((l) => (
+                <path key={l.key} d={l.d} className={`graph-edge ${l.state} ${l.personal ? "is-personal" : ""}`} />
+              ))}
+            </>
+          );
+        })()}
 
         {/* topics */}
         {concepts.map((c) => {
