@@ -1,12 +1,18 @@
-import { BookHeart, LogOut, Map as MapIcon, UserRound, Wallet } from "lucide-react";
+import { BookHeart, DoorOpen, LogOut, Map as MapIcon, UserRound, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tart } from "@/components/wonder";
 import { SocraMark } from "@/components/logo";
 import { LookingGlassToggle } from "@/components/scenery";
 import { SoundToggle } from "@/components/sound";
 import { api, getFeatures, isGuestName, mapAvailable, type Me } from "@/lib/api";
+
+/** Header tabs: the page you're on is lit, with a gold underline (and aria-current="page" for screen readers). */
+const tabClass = ({ isActive }: { isActive: boolean }) =>
+  `header-tab relative flex items-center gap-1 rounded-full px-2 py-1 transition ${
+    isActive ? "is-active bg-white/15 font-semibold text-white" : "text-[#d6ecf7] hover:bg-white/10 hover:text-white"
+  }`;
 
 export function Header() {
   const [me, setMe] = useState<Me | null>(null);
@@ -43,26 +49,32 @@ export function Header() {
         </Link>
         {me && (
           <div className="flex items-center gap-1.5 text-sm sm:gap-2">
+            <NavLink to="/learn" className={tabClass} title="The Hall of Doors">
+              <DoorOpen className="size-4" />
+              <span className="hidden lg:inline">Doors</span>
+            </NavLink>
             {hasMap && (
-              <Link to="/map" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="The Map of Wonderland">
+              <NavLink to="/map" className={tabClass} title="The Map of Wonderland">
                 <MapIcon className="size-4" />
                 <span className="hidden lg:inline">Map</span>
-              </Link>
+              </NavLink>
             )}
-            <Link to="/journal" className="flex items-center gap-1 rounded-full px-2 py-1 text-[#d6ecf7] hover:bg-white/10 hover:text-white" title="Your dream journal">
+            <NavLink to="/journal" className={tabClass} title="Your dream journal">
               <BookHeart className="size-4" />
               <span className="hidden md:inline">Dream journal</span>
-            </Link>
+            </NavLink>
             <SoundToggle className="text-[#d6ecf7] hover:text-white" />
             <LookingGlassToggle className="text-[#d6ecf7] hover:text-white" />
-            <Link
+            <NavLink
               to="/tarts"
-              className="flex items-center gap-1.5 rounded-full bg-[#faf8f1] px-3 py-1 font-semibold text-[var(--night)] ring-[var(--gold-soft)] transition hover:ring-2"
+              className={({ isActive }) =>
+                `flex items-center gap-1.5 rounded-full bg-[#faf8f1] px-3 py-1 font-semibold text-[var(--night)] ring-[var(--gold-soft)] transition hover:ring-2 ${isActive ? "ring-2 ring-offset-2 ring-offset-[var(--night)]" : ""}`
+              }
               title={`The Tart Treasury · earned today: ${me.earnedToday} / ${me.dailyCap}`}
             >
               <Tart />
               {me.balance.toLocaleString()} <span className="hidden sm:inline">TARTS</span>
-            </Link>
+            </NavLink>
             {/* The name is you: it opens your journal. The wallet is its own link, only when it holds real (devnet) tarts. */}
             <Link
               to="/journal"
