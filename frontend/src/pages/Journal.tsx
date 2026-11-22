@@ -57,9 +57,9 @@ export function Journal() {
               <>
                 {" "}
                 {entries.length} {entries.length === 1 ? "dream" : "dreams"} ·{" "}
-                <span className="inline-flex items-center gap-1 font-semibold text-foreground">
+                <Link to="/tarts" className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline">
                   <Tart /> {total} tarts
-                </span>
+                </Link>
               </>
             )}
           </p>
