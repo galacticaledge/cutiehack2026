@@ -44,8 +44,14 @@ function reducedMotion() {
 
 const ASKS_FOR_ANSWER = /\b(answer|tell me|give me|just say|solution|solve it for me|what is it)\b/i;
 
-function showRewardToast(r: RewardView) {
-  if (r.status === "paid" && r.amount > 0) {
+function showRewardToast(r: RewardView, passed = true) {
+  if (!passed && r.status === "paid") {
+    play("boing");
+    toast.warning("The court wasn't convinced", {
+      description: r.amount > 0 ? `You still woke up with ${r.amount} TARTS, reduced because your testimony didn't show why your method works. ${r.breakdown}` : `No tarts this time: your testimony didn't show why your method works. ${r.breakdown}`,
+      duration: 15000,
+    });
+  } else if (r.status === "paid" && r.amount > 0) {
     celebrate();
     play("chime");
     toast.success(`+${r.amount} TARTS · You woke up!`, {
@@ -413,14 +419,12 @@ export function Workspace() {
       setJury(null);
       setExplainOpen(false);
       if (!retry) await wakeUp(r.reward?.status === "paid" && r.reward.amount > 0 ? r.reward.amount : null);
-      if (!retry) {
-        if (r.pass) {
-          heartsBurst();
-          toast.success("The court is convinced", { description: r.feedback });
-        }
-        else toast("The jury is unconvinced", { description: r.feedback });
+      if (!retry && r.pass) {
+        heartsBurst();
+        toast.success("The court is convinced", { description: r.feedback });
       }
-      if (r.reward) showRewardToast(r.reward);
+      if (r.reward) showRewardToast(r.reward, r.pass);
+      else if (!retry && !r.pass) toast.warning("The court wasn't convinced", { description: r.feedback });
       refreshBalance();
       await load();
     } catch (e) {
@@ -588,7 +592,10 @@ export function Workspace() {
           {earns && s.status === "done" && (
             <Card className="parchment flip-in">
               <CardHeader>
-                <CardTitle className="font-display text-2xl font-normal">You woke up!</CardTitle>
+                <CardTitle className="font-display text-2xl font-normal">{s.explainPassed === false ? "You woke up, but the court wasn't convinced" : "You woke up!"}</CardTitle>
+                {s.explainPassed === false && (
+                  <p className="text-sm text-[var(--heart)]">After 3 tries your testimony didn't show why your method works, so this solve earned less.</p>
+                )}
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 {s.explainFeedback && (
