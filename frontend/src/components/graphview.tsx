@@ -254,6 +254,12 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
             <stop offset="86%" className="rh-wall-clear" />
             <stop offset="100%" className="rh-wall-dark" />
           </linearGradient>
+          {/* each topic is a freshly dug pit: black at the bottom, earthy at the lip */}
+          <radialGradient id={`pit-${gid}`} cx="50%" cy="58%" r="62%">
+            <stop offset="0%" className="rh-pit-deep" />
+            <stop offset="70%" className="rh-pit-mid" />
+            <stop offset="100%" className="rh-pit-lip" />
+          </radialGradient>
           <radialGradient id={`mouth-${gid}`} cx="50%" cy="45%" r="60%">
             <stop offset="0%" className="rh-mouth-in" />
             <stop offset="100%" className="rh-mouth-out" />
@@ -332,8 +338,15 @@ export function GraphView({ concepts, selected, onSelect }: { concepts: ConceptN
                 onClick={() => onSelect(c.id)}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(c.id))}
               >
+                {/* the mound of dug-out dirt around the pit, and a few crumbs kicked out of it */}
+                <path d={pebble(R + 9, seed(c.id) * 0.7 + 0.2)} className="rh-mound" />
+                {[0, 1, 2].map((k) => {
+                  const a = seed(`${c.id}${k}`) * Math.PI * 2;
+                  const d = R + 12 + seed(`${c.id}d${k}`) * 5;
+                  return <circle key={k} cx={(Math.cos(a) * d).toFixed(1)} cy={(Math.sin(a) * d * 0.7 - 2).toFixed(1)} r={1 + seed(`${c.id}r${k}`) * 1.3} className="rh-crumb" />;
+                })}
                 <path d={pebble(R + 4.5, seed(c.id))} fill="none" stroke={ring} strokeWidth="3" strokeDasharray={c.practiceOnly ? "4 3" : undefined} className="graph-ring" />
-                <path d={pebble(R, seed(c.id))} fill={c.practiceOnly ? "var(--pebble-own)" : STATUS_FILL[c.status]} stroke={c.practiceOnly ? "var(--cheshire)" : "var(--pebble-edge)"} strokeWidth="1.5" className="rh-pebble" />
+                <path d={pebble(R, seed(c.id))} fill={c.practiceOnly ? "var(--pebble-own)" : c.status === "mastered" ? STATUS_FILL.mastered : `url(#pit-${gid})`} stroke={c.practiceOnly ? "var(--cheshire)" : "var(--pebble-edge)"} strokeWidth="1.5" className="rh-pebble" />
                 {c.status === "locked" && <path d="M-4 1h8v5h-8zM-2.5 1v-2a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="var(--pebble-ink)" strokeWidth="1.3" />}
                 {c.status === "mastered" && <path d="M-4.5 0.5l3 3 6-6.5" fill="none" stroke="var(--potion)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />}
                 {c.status === "available" && (

@@ -597,7 +597,14 @@ main { position: relative; z-index: 1; }
 .rh-ledge-label { font-family: var(--font-display, serif); font-size: 13px; font-style: italic; fill: var(--tan); paint-order: stroke; stroke: var(--hole-halo); stroke-width: 4px; stroke-linejoin: round; }
 :root { --pebble: #140c07; --pebble-locked: #1d140d; --pebble-mastered: #10231f; --pebble-own: #221432; --pebble-edge: #0b0705; --pebble-ink: #d9c8a8; }
 .dark { --pebble: #120c07; --pebble-locked: #1a130d; --pebble-mastered: #0b1a17; --pebble-own: #170d24; --pebble-edge: #000; --pebble-ink: #cdbb98; }
-.rh-pebble { filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.45)); }
+:root { --mound: #9a7a55; --mound-edge: #5b442c; --pit-lip: #3a2716; }
+.dark { --mound: #6e5236; --mound-edge: #2a1c10; --pit-lip: #2a1c10; }
+.rh-pebble { filter: drop-shadow(0 -1px 0 rgb(255 240 210 / 0.12)); }
+.rh-pit-deep { stop-color: #000; }
+.rh-pit-mid { stop-color: #120a04; }
+.rh-pit-lip { stop-color: var(--pit-lip); }
+.rh-mound { fill: var(--mound); stroke: var(--mound-edge); stroke-width: 1; filter: drop-shadow(0 2px 1.5px rgb(0 0 0 / 0.35)); }
+.rh-crumb { fill: var(--mound); stroke: var(--mound-edge); stroke-width: 0.6; }
 .rh-suit { font-size: 12px; fill: #f1d79a; pointer-events: none; }
 .rh-suit.is-red { fill: #ff7a8a; }
 .rh-suit.is-own { fill: #d9b8ff; }
